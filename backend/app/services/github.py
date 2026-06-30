@@ -1,9 +1,18 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
 import httpx
+
+
+def _github_headers() -> dict[str, str]:
+    headers = {"Accept": "application/vnd.github+json"}
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def _parse_github_url(url: str) -> tuple[str, str]:
@@ -61,9 +70,7 @@ async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
     owner, repo = _parse_github_url(url)
     api_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
     async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(
-            api_url, headers={"Accept": "application/vnd.github+json"}
-        )
+        resp = await client.get(api_url, headers=_github_headers())
         resp.raise_for_status()
     data = resp.json()
     md_paths = [
