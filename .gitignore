@@ -1,0 +1,43 @@
+# AI coding tool directories
+.claude/
+.specify/
+.gemini/
+.codex/
+.cursor/
+.copilot/
+.aider*
+.continue/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/build/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+
+# IDE
+.vscode/
+.idea/
