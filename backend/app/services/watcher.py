@@ -1,12 +1,16 @@
 from __future__ import annotations
+
 import asyncio
-from typing import Callable
+from typing import Any
+
+from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 
 class _MDHandler(FileSystemEventHandler):
-    def __init__(self, source_id: str, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue):
+    def __init__(
+        self, source_id: str, loop: asyncio.AbstractEventLoop, queue: asyncio.Queue
+    ):
         self._source_id = source_id
         self._loop = loop
         self._queue = queue
@@ -36,7 +40,7 @@ class _MDHandler(FileSystemEventHandler):
             self._put("file_renamed", str(event.dest_path), str(event.src_path))
 
 
-_observers: dict[str, Observer] = {}
+_observers: dict[str, Any] = {}
 _queues: dict[str, asyncio.Queue] = {}
 
 

@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api import files, sources, sse
 from .core.database import create_tables
-from .api import sources, files, sse
 from .services.poller import start_polling_all
 
 

@@ -41,8 +41,6 @@ import { ref, computed } from 'vue'
 import { useSources } from '../../composables/useSources'
 import type { SourceType } from '../../types'
 
-defineEmits<{ close: [] }>()
-
 const { register } = useSources()
 const loading = ref(false)
 const error = ref('')
@@ -54,7 +52,7 @@ const form = ref<{ name: string; type: SourceType; path: string; polling_interva
   polling_interval_seconds: null,
 })
 
-const defaultPoll = computed(() => ({ github: 600, http: 300, localhost: 300 }[form.value.type] ?? 300))
+const defaultPoll = computed(() => ({ local: 300, github: 600, http: 300, localhost: 300 }[form.value.type]))
 const pathPlaceholder = computed(() => ({
   local: '/Users/alice/documents',
   github: 'https://github.com/owner/repo',

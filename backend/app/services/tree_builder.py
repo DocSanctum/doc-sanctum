@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import os
 from typing import Any
 
@@ -22,7 +23,9 @@ def _build_node(abs_path: str, rel_path: str, name: str) -> dict[str, Any]:
 def _scan_dir(abs_dir: str, rel_dir: str) -> list[dict[str, Any]]:
     children: list[dict[str, Any]] = []
     try:
-        entries = sorted(os.scandir(abs_dir), key=lambda e: (not e.is_dir(), e.name.lower()))
+        entries = sorted(
+            os.scandir(abs_dir), key=lambda e: (not e.is_dir(), e.name.lower())
+        )
     except PermissionError:
         return children
 
@@ -31,7 +34,9 @@ def _scan_dir(abs_dir: str, rel_dir: str) -> list[dict[str, Any]]:
         if entry.is_dir(follow_symlinks=False):
             sub = _scan_dir(entry.path, rel)
             if sub:
-                children.append({"path": rel, "name": entry.name, "is_dir": True, "children": sub})
+                children.append(
+                    {"path": rel, "name": entry.name, "is_dir": True, "children": sub}
+                )
         elif entry.name.endswith(".md"):
             children.append(_build_node(entry.path, rel, entry.name))
     return children
