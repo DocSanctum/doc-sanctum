@@ -4,9 +4,10 @@
     <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
     <div
       v-else
-      class="prose prose-invert prose-lg max-w-none"
+      class="prose prose-invert max-w-none"
+      :class="fontSize !== 'base' ? `prose-${fontSize}` : ''"
       v-html="rendered"
-      @click.prevent="handleClick"
+      @click="handleClick"
     />
   </div>
 </template>
@@ -14,14 +15,15 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import DOMPurify from 'dompurify'
-import 'highlight.js/styles/github-dark.css'
 import { api } from '../../services/api'
 import { useMarkdown } from '../../composables/useMarkdown'
+import { useViewerSettings } from '../../composables/useViewerSettings'
 
 const props = defineProps<{ sourceId: string; filePath: string }>()
 const emit = defineEmits<{ navigate: [path: string] }>()
 
 const { render } = useMarkdown()
+const { fontSize } = useViewerSettings()
 const raw = ref('')
 const loading = ref(false)
 const fetchError = ref('')
@@ -46,32 +48,26 @@ async function load() {
 watch(() => [props.sourceId, props.filePath], load, { immediate: true })
 
 function handleClick(e: MouseEvent) {
-  const target = e.target as HTMLElement
-  const anchor = target.closest('a')
+  const anchor = (e.target as HTMLElement).closest('a')
   if (!anchor) return
   const href = anchor.getAttribute('href') ?? ''
-  if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('#')) return
+
+  if (href.startsWith('http://') || href.startsWith('https://')) {
+    e.preventDefault()
+    window.open(href, '_blank', 'noopener,noreferrer')
+    return
+  }
+
+  if (href.startsWith('#')) return
+
   if (href.endsWith('.md')) {
+    e.preventDefault()
     emit('navigate', href)
   }
 }
 </script>
 
 <style>
-/* Heading anchors */
-.prose .header-anchor {
-  opacity: 0;
-  margin-left: 0.5rem;
-  text-decoration: none;
-  transition: opacity 0.2s;
-}
-.prose h1:hover .header-anchor,
-.prose h2:hover .header-anchor,
-.prose h3:hover .header-anchor,
-.prose h4:hover .header-anchor {
-  opacity: 0.5;
-}
-
 /* Code blocks */
 .prose pre.hljs {
   background: #0d1117;

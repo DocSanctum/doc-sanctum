@@ -17,7 +17,7 @@ const md = new MarkdownIt({
   },
 })
   .use(taskLists, { enabled: true })
-  .use(anchor, { permalink: anchor.permalink.headerLink() })
+  .use(anchor)
   .use(footnote)
   .use(abbr)
 

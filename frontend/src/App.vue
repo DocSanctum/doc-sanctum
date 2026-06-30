@@ -6,7 +6,7 @@
         <span class="font-semibold text-sm">DocSanctum</span>
         <button class="text-lg hover:text-blue-400" title="소스 추가" @click="showAdd = true">＋</button>
       </div>
-      <div class="overflow-y-auto flex-1 py-2">
+      <div class="overflow-y-auto flex-1 py-2 sidebar-scroll">
         <SourceList
           :selected-source-id="selectedSourceId"
           @select-source="selectSource"
