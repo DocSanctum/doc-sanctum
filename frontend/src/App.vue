@@ -1,8 +1,15 @@
 <template>
-  <div class="flex h-screen bg-gray-900 text-white overflow-hidden" @mousemove="onDrag" @mouseup="stopDrag">
+  <div
+    class="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden"
+    @mousemove="onDrag"
+    @mouseup="stopDrag"
+  >
     <!-- Sidebar -->
-    <aside class="flex flex-col border-r border-gray-700 shrink-0 relative" :style="{ width: sidebarWidth + 'px' }">
-      <div class="flex items-center justify-between px-3 py-3 border-b border-gray-700">
+    <aside
+      class="flex flex-col border-r border-gray-200 dark:border-gray-700 shrink-0 relative bg-white dark:bg-gray-900"
+      :style="{ width: sidebarWidth + 'px' }"
+    >
+      <div class="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-700">
         <span class="font-semibold text-sm">DocSanctum</span>
         <button class="text-lg hover:text-blue-400" title="소스 추가" @click="showAdd = true">＋</button>
       </div>
@@ -13,7 +20,7 @@
           @delete-source="deleteSource"
           @refresh-source="refreshSource"
         />
-        <div v-if="selectedSourceId" class="border-t border-gray-700 mt-2 pt-2">
+        <div v-if="selectedSourceId" class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
           <FileTree
             :source-id="selectedSourceId"
             :selected-path="selectedFile?.path ?? null"
@@ -23,10 +30,13 @@
       </div>
 
       <!-- Settings button -->
-      <div class="border-t border-gray-700 px-3 py-2 shrink-0">
+      <div class="border-t border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0">
         <button
-          class="flex items-center gap-2 w-full px-2 py-2 rounded text-sm text-gray-400 hover:text-white hover:bg-gray-700 transition-colors"
-          @click="showSettings = true"
+          class="flex items-center gap-2 w-full px-2 py-2 rounded text-sm transition-colors"
+          :class="view === 'settings'
+            ? 'bg-blue-600 text-white'
+            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'"
+          @click="view = 'settings'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -44,10 +54,11 @@
       />
     </aside>
 
-    <!-- Viewer -->
+    <!-- Main area -->
     <main class="flex-1 overflow-y-auto" :class="{ 'select-none': dragging }">
+      <SettingsPanel v-if="view === 'settings'" />
       <MarkdownViewer
-        v-if="selectedFile"
+        v-else-if="selectedFile"
         :source-id="selectedFile.sourceId"
         :file-path="selectedFile.path"
         @navigate="navigateFile"
@@ -56,7 +67,6 @@
     </main>
 
     <AddSourceModal v-if="showAdd" @close="showAdd = false" />
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 
@@ -65,7 +75,7 @@ import { ref } from 'vue'
 import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
-import SettingsModal from './components/Sidebar/SettingsModal.vue'
+import SettingsPanel from './components/Settings/SettingsPanel.vue'
 import MarkdownViewer from './components/Viewer/MarkdownViewer.vue'
 import EmptyState from './components/Viewer/EmptyState.vue'
 import { useSources } from './composables/useSources'
@@ -73,7 +83,7 @@ import { useSources } from './composables/useSources'
 const { remove } = useSources()
 
 const showAdd = ref(false)
-const showSettings = ref(false)
+const view = ref<'viewer' | 'settings'>('viewer')
 const selectedSourceId = ref<string | null>(null)
 const selectedFile = ref<{ sourceId: string; path: string } | null>(null)
 
@@ -83,18 +93,12 @@ const SIDEBAR_MAX = 480
 const sidebarWidth = ref(256)
 const dragging = ref(false)
 
-function startDrag() {
-  dragging.value = true
-}
-
+function startDrag() { dragging.value = true }
 function onDrag(e: MouseEvent) {
   if (!dragging.value) return
   sidebarWidth.value = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, e.clientX))
 }
-
-function stopDrag() {
-  dragging.value = false
-}
+function stopDrag() { dragging.value = false }
 
 function selectSource(id: string) {
   selectedSourceId.value = id
@@ -103,6 +107,7 @@ function selectSource(id: string) {
 
 function selectFile(sourceId: string, path: string) {
   selectedFile.value = { sourceId, path }
+  view.value = 'viewer'
 }
 
 function navigateFile(path: string) {

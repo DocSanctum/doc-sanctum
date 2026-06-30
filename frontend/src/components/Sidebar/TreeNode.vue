@@ -2,7 +2,7 @@
   <ul class="pl-3">
     <li v-if="node.is_dir">
       <button
-        class="flex items-center gap-1 text-xs text-gray-300 hover:text-white w-full text-left py-0.5"
+        class="flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white w-full text-left py-0.5"
         @click="open = !open"
       >
         <span>{{ open ? '▾' : '▸' }}</span>
@@ -21,7 +21,7 @@
     <li v-else>
       <button
         class="text-xs w-full text-left py-0.5 px-1 rounded truncate"
-        :class="selectedPath === node.path ? 'bg-blue-600 text-white' : 'text-gray-300 hover:text-white hover:bg-gray-700'"
+        :class="selectedPath === node.path ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'"
         @click="$emit('select-file', node.path)"
       >
         {{ node.name }}

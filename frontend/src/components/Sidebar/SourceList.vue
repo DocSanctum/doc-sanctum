@@ -6,8 +6,8 @@
       <li
         v-for="source in sourcesQuery.data.value"
         :key="source.id"
-        class="flex items-center justify-between px-3 py-2 hover:bg-gray-700 cursor-pointer rounded"
-        :class="{ 'bg-gray-700': selectedSourceId === source.id }"
+        class="flex items-center justify-between px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer rounded"
+        :class="{ 'bg-gray-100 dark:bg-gray-700': selectedSourceId === source.id }"
         @click="$emit('select-source', source.id)"
       >
         <span class="flex items-center gap-2 min-w-0 flex-1">
@@ -18,7 +18,7 @@
           />
           <span class="flex flex-col min-w-0">
             <span class="text-sm truncate">{{ source.name }}</span>
-            <span class="text-xs text-gray-500 truncate">{{ source.path }}</span>
+            <span class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ source.path }}</span>
           </span>
         </span>
         <button
