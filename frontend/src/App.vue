@@ -3,7 +3,7 @@
     <!-- Sidebar -->
     <aside class="w-64 flex flex-col border-r border-gray-700 shrink-0">
       <div class="flex items-center justify-between px-3 py-3 border-b border-gray-700">
-        <span class="font-semibold text-sm">MD Doc Browser</span>
+        <span class="font-semibold text-sm">DocSanctum</span>
         <button class="text-lg hover:text-blue-400" title="소스 추가" @click="showAdd = true">＋</button>
       </div>
       <div class="overflow-y-auto flex-1 py-2">
