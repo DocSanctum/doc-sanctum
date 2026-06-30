@@ -1,8 +1,9 @@
 from __future__ import annotations
+
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
-import uuid
 
 SourceType = Literal["local", "github", "http", "localhost"]
 SourceStatus = Literal["active", "error", "syncing"]
@@ -34,7 +35,7 @@ class Source:
         }
 
     @classmethod
-    def from_row(cls, row: dict) -> "Source":
+    def from_row(cls, row: dict) -> Source:
         return cls(
             id=row["id"],
             name=row["name"],

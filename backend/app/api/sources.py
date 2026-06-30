@@ -1,11 +1,11 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
 
 from ..core.database import get_session
-from ..core.config import settings
 from ..models.source import Source, SourceType
 from ..services.poller import poll_now
 
@@ -15,21 +15,27 @@ _DEFAULT_POLL: dict[str, int] = {"github": 600, "http": 300, "localhost": 300}
 
 
 class RegisterSourceRequest(BaseModel):
-    name: Optional[str] = None
+    name: str | None = None
     type: SourceType
     path: str
-    polling_interval_seconds: Optional[int] = None
+    polling_interval_seconds: int | None = None
 
 
 class PatchSourceRequest(BaseModel):
-    name: Optional[str] = None
-    polling_interval_seconds: Optional[int] = None
+    name: str | None = None
+    polling_interval_seconds: int | None = None
 
 
 async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
-    row = (await session.execute(
-        text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
     return Source.from_row(dict(row))
@@ -41,7 +47,9 @@ async def register_source(
 ) -> dict:
     name = req.name or req.path.rstrip("/").split("/")[-1]
     poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
-    source = Source(name=name, type=req.type, path=req.path, polling_interval_seconds=poll)
+    source = Source(
+        name=name, type=req.type, path=req.path, polling_interval_seconds=poll
+    )
     try:
         await session.execute(
             text(
@@ -60,12 +68,18 @@ async def register_source(
 
 @router.get("/sources")
 async def list_sources(session: AsyncSession = Depends(get_session)) -> list[dict]:
-    rows = (await session.execute(text("SELECT * FROM source ORDER BY created_at"))).mappings().all()
+    rows = (
+        (await session.execute(text("SELECT * FROM source ORDER BY created_at")))
+        .mappings()
+        .all()
+    )
     return [dict(r) for r in rows]
 
 
 @router.delete("/sources/{source_id}", status_code=204)
-async def delete_source(source_id: str, session: AsyncSession = Depends(get_session)) -> None:
+async def delete_source(
+    source_id: str, session: AsyncSession = Depends(get_session)
+) -> None:
     await _get_or_404(session, source_id)
     await session.execute(text("DELETE FROM source WHERE id = :id"), {"id": source_id})
     await session.commit()
@@ -73,9 +87,11 @@ async def delete_source(source_id: str, session: AsyncSession = Depends(get_sess
 
 @router.patch("/sources/{source_id}")
 async def patch_source(
-    source_id: str, req: PatchSourceRequest, session: AsyncSession = Depends(get_session)
+    source_id: str,
+    req: PatchSourceRequest,
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
-    source = await _get_or_404(session, source_id)
+    await _get_or_404(session, source_id)
     updates: dict = {}
     if req.name is not None:
         updates["name"] = req.name
@@ -92,14 +108,17 @@ async def patch_source(
 
 
 @router.post("/sources/{source_id}/refresh", status_code=202)
-async def refresh_source(source_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def refresh_source(
+    source_id: str, session: AsyncSession = Depends(get_session)
+) -> dict:
     source = await _get_or_404(session, source_id)
     if source.type == "local":
-        raise HTTPException(status_code=400, detail="Local sources do not need manual refresh")
+        raise HTTPException(
+            status_code=400, detail="Local sources do not need manual refresh"
+        )
     await session.execute(
         text("UPDATE source SET status = 'syncing' WHERE id = :id"), {"id": source_id}
     )
     await session.commit()
-    import asyncio
     asyncio.create_task(poll_now(source))
     return {"detail": "Refresh queued"}

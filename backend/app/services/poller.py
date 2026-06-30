@@ -1,11 +1,12 @@
 from __future__ import annotations
+
 import asyncio
-import json
 from typing import Any
+
+from sqlalchemy import text
 
 from ..core.database import async_session_factory
 from ..models.source import Source
-from sqlalchemy import text
 from .github import fetch_github_tree
 from .manifest import fetch_manifest_tree
 from .watcher import _queues
@@ -45,9 +46,11 @@ _tasks: dict[str, asyncio.Task] = {}
 
 async def start_polling_all() -> None:
     async with async_session_factory() as session:
-        rows = (await session.execute(
-            text("SELECT * FROM source WHERE type != 'local'")
-        )).mappings().all()
+        rows = (
+            (await session.execute(text("SELECT * FROM source WHERE type != 'local'")))
+            .mappings()
+            .all()
+        )
     for row in rows:
         source = Source.from_row(dict(row))
         if source.id not in _tasks:

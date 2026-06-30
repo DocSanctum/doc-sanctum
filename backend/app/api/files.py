@@ -1,4 +1,5 @@
 import os
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
@@ -12,19 +13,29 @@ router = APIRouter(tags=["files"])
 
 
 async def _get_source_or_404(session: AsyncSession, source_id: str) -> Source:
-    row = (await session.execute(
-        text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
-    )).mappings().first()
+    row = (
+        (
+            await session.execute(
+                text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+            )
+        )
+        .mappings()
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="Source not found")
     return Source.from_row(dict(row))
 
 
 @router.get("/sources/{source_id}/tree")
-async def get_tree(source_id: str, session: AsyncSession = Depends(get_session)) -> dict:
+async def get_tree(
+    source_id: str, session: AsyncSession = Depends(get_session)
+) -> dict:
     source = await _get_source_or_404(session, source_id)
     if source.status == "error":
-        raise HTTPException(status_code=503, detail=source.error_message or "Source error")
+        raise HTTPException(
+            status_code=503, detail=source.error_message or "Source error"
+        )
     if source.type == "local":
         return build_local_tree(source)
     return await build_remote_tree(source)
