@@ -10,9 +10,16 @@
         :class="{ 'bg-gray-700': selectedSourceId === source.id }"
         @click="$emit('select-source', source.id)"
       >
-        <span class="flex items-center gap-2 text-sm truncate">
-          <span :title="source.error_message ?? ''">{{ statusIcon(source.status) }}</span>
-          <span class="truncate">{{ source.name }}</span>
+        <span class="flex items-center gap-2 min-w-0 flex-1">
+          <span
+            class="inline-block w-2 h-2 rounded-full shrink-0"
+            :class="statusDot(source.status)"
+            :title="source.error_message ?? source.status"
+          />
+          <span class="flex flex-col min-w-0">
+            <span class="text-sm truncate">{{ source.name }}</span>
+            <span class="text-xs text-gray-500 truncate">{{ source.path }}</span>
+          </span>
         </span>
         <button
           v-if="source.type !== 'local'"
@@ -42,7 +49,11 @@ defineEmits<{
 
 const { sourcesQuery } = useSources()
 
-function statusIcon(status: SourceStatus): string {
-  return { active: '🟢', syncing: '🔄', error: '🔴' }[status] ?? '⚪'
+function statusDot(status: SourceStatus): string {
+  return {
+    active: 'bg-green-500',
+    syncing: 'bg-yellow-400 animate-pulse',
+    error: 'bg-red-500',
+  }[status] ?? 'bg-gray-500'
 }
 </script>

@@ -29,12 +29,9 @@
           <select
             v-model="currentTheme"
             class="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1.5 text-gray-200 text-xs outline-none focus:border-blue-500"
-            @change="applyTheme"
+            @change="onThemeChange"
           >
-            <option value="github-dark">GitHub Dark</option>
-            <option value="atom-one-dark">Atom One Dark</option>
-            <option value="monokai">Monokai</option>
-            <option value="tokyo-night-dark">Tokyo Night</option>
+            <option v-for="t in THEME_OPTIONS" :key="t.value" :value="t.value">{{ t.label }}</option>
           </select>
         </div>
 
@@ -47,7 +44,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
+import { applyCodeTheme, THEME_OPTIONS } from '../../composables/useCodeTheme'
+import { useViewerSettings } from '../../composables/useViewerSettings'
 
 defineEmits<{ close: [] }>()
 
@@ -57,35 +56,10 @@ const fontSizes = [
   { label: '대', value: 'lg' },
 ]
 
-const currentFontSize = ref(localStorage.getItem('ds-font-size') ?? 'base')
+const { fontSize: currentFontSize, setFontSize } = useViewerSettings()
 const currentTheme = ref(localStorage.getItem('ds-code-theme') ?? 'github-dark')
 
-function setFontSize(size: string) {
-  currentFontSize.value = size
-  localStorage.setItem('ds-font-size', size)
-  applyFontSize(size)
+function onThemeChange() {
+  applyCodeTheme(currentTheme.value)
 }
-
-function applyFontSize(size: string) {
-  const viewer = document.querySelector('.markdown-viewer .prose') as HTMLElement | null
-  if (!viewer) return
-  viewer.classList.remove('prose-sm', 'prose-base', 'prose-lg')
-  if (size !== 'base') viewer.classList.add(`prose-${size}`)
-}
-
-function applyTheme() {
-  localStorage.setItem('ds-code-theme', currentTheme.value)
-  // Theme switching is handled via dynamic CSS import — requires page reload for full effect
-  const existing = document.getElementById('hljs-theme')
-  if (existing) existing.remove()
-  const link = document.createElement('link')
-  link.id = 'hljs-theme'
-  link.rel = 'stylesheet'
-  link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/${currentTheme.value}.min.css`
-  document.head.appendChild(link)
-}
-
-onMounted(() => {
-  applyFontSize(currentFontSize.value)
-})
 </script>
