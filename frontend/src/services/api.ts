@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus } from '../types'
 
 const BASE = '/api/v1'
 
@@ -38,4 +38,9 @@ export const api = {
 
   refreshSource: (id: string) =>
     request<void>(`/sources/${id}/refresh`, { method: 'POST' }),
+
+  getMcpStatus: () => request<McpStatus>('/mcp/status'),
+
+  setMcpEnabled: (enabled: boolean) =>
+    request<McpStatus>('/mcp/status', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 }

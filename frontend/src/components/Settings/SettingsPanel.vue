@@ -95,6 +95,71 @@
       </div>
     </section>
 
+    <!-- MCP Server -->
+    <section class="mb-8">
+      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">MCP Server</h2>
+      <div v-if="mcpLoading" class="text-sm text-gray-400 dark:text-gray-500">로딩 중...</div>
+      <div v-else-if="mcpStatus" class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <!-- Header row -->
+        <div class="flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-800">
+          <div class="flex items-center gap-2">
+            <span
+              class="inline-block w-2 h-2 rounded-full"
+              :class="mcpStatus.enabled ? 'bg-green-500' : 'bg-gray-400'"
+            />
+            <span class="text-sm font-medium text-gray-900 dark:text-white">
+              {{ mcpStatus.enabled ? 'Enabled' : 'Disabled' }}
+            </span>
+          </div>
+          <button
+            class="text-xs px-3 py-1.5 rounded-md border font-medium transition-colors"
+            :class="mcpStatus.enabled
+              ? 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
+              : 'border-green-300 dark:border-green-700 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'"
+            @click="toggleMcp"
+          >
+            {{ mcpStatus.enabled ? 'Disable' : 'Enable' }}
+          </button>
+        </div>
+
+        <!-- Endpoints -->
+        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
+          <div v-for="ep in endpoints" :key="ep.label">
+            <div class="flex items-center gap-1.5 mb-1">
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ ep.label }}</span>
+              <span class="text-xs px-1 rounded"
+                :class="ep.badge === 'new' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'"
+              >{{ ep.badge }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <code class="flex-1 text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 truncate font-mono">
+                {{ ep.url }}
+              </code>
+              <button
+                class="text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+                @click="copyUrl(ep.url, ep.label)"
+              >{{ copiedLabel === ep.label ? '✓ 복사됨' : '복사' }}</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tools -->
+        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
+          <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">Tools ({{ mcpStatus.tools.length }})</div>
+          <div class="space-y-1.5">
+            <div
+              v-for="tool in mcpStatus.tools"
+              :key="tool.name"
+              class="flex items-start gap-2"
+            >
+              <code class="text-xs bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 px-1.5 py-0.5 rounded font-mono shrink-0">{{ tool.name }}</code>
+              <span class="text-xs text-gray-500 dark:text-gray-400 pt-0.5">{{ tool.description }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Version & Changelog -->
     <section class="pt-6 border-t border-gray-200 dark:border-gray-700">
       <div class="flex items-baseline gap-3 mb-4">
@@ -141,12 +206,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, watch } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
 import { useTheme } from '../../composables/useTheme'
 import { useViewerSettings } from '../../composables/useViewerSettings'
 import { applyCodeTheme, THEME_OPTIONS } from '../../composables/useCodeTheme'
 import { useSources } from '../../composables/useSources'
 import { changelog } from '../../data/changelog'
+import { api } from '../../services/api'
+import type { McpStatus } from '../../types'
 import pkg from '../../../package.json'
 
 const { theme, applyTheme } = useTheme()
@@ -201,4 +268,46 @@ function selectCodeTheme(value: string) {
   currentCodeTheme.value = value
   applyCodeTheme(value)
 }
+
+// MCP
+const mcpStatus = ref<McpStatus | null>(null)
+const mcpLoading = ref(false)
+const copiedLabel = ref('')
+
+function backendOrigin() {
+  const h = window.location.hostname
+  return h === 'localhost' || h === '127.0.0.1'
+    ? `http://${h}:8000`
+    : window.location.origin
+}
+
+const endpoints = computed(() => {
+  const o = backendOrigin()
+  return [
+    { label: 'Streamable HTTP', url: `${o}${mcpStatus.value?.http_url ?? '/mcp-http'}`, badge: 'new' },
+    { label: 'SSE', url: `${o}${mcpStatus.value?.sse_url ?? '/mcp/sse'}`, badge: 'legacy' },
+  ]
+})
+
+async function loadMcpStatus() {
+  mcpLoading.value = true
+  try {
+    mcpStatus.value = await api.getMcpStatus()
+  } finally {
+    mcpLoading.value = false
+  }
+}
+
+async function toggleMcp() {
+  if (!mcpStatus.value) return
+  mcpStatus.value = await api.setMcpEnabled(!mcpStatus.value.enabled)
+}
+
+async function copyUrl(url: string, label: string) {
+  await navigator.clipboard.writeText(url)
+  copiedLabel.value = label
+  setTimeout(() => { copiedLabel.value = '' }, 2000)
+}
+
+onMounted(loadMcpStatus)
 </script>
