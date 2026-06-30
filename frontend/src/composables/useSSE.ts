@@ -1,7 +1,6 @@
 import { watch, onUnmounted } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
 import type { Ref } from 'vue'
-import type { SSEEvent } from '../types'
 
 export function useSSE(sourceId: Ref<string | null>) {
   const qc = useQueryClient()
