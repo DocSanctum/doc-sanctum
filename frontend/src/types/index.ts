@@ -42,6 +42,18 @@ export interface SSEEvent {
   old_path?: string
 }
 
+export interface McpTool {
+  name: string
+  description: string
+}
+
+export interface McpStatus {
+  enabled: boolean
+  sse_url: string
+  http_url: string
+  tools: McpTool[]
+}
+
 export interface RegisterSourcePayload {
   name?: string
   type: SourceType

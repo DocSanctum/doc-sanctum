@@ -30,3 +30,27 @@ async def create_tables() -> None:
             )
         """)
         )
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS setting (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
+        )
+
+
+async def get_setting(key: str, default: str | None = None) -> str | None:
+    async with async_session_factory() as session:
+        row = await session.execute(text("SELECT value FROM setting WHERE key = :k"), {"k": key})
+        result = row.scalar_one_or_none()
+        return result if result is not None else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    async with async_session_factory() as session:
+        await session.execute(
+            text("INSERT INTO setting(key, value) VALUES(:k, :v) ON CONFLICT(key) DO UPDATE SET value=:v"),
+            {"k": key, "v": value},
+        )
+        await session.commit()
