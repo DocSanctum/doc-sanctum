@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import time
-
-import pytest
-
 import backend.app.mcp.cache as cache_module
+import pytest
 from backend.app.mcp.cache import get_cached, mark_stale, set_cached
 
 

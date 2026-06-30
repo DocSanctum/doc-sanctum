@@ -8,7 +8,10 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 SETTING_KEY = "mcp_enabled"
 
 TOOLS = [
-    {"name": "list_documents", "description": "List all indexed documents across sources"},
+    {
+        "name": "list_documents",
+        "description": "List all indexed documents across sources",
+    },
     {"name": "read_document", "description": "Read the content of a specific document"},
     {"name": "search_documents", "description": "Search documents by keyword"},
 ]
@@ -32,10 +35,17 @@ class McpPatch(BaseModel):
 
 @router.get("/status", response_model=McpStatus)
 async def get_mcp_status():
-    return McpStatus(enabled=await is_enabled(), sse_url="/mcp/sse", http_url="/mcp-http", tools=TOOLS)
+    return McpStatus(
+        enabled=await is_enabled(),
+        sse_url="/mcp/sse",
+        http_url="/mcp-http",
+        tools=TOOLS,
+    )
 
 
 @router.patch("/status", response_model=McpStatus)
 async def patch_mcp_status(body: McpPatch):
     await set_setting(SETTING_KEY, "true" if body.enabled else "false")
-    return McpStatus(enabled=body.enabled, sse_url="/mcp/sse", http_url="/mcp-http", tools=TOOLS)
+    return McpStatus(
+        enabled=body.enabled, sse_url="/mcp/sse", http_url="/mcp-http", tools=TOOLS
+    )
