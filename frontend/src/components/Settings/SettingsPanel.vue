@@ -1,76 +1,91 @@
 <template>
   <div class="max-w-xl mx-auto px-8 py-10">
-    <h1 class="text-lg font-semibold mb-8 text-gray-900 dark:text-white">설정</h1>
+    <h1 class="text-xl font-bold mb-8 text-gray-900 dark:text-white">설정</h1>
 
     <!-- App theme -->
     <section class="mb-8">
-      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">앱 테마</h2>
-      <div class="flex gap-3">
-        <button
-          v-for="t in appThemes"
-          :key="t.value"
-          class="flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors"
-          :class="theme === t.value
-            ? 'bg-blue-600 border-blue-500 text-white'
-            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
-          @click="applyTheme(t.value)"
-        >
-          <span>{{ t.icon }}</span>
-          {{ t.label }}
-        </button>
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">앱 테마</h2>
+        <div class="flex gap-2">
+          <button
+            v-for="t in appThemes"
+            :key="t.value"
+            class="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            :class="theme === t.value
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+            @click="applyTheme(t.value)"
+          >
+            <span>{{ t.icon }}</span>
+            {{ t.label }}
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- Font size -->
     <section class="mb-8">
-      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">뷰어 폰트 크기</h2>
-      <div class="flex gap-3">
-        <button
-          v-for="size in fontSizes"
-          :key="size.value"
-          class="px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors"
-          :class="fontSize === size.value
-            ? 'bg-blue-600 border-blue-500 text-white'
-            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
-          @click="setFontSize(size.value)"
-        >
-          {{ size.label }}
-        </button>
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">뷰어 폰트 크기</h2>
+        <div class="flex gap-2">
+          <button
+            v-for="size in fontSizes"
+            :key="size.value"
+            class="px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            :class="fontSize === size.value
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+            @click="setFontSize(size.value)"
+          >
+            {{ size.label }}
+          </button>
+        </div>
       </div>
     </section>
 
     <!-- Code theme -->
     <section class="mb-8">
-      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">코드 하이라이트 테마</h2>
-      <div class="grid grid-cols-2 gap-2">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">코드 하이라이트 테마</h2>
+        <span class="text-xs text-gray-400 dark:text-gray-500">{{ THEME_OPTIONS.find(t => t.value === currentCodeTheme)?.label }}</span>
+      </div>
+      <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden divide-y divide-gray-100 dark:divide-gray-700">
         <button
           v-for="t in THEME_OPTIONS"
           :key="t.value"
-          class="flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-colors text-left"
+          class="flex items-center justify-between w-full px-4 py-2.5 text-sm transition-colors text-left"
           :class="currentCodeTheme === t.value
-            ? 'bg-blue-600 border-blue-500 text-white'
-            : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+            ? 'bg-blue-600 text-white'
+            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'"
           @click="selectCodeTheme(t.value)"
         >
-          <span>{{ t.label }}</span>
-          <span
-            class="text-xs px-1.5 py-0.5 rounded"
-            :class="currentCodeTheme === t.value
-              ? 'bg-blue-500 text-blue-100'
-              : t.mode === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'"
-          >{{ t.mode === 'dark' ? '다크' : '라이트' }}</span>
+          <div class="flex items-center gap-2">
+            <span>{{ t.label }}</span>
+            <span
+              class="text-xs px-1.5 py-0.5 rounded"
+              :class="currentCodeTheme === t.value
+                ? 'bg-blue-500 text-blue-100'
+                : t.mode === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-600 dark:text-gray-300'"
+            >{{ t.mode === 'dark' ? '다크' : '라이트' }}</span>
+          </div>
+          <span v-if="currentCodeTheme === t.value" class="text-blue-200 text-xs">✓</span>
         </button>
       </div>
     </section>
 
     <!-- Source polling -->
-    <section v-if="remoteSources.length > 0" class="mb-8">
-      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">소스 폴링 주기</h2>
-      <div class="space-y-2">
+    <section class="mb-8">
+      <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">소스 폴링 주기</h2>
+      <p class="text-xs text-gray-400 dark:text-gray-500 mb-3">GitHub, HTTP, Localhost 소스에만 적용됩니다. Local 소스는 파일시스템 감지로 실시간 반영됩니다.</p>
+      <div v-if="allSources.length === 0" class="text-xs text-gray-400 dark:text-gray-500 italic">
+        등록된 소스가 없습니다.
+      </div>
+      <div v-else class="space-y-2">
         <div
-          v-for="source in remoteSources"
+          v-for="source in allSources"
           :key="source.id"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          :class="source.type === 'local' ? 'opacity-50' : ''"
         >
           <div class="flex-1 min-w-0">
             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ source.name }}</div>
@@ -78,16 +93,18 @@
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <input
-              :value="pollingValues[source.id]"
+              :value="source.type === 'local' ? '' : pollingValues[source.id]"
+              :placeholder="source.type === 'local' ? '실시간 감지' : ''"
+              :disabled="source.type === 'local'"
               type="number"
               min="30"
-              class="w-20 text-xs text-right bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+              class="w-24 text-xs text-right bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-white rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed"
               @input="pollingValues[source.id] = Number(($event.target as HTMLInputElement).value)"
             />
             <span class="text-xs text-gray-400 dark:text-gray-500">초</span>
             <button
-              class="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors"
-              :disabled="pollingValues[source.id] === source.polling_interval_seconds"
+              class="text-xs px-2 py-1 rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50 transition-colors disabled:cursor-not-allowed"
+              :disabled="source.type === 'local' || pollingValues[source.id] === source.polling_interval_seconds"
               @click="savePoll(source.id)"
             >저장</button>
           </div>
@@ -162,14 +179,21 @@
 
     <!-- Version & Changelog -->
     <section class="pt-6 border-t border-gray-200 dark:border-gray-700">
-      <div class="flex items-baseline gap-3 mb-4">
-        <span class="text-xl font-bold text-gray-900 dark:text-white">DocSanctum</span>
-        <span class="text-sm font-mono text-blue-500 dark:text-blue-400">v{{ currentVersion }}</span>
+      <div class="flex items-baseline justify-between mb-4">
+        <div class="flex items-baseline gap-3">
+          <span class="text-xl font-bold text-gray-900 dark:text-white">DocSanctum</span>
+          <span class="text-sm font-mono text-blue-500 dark:text-blue-400">v{{ currentVersion }}</span>
+        </div>
+        <button
+          v-if="changelog.length > RECENT_COUNT"
+          class="text-xs text-blue-500 dark:text-blue-400 hover:underline"
+          @click="$emit('open-changelog')"
+        >전체 이력 보기 →</button>
       </div>
 
       <div class="space-y-4">
         <div
-          v-for="entry in changelog"
+          v-for="entry in recentChangelog"
           :key="entry.version"
           class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
         >
@@ -207,6 +231,8 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, watch, onMounted } from 'vue'
+
+defineEmits<{ 'open-changelog': [] }>()
 import { useTheme } from '../../composables/useTheme'
 import { useViewerSettings } from '../../composables/useViewerSettings'
 import { applyCodeTheme, THEME_OPTIONS } from '../../composables/useCodeTheme'
@@ -221,13 +247,14 @@ const { fontSize, setFontSize } = useViewerSettings()
 const { sourcesQuery, patch } = useSources()
 
 const currentVersion = pkg.version
+const RECENT_COUNT = 5
+const recentChangelog = computed(() => changelog.slice(0, RECENT_COUNT))
 const currentCodeTheme = ref(localStorage.getItem('ds-code-theme') ?? 'github-dark')
 
 const DEFAULT_POLL: Record<string, number> = { github: 600, http: 300, localhost: 300 }
 
-const remoteSources = computed(() =>
-  (sourcesQuery.data.value ?? []).filter(s => s.type !== 'local')
-)
+const allSources = computed(() => sourcesQuery.data.value ?? [])
+const remoteSources = computed(() => allSources.value.filter(s => s.type !== 'local'))
 
 const pollingValues = reactive<Record<string, number>>({})
 

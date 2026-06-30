@@ -6,6 +6,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.5.0',
+    date: '2026-07-01',
+    changes: [
+      'Settings panel: app theme and font size buttons right-aligned',
+      'Settings panel: code theme changed to vertical list with checkmark indicator',
+      'Settings panel: polling section always visible with note for GitHub/HTTP sources; local sources shown as disabled',
+      'Changelog: show recent 5 entries with link to full history page',
+      'Fix CI: pytest path resolution and ruff lint/format errors',
+    ],
+  },
+  {
     version: '0.4.0',
     date: '2026-07-01',
     changes: [
