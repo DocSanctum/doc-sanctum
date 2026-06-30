@@ -20,11 +20,13 @@ def _search_lines(lines: list[str], query: str) -> list[dict[str, Any]]:
         if q in line.lower():
             start = max(0, i - CONTEXT_LINES)
             end = min(len(lines), i + CONTEXT_LINES + 1)
-            matches.append({
-                "line_number": i + 1,
-                "line": line.rstrip("\n"),
-                "context": [l.rstrip("\n") for l in lines[start:end]],
-            })
+            matches.append(
+                {
+                    "line_number": i + 1,
+                    "line": line.rstrip("\n"),
+                    "context": [ln.rstrip("\n") for ln in lines[start:end]],
+                }
+            )
             if len(matches) >= MAX_MATCHES_PER_FILE:
                 break
     return matches
@@ -77,14 +79,18 @@ async def search_documents_handler(query: str, source_id: str | None = None) -> 
     async with async_session_factory() as session:
         if source_id:
             rows = (
-                await session.execute(
-                    text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+                (
+                    await session.execute(
+                        text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         else:
             rows = (
-                await session.execute(text("SELECT * FROM source"))
-            ).mappings().all()
+                (await session.execute(text("SELECT * FROM source"))).mappings().all()
+            )
 
     if source_id and not rows:
         raise ValueError(f"Source not found: {source_id}")

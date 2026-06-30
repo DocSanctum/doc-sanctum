@@ -2,9 +2,8 @@ import os
 import tempfile
 
 import pytest
-
-from backend.app.services.tree_builder import build_local_tree
 from backend.app.models.source import Source
+from backend.app.services.tree_builder import build_local_tree
 
 
 def _make_source(path: str) -> Source:

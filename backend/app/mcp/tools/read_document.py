@@ -52,10 +52,14 @@ async def read_document_handler(source_id: str, path: str) -> str:
     """
     async with async_session_factory() as session:
         row = (
-            await session.execute(
-                text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+            (
+                await session.execute(
+                    text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+                )
             )
-        ).mappings().first()
+            .mappings()
+            .first()
+        )
 
     if not row:
         raise ValueError(f"Source not found: {source_id}")

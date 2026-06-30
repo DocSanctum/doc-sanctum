@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-
 from backend.app.mcp.tools.search_documents import MAX_MATCHES_PER_FILE, _search_lines
 
 

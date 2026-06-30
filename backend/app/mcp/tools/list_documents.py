@@ -9,21 +9,27 @@ from ...services.tree_builder import build_local_tree, build_remote_tree
 from ..cache import get_cached, mark_stale, set_cached
 
 
-def _flatten_tree(node: dict[str, Any], results: list[dict[str, Any]], source: Source) -> None:
+def _flatten_tree(
+    node: dict[str, Any], results: list[dict[str, Any]], source: Source
+) -> None:
     if not node.get("is_dir"):
-        results.append({
-            "path": node["path"],
-            "name": node["name"],
-            "source_id": source.id,
-            "source_name": source.name,
-            "source_type": source.type,
-        })
+        results.append(
+            {
+                "path": node["path"],
+                "name": node["name"],
+                "source_id": source.id,
+                "source_name": source.name,
+                "source_type": source.type,
+            }
+        )
         return
     for child in node.get("children", []):
         _flatten_tree(child, results, source)
 
 
-async def _get_tree_with_cache(source: Source) -> tuple[dict[str, Any], dict[str, Any] | None]:
+async def _get_tree_with_cache(
+    source: Source,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Returns (tree, warning_or_None)."""
     if source.type == "local":
         return build_local_tree(source), None
@@ -44,7 +50,7 @@ async def _get_tree_with_cache(source: Source) -> tuple[dict[str, Any], dict[str
                 "source_id": source.id,
                 "source_name": source.name,
                 "reason": "rate_limit",
-                "message": f"GitHub API rate limit exceeded. Serving cached data.",
+                "message": "GitHub API rate limit exceeded. Serving cached data.",
                 "stale": True,
             }
             if stale:
@@ -56,7 +62,10 @@ async def _get_tree_with_cache(source: Source) -> tuple[dict[str, Any], dict[str
             "message": str(exc),
             "stale": False,
         }
-        return {"source_id": source.id, "root": {"is_dir": True, "children": []}}, warning
+        return {
+            "source_id": source.id,
+            "root": {"is_dir": True, "children": []},
+        }, warning
     except Exception as exc:
         warning = {
             "source_id": source.id,
@@ -65,7 +74,10 @@ async def _get_tree_with_cache(source: Source) -> tuple[dict[str, Any], dict[str
             "message": str(exc),
             "stale": False,
         }
-        return {"source_id": source.id, "root": {"is_dir": True, "children": []}}, warning
+        return {
+            "source_id": source.id,
+            "root": {"is_dir": True, "children": []},
+        }, warning
 
 
 async def list_documents_handler(source_id: str | None = None) -> str:
@@ -79,14 +91,18 @@ async def list_documents_handler(source_id: str | None = None) -> str:
     async with async_session_factory() as session:
         if source_id:
             rows = (
-                await session.execute(
-                    text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+                (
+                    await session.execute(
+                        text("SELECT * FROM source WHERE id = :id"), {"id": source_id}
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
         else:
             rows = (
-                await session.execute(text("SELECT * FROM source"))
-            ).mappings().all()
+                (await session.execute(text("SELECT * FROM source"))).mappings().all()
+            )
 
     if source_id and not rows:
         raise ValueError(f"Source not found: {source_id}")
@@ -102,4 +118,6 @@ async def list_documents_handler(source_id: str | None = None) -> str:
         if tree and tree.get("root"):
             _flatten_tree(tree["root"], documents, source)
 
-    return json.dumps({"documents": documents, "warnings": warnings}, ensure_ascii=False)
+    return json.dumps(
+        {"documents": documents, "warnings": warnings}, ensure_ascii=False
+    )
