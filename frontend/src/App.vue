@@ -33,7 +33,7 @@
       <div class="border-t border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0">
         <button
           class="flex items-center gap-2 w-full px-2 py-2 rounded text-sm transition-colors"
-          :class="view === 'settings'
+          :class="view === 'settings' || view === 'changelog'
             ? 'bg-blue-600 text-white'
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'"
           @click="view = 'settings'"
@@ -56,7 +56,8 @@
 
     <!-- Main area -->
     <main class="flex-1 overflow-y-auto" :class="{ 'select-none': dragging }">
-      <SettingsPanel v-if="view === 'settings'" />
+      <ChangelogPage v-if="view === 'changelog'" @back="view = 'settings'" />
+      <SettingsPanel v-else-if="view === 'settings'" @open-changelog="view = 'changelog'" />
       <MarkdownViewer
         v-else-if="selectedFile"
         :source-id="selectedFile.sourceId"
@@ -76,6 +77,7 @@ import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
 import SettingsPanel from './components/Settings/SettingsPanel.vue'
+import ChangelogPage from './components/Settings/ChangelogPage.vue'
 import MarkdownViewer from './components/Viewer/MarkdownViewer.vue'
 import EmptyState from './components/Viewer/EmptyState.vue'
 import { useSources } from './composables/useSources'
@@ -83,7 +85,7 @@ import { useSources } from './composables/useSources'
 const { remove } = useSources()
 
 const showAdd = ref(false)
-const view = ref<'viewer' | 'settings'>('viewer')
+const view = ref<'viewer' | 'settings' | 'changelog'>('viewer')
 const selectedSourceId = ref<string | null>(null)
 const selectedFile = ref<{ sourceId: string; path: string } | null>(null)
 
