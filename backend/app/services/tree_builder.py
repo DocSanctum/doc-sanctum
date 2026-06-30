@@ -49,7 +49,7 @@ async def build_remote_tree(source: Source) -> dict[str, Any]:
 
 
 def build_local_tree(source: Source) -> dict[str, Any]:
-    root_children = _scan_dir(source.path, "")
+    root_children = _scan_dir(os.path.expanduser(source.path), "")
     return {
         "source_id": source.id,
         "root": {
