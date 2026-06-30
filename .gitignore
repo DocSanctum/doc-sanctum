@@ -1,6 +1,8 @@
 # AI coding tool directories
 .claude/
 .specify/
+CLAUDE.md
+specs/
 .gemini/
 .codex/
 .cursor/
