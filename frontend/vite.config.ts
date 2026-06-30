@@ -5,8 +5,8 @@ export default defineConfig({
   plugins: [vue()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
-      '/sse': 'http://localhost:8000',
+      '/api': process.env.VITE_BACKEND_URL ?? 'http://backend:8000',
+      '/sse': process.env.VITE_BACKEND_URL ?? 'http://backend:8000',
     },
   },
   test: {

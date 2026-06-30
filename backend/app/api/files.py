@@ -49,8 +49,9 @@ async def get_file(
 ) -> str:
     source = await _get_source_or_404(session, source_id)
     # Path traversal guard
-    safe_root = os.path.realpath(source.path)
-    target = os.path.realpath(os.path.join(source.path, path))
+    expanded = os.path.expanduser(source.path)
+    safe_root = os.path.realpath(expanded)
+    target = os.path.realpath(os.path.join(expanded, path))
     if not target.startswith(safe_root + os.sep) and target != safe_root:
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.isfile(target):
