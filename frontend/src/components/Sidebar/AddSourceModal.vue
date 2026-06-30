@@ -1,14 +1,14 @@
 <template>
   <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="$emit('close')">
-    <div class="bg-gray-800 rounded-lg p-6 w-96 shadow-xl">
-      <h2 class="text-white font-semibold mb-4">소스 경로 추가</h2>
+    <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 shadow-xl">
+      <h2 class="text-gray-900 dark:text-white font-semibold mb-4">소스 경로 추가</h2>
       <form @submit.prevent="submit">
         <div class="mb-3">
-          <label class="text-xs text-gray-300 block mb-1">이름 (선택)</label>
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">이름 (선택)</label>
           <input v-model="form.name" class="input" placeholder="My Docs" />
         </div>
         <div class="mb-3">
-          <label class="text-xs text-gray-300 block mb-1">유형 <span class="text-red-400">*</span></label>
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">유형 <span class="text-red-400">*</span></label>
           <select v-model="form.type" class="input">
             <option value="local">로컬 폴더</option>
             <option value="github">GitHub 저장소</option>
@@ -17,11 +17,11 @@
           </select>
         </div>
         <div class="mb-3">
-          <label class="text-xs text-gray-300 block mb-1">경로 / URL <span class="text-red-400">*</span></label>
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">경로 / URL <span class="text-red-400">*</span></label>
           <input v-model="form.path" class="input" :placeholder="pathPlaceholder" required />
         </div>
         <div v-if="form.type !== 'local'" class="mb-3">
-          <label class="text-xs text-gray-300 block mb-1">폴링 간격 (초)</label>
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">폴링 간격 (초)</label>
           <input v-model.number="form.polling_interval_seconds" type="number" class="input" :placeholder="defaultPoll.toString()" min="30" />
         </div>
         <p v-if="error" class="text-red-400 text-xs mb-3">{{ error }}</p>

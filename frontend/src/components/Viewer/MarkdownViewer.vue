@@ -4,7 +4,7 @@
     <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
     <div
       v-else
-      class="prose prose-invert max-w-none"
+      class="prose dark:prose-invert max-w-none"
       :class="fontSize !== 'base' ? `prose-${fontSize}` : ''"
       v-html="rendered"
       @click="handleClick"
@@ -70,13 +70,14 @@ function handleClick(e: MouseEvent) {
 <style>
 /* Code blocks */
 .prose pre.hljs {
-  background: #0d1117;
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
   margin: 1.5rem 0;
-  border: 1px solid #30363d;
 }
+:root.dark .prose pre.hljs { border: 1px solid #30363d; }
+:root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; }
+
 .prose pre.hljs code {
   background: transparent;
   padding: 0;
@@ -85,14 +86,21 @@ function handleClick(e: MouseEvent) {
 }
 
 /* Inline code */
-.prose :not(pre) > code {
+:root.dark .prose :not(pre) > code {
   background: #1f2937;
   border: 1px solid #374151;
+  color: #e5e7eb;
+}
+:root:not(.dark) .prose :not(pre) > code {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  color: #1f2937;
+}
+.prose :not(pre) > code {
   border-radius: 4px;
   padding: 0.15em 0.4em;
   font-size: 0.875em;
   font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
-  color: #e5e7eb;
 }
 .prose :not(pre) > code::before,
 .prose :not(pre) > code::after {
@@ -105,17 +113,13 @@ function handleClick(e: MouseEvent) {
   border-collapse: collapse;
   font-size: 0.9em;
 }
-.prose thead th {
-  background: #1f2937;
-  border-bottom: 2px solid #374151;
-}
-.prose th, .prose td {
-  border: 1px solid #374151;
-  padding: 0.6rem 0.9rem;
-}
-.prose tbody tr:hover {
-  background: #1a2233;
-}
+:root.dark .prose thead th { background: #1f2937; border-bottom: 2px solid #374151; }
+:root:not(.dark) .prose thead th { background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
+:root.dark .prose th, :root.dark .prose td { border: 1px solid #374151; }
+:root:not(.dark) .prose th, :root:not(.dark) .prose td { border: 1px solid #e5e7eb; }
+.prose th, .prose td { padding: 0.6rem 0.9rem; }
+:root.dark .prose tbody tr:hover { background: #1a2233; }
+:root:not(.dark) .prose tbody tr:hover { background: #f9fafb; }
 
 /* Task list */
 .prose .task-list-item {
@@ -139,12 +143,10 @@ function handleClick(e: MouseEvent) {
 /* Blockquote */
 .prose blockquote {
   border-left: 4px solid #3b82f6;
-  background: #111827;
   border-radius: 0 6px 6px 0;
   padding: 0.75rem 1.25rem;
-  color: #d1d5db;
 }
-.prose blockquote p {
-  margin: 0;
-}
+:root.dark .prose blockquote { background: #111827; color: #d1d5db; }
+:root:not(.dark) .prose blockquote { background: #eff6ff; color: #1e3a5f; }
+.prose blockquote p { margin: 0; }
 </style>
