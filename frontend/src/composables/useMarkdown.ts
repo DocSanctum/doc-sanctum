@@ -1,6 +1,8 @@
 import MarkdownIt from 'markdown-it'
 import taskLists from 'markdown-it-task-lists'
 import anchor from 'markdown-it-anchor'
+import footnote from 'markdown-it-footnote'
+import abbr from 'markdown-it-abbr'
 import hljs from 'highlight.js'
 
 const md = new MarkdownIt({
@@ -8,14 +10,16 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
   highlight(code, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-    }
-    return hljs.highlightAuto(code).value
+    const highlighted = lang && hljs.getLanguage(lang)
+      ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+      : hljs.highlightAuto(code).value
+    return `<pre class="hljs"><code>${highlighted}</code></pre>`
   },
 })
   .use(taskLists, { enabled: true })
-  .use(anchor)
+  .use(anchor, { permalink: anchor.permalink.headerLink() })
+  .use(footnote)
+  .use(abbr)
 
 export function useMarkdown() {
   function render(src: string): string {
