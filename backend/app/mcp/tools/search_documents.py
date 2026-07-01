@@ -7,7 +7,7 @@ from sqlalchemy import text
 from ...core.database import async_session_factory
 from ...models.source import Source
 from .list_documents import _flatten_tree, _get_tree_with_cache
-from .read_document import _read_github, _read_http, _read_local
+from .read_document import read_with_cache
 
 MAX_MATCHES_PER_FILE = 10
 CONTEXT_LINES = 2
@@ -34,12 +34,8 @@ def _search_lines(lines: list[str], query: str) -> list[dict[str, Any]]:
 
 async def _read_content(source: Source, path: str) -> str | None:
     try:
-        if source.type == "local":
-            return await _read_local(source, path)
-        elif source.type == "github":
-            return await _read_github(source, path)
-        else:
-            return await _read_http(source, path)
+        content, _warning = await read_with_cache(source, path)
+        return content
     except Exception:
         return None
 

@@ -2,14 +2,24 @@ from __future__ import annotations
 
 import backend.app.mcp.cache as cache_module
 import pytest
-from backend.app.mcp.cache import get_cached, mark_stale, set_cached
+from backend.app.mcp.cache import (
+    clear_source,
+    get_cached,
+    get_cached_content,
+    mark_stale,
+    mark_stale_content,
+    set_cached,
+    set_cached_content,
+)
 
 
 @pytest.fixture(autouse=True)
 def clear_cache():
     cache_module._cache.clear()
+    cache_module._content_cache.clear()
     yield
     cache_module._cache.clear()
+    cache_module._content_cache.clear()
 
 
 def test_set_and_get_within_ttl():
@@ -53,3 +63,59 @@ def test_stale_entry_returned_even_after_ttl(monkeypatch):
     entry = get_cached("src-4")
     assert entry is not None
     assert entry["stale"] is True
+
+
+# --- Content cache (source_id, path) — FR-004, FR-005: remote sources only ---
+
+
+def test_set_and_get_content_within_ttl():
+    set_cached_content("src-5", "guide/intro.md", "# Intro\n")
+    entry = get_cached_content("src-5", "guide/intro.md")
+    assert entry is not None
+    assert entry["data"] == "# Intro\n"
+    assert entry["stale"] is False
+
+
+def test_get_content_returns_none_after_ttl(monkeypatch):
+    set_cached_content("src-6", "a.md", "content")
+    monkeypatch.setattr(cache_module, "TTL", 0.0)
+    assert get_cached_content("src-6", "a.md") is None
+
+
+def test_mark_stale_content_keeps_data():
+    set_cached_content("src-7", "a.md", "content")
+    mark_stale_content("src-7", "a.md")
+    entry = get_cached_content("src-7", "a.md")
+    assert entry is not None
+    assert entry["stale"] is True
+    assert entry["data"] == "content"
+
+
+def test_content_cache_keys_are_scoped_by_path():
+    set_cached_content("src-8", "a.md", "content A")
+    set_cached_content("src-8", "b.md", "content B")
+    assert get_cached_content("src-8", "a.md")["data"] == "content A"
+    assert get_cached_content("src-8", "b.md")["data"] == "content B"
+
+
+def test_get_content_returns_none_for_unknown():
+    assert get_cached_content("unknown", "a.md") is None
+
+
+def test_clear_source_removes_tree_and_content_entries():
+    set_cached("src-9", {"root": {}})
+    set_cached_content("src-9", "a.md", "content A")
+    set_cached_content("src-9", "b.md", "content B")
+    set_cached_content("src-other", "a.md", "unrelated")
+
+    clear_source("src-9")
+
+    assert get_cached("src-9") is None
+    assert get_cached_content("src-9", "a.md") is None
+    assert get_cached_content("src-9", "b.md") is None
+    # a different source's content cache must survive
+    assert get_cached_content("src-other", "a.md")["data"] == "unrelated"
+
+
+def test_clear_source_nonexistent_is_noop():
+    clear_source("nonexistent")  # should not raise
