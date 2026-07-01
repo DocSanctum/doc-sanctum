@@ -33,6 +33,7 @@ frontend/build/
 
 # Docker
 *.dockerignore
+.docker_last_build
 
 # OS
 .DS_Store
