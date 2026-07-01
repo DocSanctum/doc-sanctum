@@ -1,23 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 from sqlalchemy import text
 
 from ..core.database import async_session_factory
+from ..mcp.cache import set_cached
 from ..models.source import Source
+from ..vectorstore.indexer import sync_source_index
 from .github import fetch_github_tree
 from .manifest import fetch_manifest_tree
 from .watcher import _queues
+
+logger = logging.getLogger(__name__)
 
 
 async def _poll_source(source: Source) -> None:
     try:
         if source.type == "github":
-            await fetch_github_tree(source.path, source.id)
+            tree = await fetch_github_tree(source.path, source.id)
         else:
-            await fetch_manifest_tree(source.path, source.id, source.name)
+            tree = await fetch_manifest_tree(source.path, source.id, source.name)
+        set_cached(source.id, tree)
         status, error_msg = "active", None
     except Exception as exc:
         status, error_msg = "error", str(exc)
@@ -28,6 +34,12 @@ async def _poll_source(source: Source) -> None:
             {"s": status, "e": error_msg, "id": source.id},
         )
         await session.commit()
+
+    if status == "active":
+        try:
+            await sync_source_index(source)
+        except Exception:
+            logger.exception("Failed to sync vector index for source %s", source.id)
 
     payload: dict[str, Any] = {"event": "tree_refreshed", "source_id": source.id}
     if source.id in _queues:

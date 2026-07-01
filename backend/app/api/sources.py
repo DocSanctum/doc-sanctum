@@ -1,4 +1,6 @@
 import asyncio
+import functools
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -8,6 +10,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_session
 from ..models.source import Source, SourceType
 from ..services.poller import poll_now
+from ..services.watcher import register_index_listener, start_watching, stop_watching
+from ..vectorstore.indexer import (
+    EngineUnavailableError,
+    create_index,
+    delete_source_index,
+    handle_watch_event,
+)
 
 router = APIRouter(tags=["sources"])
 
@@ -50,6 +59,12 @@ async def register_source(
     source = Source(
         name=name, type=req.type, path=req.path, polling_interval_seconds=poll
     )
+
+    try:
+        index_warnings = await create_index(source)
+    except EngineUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     try:
         await session.execute(
             text(
@@ -60,10 +75,22 @@ async def register_source(
         )
         await session.commit()
     except Exception as exc:
+        await delete_source_index(source.id)
         if "UNIQUE" in str(exc):
             raise HTTPException(status_code=409, detail="Path already registered")
         raise
-    return source.to_dict()
+
+    if source.type == "local":
+        watch_root = os.path.expanduser(source.path)
+        start_watching(source.id, watch_root)
+        register_index_listener(
+            source.id, functools.partial(handle_watch_event, source, watch_root)
+        )
+
+    result = source.to_dict()
+    if index_warnings:
+        result["index_warnings"] = index_warnings
+    return result
 
 
 @router.get("/sources")
@@ -83,6 +110,8 @@ async def delete_source(
     await _get_or_404(session, source_id)
     await session.execute(text("DELETE FROM source WHERE id = :id"), {"id": source_id})
     await session.commit()
+    await delete_source_index(source_id)
+    stop_watching(source_id)
 
 
 @router.patch("/sources/{source_id}")

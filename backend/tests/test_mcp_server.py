@@ -7,6 +7,7 @@ def test_mcp_tool_names_no_handler_suffix():
     assert "list_documents" in tool_names
     assert "read_document" in tool_names
     assert "search_documents" in tool_names
+    assert "semantic_search_documents" in tool_names
 
 
 def test_mcp_tool_names_no_raw_handler():
@@ -17,6 +18,6 @@ def test_mcp_tool_names_no_raw_handler():
 
 
 def test_mcp_tool_count():
-    """등록된 툴이 정확히 3개여야 한다."""
+    """등록된 툴이 정확히 4개여야 한다."""
     tool_names = [tool.name for tool in mcp._tool_manager._tools.values()]
-    assert len(tool_names) == 3
+    assert len(tool_names) == 4

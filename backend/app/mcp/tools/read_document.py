@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Any
 
 import httpx
 from sqlalchemy import text
@@ -7,6 +8,7 @@ from sqlalchemy import text
 from ...core.database import async_session_factory
 from ...models.source import Source
 from ...services.github import _github_headers, _parse_github_url
+from ..cache import get_cached_content, mark_stale_content, set_cached_content
 
 
 async def _read_local(source: Source, path: str) -> str:
@@ -43,6 +45,42 @@ async def _read_http(source: Source, path: str) -> str:
     return resp.text
 
 
+async def _fetch_remote(source: Source, path: str) -> str:
+    if source.type == "github":
+        return await _read_github(source, path)
+    return await _read_http(source, path)
+
+
+async def read_with_cache(
+    source: Source, path: str
+) -> tuple[str, dict[str, Any] | None]:
+    """Read document content, applying the (source_id, path) content cache to
+    remote sources only (FR-004, FR-005). Returns (content, warning_or_None)."""
+    if source.type == "local":
+        return await _read_local(source, path), None
+
+    cached = get_cached_content(source.id, path)
+    if cached is not None and not cached["stale"]:
+        return cached["data"], None
+
+    try:
+        content = await _fetch_remote(source, path)
+        set_cached_content(source.id, path, content)
+        return content, None
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (403, 429) and cached is not None:
+            mark_stale_content(source.id, path)
+            warning = {
+                "source_id": source.id,
+                "source_name": source.name,
+                "reason": "rate_limit",
+                "message": "GitHub API rate limit exceeded. Serving cached content.",
+                "stale": True,
+            }
+            return cached["data"], warning
+        raise
+
+
 async def read_document_handler(source_id: str, path: str) -> str:
     """Read the full content of a specific MD file.
 
@@ -65,20 +103,14 @@ async def read_document_handler(source_id: str, path: str) -> str:
         raise ValueError(f"Source not found: {source_id}")
 
     source = Source.from_row(dict(row))
+    content, warning = await read_with_cache(source, path)
 
-    if source.type == "local":
-        content = await _read_local(source, path)
-    elif source.type == "github":
-        content = await _read_github(source, path)
-    else:
-        content = await _read_http(source, path)
-
-    return json.dumps(
-        {
-            "path": path,
-            "source_id": source.id,
-            "source_name": source.name,
-            "content": content,
-        },
-        ensure_ascii=False,
-    )
+    result: dict[str, Any] = {
+        "path": path,
+        "source_id": source.id,
+        "source_name": source.name,
+        "content": content,
+    }
+    if warning:
+        result["warning"] = warning
+    return json.dumps(result, ensure_ascii=False)

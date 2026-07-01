@@ -1,10 +1,39 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+
+logger = logging.getLogger(__name__)
+
+IndexListener = Callable[[dict[str, Any]], Awaitable[None]]
+
+# source_id -> async callback invoked (in addition to the SSE queue) for every
+# local .md change, so the vector index stays in sync regardless of whether an
+# SSE client is connected (FR-010).
+_index_listeners: dict[str, IndexListener] = {}
+
+
+def register_index_listener(source_id: str, callback: IndexListener) -> None:
+    _index_listeners[source_id] = callback
+
+
+def unregister_index_listener(source_id: str) -> None:
+    _index_listeners.pop(source_id, None)
+
+
+async def _notify_index_listener(payload: dict[str, Any]) -> None:
+    listener = _index_listeners.get(payload["source_id"])
+    if listener is None:
+        return
+    try:
+        await listener(payload)
+    except Exception:
+        logger.exception("Index listener failed for source %s", payload["source_id"])
 
 
 class _MDHandler(FileSystemEventHandler):
@@ -22,6 +51,7 @@ class _MDHandler(FileSystemEventHandler):
         if old_path:
             payload["old_path"] = old_path
         asyncio.run_coroutine_threadsafe(self._queue.put(payload), self._loop)
+        asyncio.run_coroutine_threadsafe(_notify_index_listener(payload), self._loop)
 
     def on_created(self, event: FileSystemEvent) -> None:
         if not event.is_directory:
@@ -63,6 +93,7 @@ def stop_watching(source_id: str) -> None:
         obs.stop()
         obs.join()
     _queues.pop(source_id, None)
+    unregister_index_listener(source_id)
 
 
 def get_queue(source_id: str) -> asyncio.Queue | None:

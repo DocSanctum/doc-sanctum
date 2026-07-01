@@ -10,6 +10,7 @@ from .api import mcp as mcp_api
 from .core.database import create_tables
 from .mcp.server import mcp
 from .services.poller import start_polling_all
+from .vectorstore.client import init_engine
 
 _mcp_sse_app: ASGIApp = mcp.sse_app()
 _mcp_http_app: ASGIApp = mcp.streamable_http_app()
@@ -31,6 +32,7 @@ def _make_guard(inner: ASGIApp) -> ASGIApp:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_tables()
+    init_engine()
     await start_polling_all()
     yield
 
