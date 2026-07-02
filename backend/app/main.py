@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="MD Doc Browser", lifespan=lifespan)
+app = FastAPI(title="DocSanctum", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
