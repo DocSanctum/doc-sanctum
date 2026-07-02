@@ -6,4 +6,4 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 docker compose down
 
-echo "doc-sanctum이 중지되었습니다."
+echo "doc-sanctum stopped."

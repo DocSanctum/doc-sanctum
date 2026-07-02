@@ -16,15 +16,15 @@ for arg in "$@"; do
       FORCE_BUILD=true
       ;;
     *)
-      echo "알 수 없는 옵션: $arg" >&2
-      echo "사용법: $0 [--build]" >&2
+      echo "Unknown option: $arg" >&2
+      echo "Usage: $0 [--build]" >&2
       exit 1
       ;;
   esac
 done
 
 if [ ! -f .env ]; then
-  echo ".env 파일이 없습니다. .env.example을 참고하여 .env를 먼저 만들어주세요:"
+  echo ".env file not found. Create one from .env.example first:"
   echo "  cp .env.example .env"
   exit 1
 fi
@@ -49,10 +49,10 @@ elif [ -n "$CURRENT_COMMIT" ]; then
 fi
 
 if $NEED_BUILD; then
-  echo "변경 사항이 감지되어 이미지를 다시 빌드합니다..."
+  echo "Changes detected, rebuilding images..."
   docker compose up -d --build
 else
-  echo "변경 사항이 없어 기존 이미지로 바로 실행합니다. (강제 재빌드: $0 --build)"
+  echo "No changes detected, starting with existing images. (force rebuild: $0 --build)"
   docker compose up -d
 fi
 
@@ -61,9 +61,9 @@ if [ -n "$CURRENT_COMMIT" ]; then
 fi
 
 echo ""
-echo "doc-sanctum이 시작되었습니다."
-echo "  프론트엔드: http://localhost:${FRONTEND_PORT:-3000}"
-echo "  백엔드 API: http://localhost:${BACKEND_PORT:-8000}"
+echo "doc-sanctum is up."
+echo "  Frontend: http://localhost:${FRONTEND_PORT:-3000}"
+echo "  Backend API: http://localhost:${BACKEND_PORT:-8000}"
 echo ""
-echo "로그 보기: docker compose logs -f"
-echo "중지하기: ./stop.sh"
+echo "View logs: docker compose logs -f"
+echo "Stop: ./stop.sh"
