@@ -60,3 +60,9 @@ export interface RegisterSourcePayload {
   path: string
   polling_interval_seconds?: number | null
 }
+
+export type DeploymentMode = 'standalone' | 'scaleout'
+
+export interface DeploymentStatus {
+  mode: DeploymentMode
+}

@@ -8,6 +8,7 @@ from typing import Any
 import chromadb
 from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
+from ..core.config import settings
 from .chunker import Chunk
 
 logger = logging.getLogger(__name__)
@@ -25,8 +26,15 @@ def _collection_name(source_id: str) -> str:
 def init_engine() -> bool:
     """Initialize the local embedding engine and vector DB client once, probing
     the embedding function with a trivial call. Distinguishes "engine
-    unavailable" (FR-014) from per-document embedding failures (FR-009).
-    Thread-safe and safe to call multiple times."""
+    unavailable" (FR-014, 003) from per-document embedding failures (FR-009).
+    Thread-safe and safe to call multiple times.
+
+    In `scaleout` deployment mode (004), the vector store is a shared, remote
+    Chroma server rather than an in-process one, so a connection failure here
+    is re-raised instead of swallowed — main.py's lifespan calls this
+    unguarded, so the exception fails app startup (FR-010) rather than
+    silently degrading, since a `scaleout` replica with no shared index would
+    otherwise serve incomplete/inconsistent semantic search results."""
     global _client, _embedding_function, _engine_available
     with _init_lock:
         if _embedding_function is not None:
@@ -34,13 +42,25 @@ def init_engine() -> bool:
         try:
             _embedding_function = DefaultEmbeddingFunction()
             _embedding_function(["healthcheck"])
-            _client = chromadb.EphemeralClient()
+            if settings.deployment_mode == "scaleout":
+                if not settings.vector_store_host:
+                    raise RuntimeError(
+                        "VECTOR_STORE_HOST must be set when DEPLOYMENT_MODE=scaleout"
+                    )
+                _client = chromadb.HttpClient(
+                    host=settings.vector_store_host, port=settings.vector_store_port
+                )
+                _client.heartbeat()
+            else:
+                _client = chromadb.EphemeralClient()
             _engine_available = True
         except Exception:
             logger.exception("Failed to initialize local embedding engine")
             _embedding_function = None
             _client = None
             _engine_available = False
+            if settings.deployment_mode == "scaleout":
+                raise
     return _engine_available
 
 

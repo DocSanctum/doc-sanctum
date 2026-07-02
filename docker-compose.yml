@@ -1,4 +1,29 @@
+# --- Scaleout deployment (specs/004-scaleout-deployment) -------------------
+# The default setup below is `standalone`: one backend, one in-memory vector
+# index, local + remote sources both allowed. To run multiple backend
+# replicas sharing one persistent vector index instead:
+#   1. Start `vectorstore` (this compose file already does, it's cheap idle).
+#   2. Launch backend with DEPLOYMENT_MODE=scaleout, e.g.:
+#        DEPLOYMENT_MODE=scaleout docker compose up -d --scale backend=2
+#   3. Local filesystem sources are rejected in this mode (FR-004) — backend
+#      replicas don't have access to the operator's machine, only to remote
+#      GitHub/HTTP sources. Registering one returns 422.
+#   4. `vectorstore_data` persists the shared index across restarts/redeploys
+#      of any replica — do not delete it unless you intend to lose the index.
+#   5. Put a load balancer in front with least-connections (or similar
+#      load-aware) routing if you can — plain round-robin will keep sending
+#      requests to a replica that's mid-embedding a large re-index (see
+#      specs/004-scaleout-deployment/quickstart.md "운영 참고").
+# -----------------------------------------------------------------------------
 services:
+  vectorstore:
+    image: chromadb/chroma:latest
+    ports:
+      - "${VECTOR_STORE_HOST_PORT:-8001}:8000"  # host-facing port, for local inspection only
+    volumes:
+      - vectorstore_data:/chroma/chroma
+    restart: unless-stopped
+
   backend:
     build:
       context: ./backend
@@ -12,6 +37,9 @@ services:
       - DATABASE_URL=sqlite+aiosqlite:////data/db.sqlite3
       - DEFAULT_POLL_INTERVAL=${DEFAULT_POLL_INTERVAL:-300}
       - HOME=${HOME}
+      - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-standalone}  # standalone | scaleout
+      - VECTOR_STORE_HOST=${VECTOR_STORE_HOST:-vectorstore}  # only read when scaleout
+      - VECTOR_STORE_PORT=8000                                # vectorstore's in-network port
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
       - NO_PROXY=${NO_PROXY:-}
@@ -41,3 +69,4 @@ services:
 
 volumes:
   sqlite_data:
+  vectorstore_data:

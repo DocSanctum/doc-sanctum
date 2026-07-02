@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..core.config import settings
 from ..core.database import get_session
 from ..models.source import Source, SourceType
 from ..services.poller import poll_now
@@ -35,6 +36,18 @@ class PatchSourceRequest(BaseModel):
     polling_interval_seconds: int | None = None
 
 
+def _reject_local_source_in_scaleout(source_type: str) -> None:
+    """scaleout backend replicas have no access to the operator's local
+    filesystem, so local source registration must fail fast here rather than
+    succeeding and later failing on every list/read/index attempt (FR-004,
+    SC-003, specs/004-scaleout-deployment)."""
+    if settings.deployment_mode == "scaleout" and source_type == "local":
+        raise HTTPException(
+            status_code=422,
+            detail="Local sources are not supported in scaleout deployment mode",
+        )
+
+
 async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
     row = (
         (
@@ -54,6 +67,7 @@ async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
 async def register_source(
     req: RegisterSourceRequest, session: AsyncSession = Depends(get_session)
 ) -> dict:
+    _reject_local_source_in_scaleout(req.type)
     name = req.name or req.path.rstrip("/").split("/")[-1]
     poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
     source = Source(
