@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .api import files, sources, sse
+from .api import deployment, files, sources, sse
 from .api import mcp as mcp_api
 from .core.database import create_tables
 from .mcp.server import mcp
@@ -50,6 +50,7 @@ app.include_router(sources.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(sse.router, prefix="/api/v1")
 app.include_router(mcp_api.router, prefix="/api/v1")
+app.include_router(deployment.router, prefix="/api/v1")
 
 app.mount("/mcp", _make_guard(_mcp_sse_app))  # SSE transport (legacy)
 app.mount(

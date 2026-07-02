@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus } from '../types'
 
 const BASE = '/api/v1'
 
@@ -43,4 +43,6 @@ export const api = {
 
   setMcpEnabled: (enabled: boolean) =>
     request<McpStatus>('/mcp/status', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
+
+  getDeploymentMode: () => request<DeploymentStatus>('/deployment'),
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.indexer as indexer_module
 import pytest
 from backend.app.models.source import Source
@@ -38,6 +39,116 @@ def test_chunk_markdown_no_empty_chunks():
     text = "# A\n\n\n\n## B\n\ncontent\n\n\n\n"
     chunks = chunk_markdown(text)
     assert all(c.text.strip() for c in chunks)
+
+
+# --- Client init_engine() deployment-mode branching (004 research.md §1, §5) ---
+
+
+class _FakeEmbeddingFunction:
+    def __call__(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] for _ in texts]
+
+
+class _FakeHttpClient:
+    def __init__(self, host: str, port: int, heartbeat_ok: bool = True) -> None:
+        self.host = host
+        self.port = port
+        self._heartbeat_ok = heartbeat_ok
+
+    def heartbeat(self) -> int:
+        if not self._heartbeat_ok:
+            raise ConnectionError("cannot reach shared vector store")
+        return 1
+
+
+@pytest.fixture(autouse=True)
+def reset_engine_state():
+    client_module._client = None
+    client_module._embedding_function = None
+    client_module._engine_available = False
+    yield
+    client_module._client = None
+    client_module._embedding_function = None
+    client_module._engine_available = False
+
+
+def test_init_engine_standalone_uses_ephemeral_client(monkeypatch):
+    monkeypatch.setattr(client_module.settings, "deployment_mode", "standalone")
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+    calls: dict[str, object] = {}
+
+    class FakeChroma:
+        @staticmethod
+        def EphemeralClient():
+            calls["ephemeral"] = True
+            return object()
+
+        @staticmethod
+        def HttpClient(host, port):  # pragma: no cover - must not be called
+            calls["http"] = (host, port)
+            return _FakeHttpClient(host, port)
+
+    monkeypatch.setattr(client_module, "chromadb", FakeChroma)
+
+    assert client_module.init_engine() is True
+    assert calls.get("ephemeral") is True
+    assert "http" not in calls
+
+
+def test_init_engine_scaleout_connects_via_http_client(monkeypatch):
+    monkeypatch.setattr(client_module.settings, "deployment_mode", "scaleout")
+    monkeypatch.setattr(client_module.settings, "vector_store_host", "vectorstore")
+    monkeypatch.setattr(client_module.settings, "vector_store_port", 8000)
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+
+    class FakeChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            assert (host, port) == ("vectorstore", 8000)
+            return _FakeHttpClient(host, port, heartbeat_ok=True)
+
+    monkeypatch.setattr(client_module, "chromadb", FakeChroma)
+
+    assert client_module.init_engine() is True
+    assert client_module.is_engine_available() is True
+
+
+def test_init_engine_scaleout_raises_when_unreachable(monkeypatch):
+    monkeypatch.setattr(client_module.settings, "deployment_mode", "scaleout")
+    monkeypatch.setattr(client_module.settings, "vector_store_host", "vectorstore")
+    monkeypatch.setattr(client_module.settings, "vector_store_port", 8000)
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+
+    class FakeChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            return _FakeHttpClient(host, port, heartbeat_ok=False)
+
+    monkeypatch.setattr(client_module, "chromadb", FakeChroma)
+
+    with pytest.raises(Exception):
+        client_module.init_engine()
+    assert client_module.is_engine_available() is False
+
+
+def test_init_engine_standalone_failure_is_swallowed_not_raised(monkeypatch):
+    """standalone must keep 003's FR-014 behavior: failures degrade to
+    `False` (surfaced later as a 503 at registration) instead of crashing."""
+    monkeypatch.setattr(client_module.settings, "deployment_mode", "standalone")
+
+    def boom():
+        raise RuntimeError("embedding model missing")
+
+    monkeypatch.setattr(client_module, "DefaultEmbeddingFunction", boom)
+
+    assert client_module.init_engine() is False
+    assert client_module.is_engine_available() is False
 
 
 # --- Indexer (FR-009 partial failure, FR-010 targeted reindex, FR-012 cleanup) ---

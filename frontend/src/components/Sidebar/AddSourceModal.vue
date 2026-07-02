@@ -10,7 +10,7 @@
         <div class="mb-3">
           <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">유형 <span class="text-red-400">*</span></label>
           <select v-model="form.type" class="input">
-            <option value="local">로컬 폴더</option>
+            <option v-if="!isScaleout" value="local">로컬 폴더</option>
             <option value="github">GitHub 저장소</option>
             <option value="http">HTTP/HTTPS URL</option>
             <option value="localhost">Localhost URL</option>
@@ -37,11 +37,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useSources } from '../../composables/useSources'
+import { useDeploymentMode } from '../../composables/useDeploymentMode'
 import type { SourceType } from '../../types'
 
 const { register } = useSources()
+const deploymentQuery = useDeploymentMode()
+// scaleout backend replicas can't reach the operator's local filesystem, so
+// local source registration is rejected server-side too (FR-004) — hide it
+// here rather than let users hit a 422 (FR-007, specs/004-scaleout-deployment).
+const isScaleout = computed(() => deploymentQuery.data.value?.mode === 'scaleout')
 const loading = ref(false)
 const error = ref('')
 
@@ -50,6 +56,12 @@ const form = ref<{ name: string; type: SourceType; path: string; polling_interva
   type: 'local',
   path: '',
   polling_interval_seconds: null,
+})
+
+watch(isScaleout, (scaleout) => {
+  if (scaleout && form.value.type === 'local') {
+    form.value.type = 'github'
+  }
 })
 
 const defaultPoll = computed(() => ({ local: 300, github: 600, http: 300, localhost: 300 }[form.value.type]))
