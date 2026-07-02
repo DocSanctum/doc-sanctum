@@ -13,11 +13,18 @@ const md = new MarkdownIt({
     const highlighted = lang && hljs.getLanguage(lang)
       ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
       : hljs.highlightAuto(code).value
-    return `<pre class="hljs"><code>${highlighted}</code></pre>`
+    return `<div class="code-block"><button type="button" class="code-copy-btn" aria-label="코드 복사">복사</button><pre class="hljs"><code>${highlighted}</code></pre></div>`
   },
 })
   .use(taskLists, { enabled: true })
-  .use(anchor)
+  .use(anchor, {
+    permalink: anchor.permalink.linkInsideHeader({
+      class: 'header-anchor',
+      symbol: '#',
+      placement: 'after',
+      ariaHidden: true,
+    }),
+  })
   .use(footnote)
   .use(abbr)
 

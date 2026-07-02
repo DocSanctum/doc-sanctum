@@ -9,6 +9,8 @@
       v-else-if="treeQuery.data.value"
       :node="treeQuery.data.value.root"
       :selected-path="selectedPath"
+      :reveal-path="revealPath"
+      :reveal-token="revealToken"
       @select-file="$emit('select-file', sourceId!, $event)"
     />
     <div v-else class="text-xs text-gray-400 px-3 py-1">MD 파일 없음</div>
@@ -16,9 +18,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useFileTree } from '../../composables/useFileTree'
 import { useSSE } from '../../composables/useSSE'
+import { useTreeReveal } from '../../composables/useTreeReveal'
 import TreeNode from './TreeNode.vue'
 
 const props = defineProps<{
@@ -31,4 +34,5 @@ defineEmits<{ 'select-file': [sourceId: string, path: string] }>()
 const sourceIdRef = computed(() => props.sourceId)
 const { treeQuery } = useFileTree(sourceIdRef)
 useSSE(sourceIdRef)
+const { revealPath, revealToken } = useTreeReveal()
 </script>
