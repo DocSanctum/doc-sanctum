@@ -17,7 +17,7 @@
         <SourceList
           :selected-source-id="selectedSourceId"
           @select-source="selectSource"
-          @delete-source="deleteSource"
+          @delete-source="requestDelete"
           @refresh-source="refreshSource"
         />
         <div v-if="selectedSourceId" class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
@@ -69,14 +69,22 @@
     </main>
 
     <AddSourceModal v-if="showAdd" @close="showAdd = false" />
+    <ConfirmDeleteModal
+      v-if="pendingDeleteSource"
+      :source-name="pendingDeleteSource.name"
+      :loading="remove.isPending.value"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
+import ConfirmDeleteModal from './components/Sidebar/ConfirmDeleteModal.vue'
 import SettingsPanel from './components/Settings/SettingsPanel.vue'
 import ChangelogPage from './components/Settings/ChangelogPage.vue'
 import MarkdownViewer from './components/Viewer/MarkdownViewer.vue'
@@ -85,10 +93,14 @@ import ReadingProgressBar from './components/Viewer/ReadingProgressBar.vue'
 import { useSources } from './composables/useSources'
 import { useViewerUrl } from './composables/useViewerUrl'
 
-const { remove } = useSources()
+const { sourcesQuery, remove } = useSources()
 const viewerUrl = useViewerUrl()
 
 const showAdd = ref(false)
+const pendingDeleteId = ref<string | null>(null)
+const pendingDeleteSource = computed(() =>
+  sourcesQuery.data.value?.find((s) => s.id === pendingDeleteId.value) ?? null
+)
 const view = ref<'viewer' | 'settings' | 'changelog'>('viewer')
 
 // 최초 로드 시 URL의 source/file 쿼리 파라미터를 그대로 신뢰해 복원한다(FR-006).
@@ -155,8 +167,19 @@ function navigateFile(path: string) {
   }
 }
 
-async function deleteSource(id: string) {
+function requestDelete(id: string) {
+  pendingDeleteId.value = id
+}
+
+function cancelDelete() {
+  pendingDeleteId.value = null
+}
+
+async function confirmDelete() {
+  const id = pendingDeleteId.value
+  if (!id) return
   await remove.mutateAsync(id)
+  pendingDeleteId.value = null
   if (selectedSourceId.value === id) {
     selectedSourceId.value = null
     selectedFile.value = null
