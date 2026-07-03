@@ -40,6 +40,7 @@ services:
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
+        HOME: ${HOME}
     ports:
       - "${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
     environment:
@@ -55,6 +56,12 @@ services:
     volumes:
       - sqlite_data:/data
       - ${HOME}:${HOME}:ro
+      # Writable overlay on top of the read-only HOME mount above: the
+      # embedding model chromadb bakes into the image during build lives at
+      # this same path (Path.home()/.cache/chroma — see backend/Dockerfile),
+      # so Docker auto-populates this named volume from the image on first
+      # run instead of trying to write into the read-only host HOME mount.
+      - embedding_model_cache:${HOME}/.cache/chroma
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
@@ -79,3 +86,4 @@ services:
 volumes:
   sqlite_data:
   vectorstore_data:
+  embedding_model_cache:

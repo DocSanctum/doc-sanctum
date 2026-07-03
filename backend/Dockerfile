@@ -11,6 +11,15 @@ ENV HTTP_PROXY=${HTTP_PROXY} \
     HTTPS_PROXY=${HTTPS_PROXY} \
     NO_PROXY=${NO_PROXY}
 
+# docker-compose sets the container's runtime HOME to the host user's HOME
+# (so local filesystem sources can be browsed under the same paths) and
+# bind-mounts it read-only. chromadb resolves its embedding model cache to
+# Path.home()/.cache/chroma, so HOME must match the runtime value here too —
+# otherwise the model warmed below is baked under the build's default /root
+# and is unreachable once HOME points elsewhere at runtime.
+ARG HOME=/root
+ENV HOME=${HOME}
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
