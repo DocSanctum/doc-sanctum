@@ -10,10 +10,19 @@
 #      GitHub/HTTP sources. Registering one returns 422.
 #   4. `vectorstore_data` persists the shared index across restarts/redeploys
 #      of any replica — do not delete it unless you intend to lose the index.
-#   5. Put a load balancer in front with least-connections (or similar
+#   5. `BACKEND_PORT` is now a host port *range* (default 8000-8009), because
+#      a fixed single port can't be published by more than one replica —
+#      `--scale backend=2` fails outright otherwise ("port is already
+#      allocated"). Each replica binds the next free port in the range, so
+#      with 2 replicas up you'll see them on 8000 and 8001, including their
+#      MCP endpoints (`:8000/mcp`, `:8001/mcp`, ...) — the MCP address is NOT
+#      the same across replicas when accessed directly.
+#   6. Put a load balancer in front with least-connections (or similar
 #      load-aware) routing if you can — plain round-robin will keep sending
 #      requests to a replica that's mid-embedding a large re-index (see
-#      specs/004-scaleout-deployment/quickstart.md "운영 참고").
+#      specs/004-scaleout-deployment/quickstart.md "운영 참고"). Point MCP
+#      clients (and anything else that needs one stable address) at the LB,
+#      not at an individual replica's port from the range above.
 # -----------------------------------------------------------------------------
 services:
   vectorstore:
@@ -32,7 +41,7 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
     environment:
       - DATABASE_URL=sqlite+aiosqlite:////data/db.sqlite3
       - DEFAULT_POLL_INTERVAL=${DEFAULT_POLL_INTERVAL:-300}
