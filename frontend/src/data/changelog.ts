@@ -6,6 +6,20 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.6.0',
+    date: '2026-07-04',
+    changes: [
+      'Semantic search and remote-source caching added to the MCP server',
+      'Scaleout deployment mode: multiple backend replicas sharing one persistent vector index',
+      'Backend port published as a range so scaleout replicas don’t clash',
+      'Optional corporate proxy support for docker compose builds and outbound requests',
+      'start.sh / stop.sh wrapper scripts for docker compose',
+      'Markdown viewer: table of contents, code copy button, permalink deep links, breadcrumb, reading progress bar',
+      'Confirm dialog before deleting a registered source',
+      'Fix: embedding model cache is now reachable when the container’s HOME is remapped to the host user’s home directory, which was causing source registration to fail with "Local embedding engine is unavailable"',
+    ],
+  },
+  {
     version: '0.5.0',
     date: '2026-07-01',
     changes: [
