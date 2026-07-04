@@ -8,7 +8,7 @@
     <TreeNode
       v-else-if="treeQuery.data.value"
       :node="treeQuery.data.value.root"
-      :selected-path="selectedPath"
+      :source-id="sourceId!"
       :reveal-path="revealPath"
       :reveal-token="revealToken"
       @select-file="$emit('select-file', sourceId!, $event)"
@@ -26,7 +26,6 @@ import TreeNode from './TreeNode.vue'
 
 const props = defineProps<{
   sourceId: string | null
-  selectedPath: string | null
 }>()
 
 defineEmits<{ 'select-file': [sourceId: string, path: string] }>()
