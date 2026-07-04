@@ -66,3 +66,17 @@ export type DeploymentMode = 'standalone' | 'scaleout'
 export interface DeploymentStatus {
   mode: DeploymentMode
 }
+
+export type PaneId = 1 | 2
+export type PaneColor = 'blue' | 'amber'
+
+export interface ViewerPaneState {
+  id: PaneId
+  sourceId: string | null
+  filePath: string | null
+}
+
+export interface PaneMatch {
+  paneId: PaneId
+  color: PaneColor
+}

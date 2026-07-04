@@ -36,7 +36,10 @@ import { useViewerUrl } from '../../composables/useViewerUrl'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
 
-const props = defineProps<{ sourceId: string; filePath: string }>()
+const props = withDefaults(
+  defineProps<{ sourceId: string; filePath: string; active?: boolean }>(),
+  { active: true }
+)
 const emit = defineEmits<{ navigate: [path: string] }>()
 
 const { render } = useMarkdown()
@@ -80,17 +83,27 @@ async function load() {
   // 되돌려버린다.
   loading.value = false
   await nextTick()
-  restoreScrollFromUrl()
-  await toc.refresh(getHeadingId())
+  // 여러 패널이 동시에 열려 있을 때 URL 해시는 활성 패널 하나만 소유한다
+  // (research.md #4) — 비활성 패널은 해시를 읽지도 쓰지도 않는다.
+  if (props.active) restoreScrollFromUrl()
+  await toc.refresh(props.active ? getHeadingId() : null)
   suppressHashSync = false
 }
 
 watch(() => [props.sourceId, props.filePath], load, { immediate: true })
 
 watch(toc.activeId, (id) => {
-  if (suppressHashSync || !id) return
+  if (suppressHashSync || !id || !props.active) return
   setHeadingId(id)
 })
+
+// 패널이 새로 활성화되면, 그 시점의 활성 헤딩으로 해시 소유권을 즉시 넘겨받는다.
+watch(
+  () => props.active,
+  (isActive) => {
+    if (isActive && toc.activeId.value) setHeadingId(toc.activeId.value)
+  }
+)
 
 function restoreScrollFromUrl() {
   const headingId = getHeadingId()

@@ -13,7 +13,7 @@
           v-for="child in node.children ?? []"
           :key="child.path"
           :node="child"
-          :selected-path="selectedPath"
+          :source-id="sourceId"
           :reveal-path="revealPath"
           :reveal-token="revealToken"
           @select-file="$emit('select-file', $event)"
@@ -23,30 +23,40 @@
     <li v-else>
       <button
         ref="fileBtn"
-        class="text-xs w-full text-left py-0.5 px-1 rounded truncate"
-        :class="[
-          selectedPath === node.path ? 'bg-blue-600 text-white' : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
-          { 'tree-reveal-flash': flashing },
-        ]"
+        class="flex items-center gap-1.5 text-xs w-full text-left py-0.5 px-1 rounded truncate text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+        :class="{ 'tree-reveal-flash': flashing }"
         @click="$emit('select-file', node.path)"
       >
-        {{ node.name }}
+        <span v-if="matches.length" class="flex items-center gap-0.5 shrink-0">
+          <span
+            v-for="m in matches"
+            :key="m.paneId"
+            class="pane-match-dot inline-block w-1.5 h-1.5 rounded-full"
+            :class="paneColorClass(m.color, 'bg')"
+            :title="`패널 ${m.paneId}에서 열림`"
+          />
+        </span>
+        <span class="truncate">{{ node.name }}</span>
       </button>
     </li>
   </ul>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import type { TreeNode as TreeNodeType } from '../../types'
+import { usePanes, paneColorClass } from '../../composables/usePanes'
 
 const props = defineProps<{
   node: TreeNodeType
-  selectedPath: string | null
+  sourceId: string
   revealPath?: string | null
   revealToken?: number
 }>()
 defineEmits<{ 'select-file': [path: string] }>()
+
+const { paneMatches } = usePanes()
+const matches = computed(() => paneMatches(props.sourceId, props.node.path))
 
 const open = ref(true)
 const fileBtn = ref<HTMLButtonElement | null>(null)
