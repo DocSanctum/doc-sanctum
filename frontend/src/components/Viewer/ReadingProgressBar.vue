@@ -1,6 +1,6 @@
 <template>
   <div class="reading-progress-track" role="progressbar" :aria-valuenow="Math.round(ratio * 100)" aria-valuemin="0" aria-valuemax="100">
-    <div class="reading-progress-fill" :style="{ width: `${ratio * 100}%` }" />
+    <div class="reading-progress-fill" :class="paneColorClass(props.color, 'bg')" :style="{ width: `${ratio * 100}%` }" />
   </div>
   <div class="back-to-top-anchor">
     <Transition name="fade">
@@ -8,6 +8,7 @@
         v-if="showBackToTop"
         type="button"
         class="back-to-top"
+        :class="[paneColorClass(props.color, 'bg'), paneColorClass(props.color, 'solidHover')]"
         aria-label="맨 위로 이동"
         @click="scrollToTop"
       >↑</button>
@@ -18,8 +19,10 @@
 <script setup lang="ts">
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import { useReadingProgress } from '../../composables/useReadingProgress'
+import { paneColorClass } from '../../composables/usePanes'
+import type { PaneColor } from '../../types'
 
-const props = defineProps<{ container: MaybeRefOrGetter<HTMLElement | null | undefined> }>()
+const props = defineProps<{ container: MaybeRefOrGetter<HTMLElement | null | undefined>; color: PaneColor }>()
 const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(props.container))
 </script>
 
@@ -35,7 +38,6 @@ const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(p
 }
 .reading-progress-fill {
   height: 100%;
-  background: #3b82f6;
   transition: width 0.1s linear;
 }
 /*
@@ -61,15 +63,11 @@ const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(p
   height: 2.5rem;
   border-radius: 9999px;
   border: none;
-  background: #3b82f6;
   color: white;
   font-size: 1.1rem;
   cursor: pointer;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-}
-.back-to-top:hover,
-.back-to-top:focus-visible {
-  background: #2563eb;
+  transition: background-color 0.15s ease;
 }
 .fade-enter-active,
 .fade-leave-active {

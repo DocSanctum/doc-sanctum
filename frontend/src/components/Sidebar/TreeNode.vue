@@ -23,8 +23,8 @@
     <li v-else>
       <button
         ref="fileBtn"
-        class="flex items-center gap-1.5 text-xs w-full text-left py-0.5 px-1 rounded truncate text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-        :class="[{ 'tree-reveal-flash': flashing }, activeMatchTint]"
+        class="flex items-center gap-1.5 text-xs w-full text-left py-0.5 px-1 rounded truncate text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+        :class="[{ 'tree-reveal-flash': flashing }, activeMatchTint, activePaneHoverClass]"
         @click="$emit('select-file', node.path)"
       >
         <span v-if="matches.length" class="flex items-center gap-0.5 shrink-0">
@@ -55,13 +55,16 @@ const props = defineProps<{
 }>()
 defineEmits<{ 'select-file': [path: string] }>()
 
-const { paneMatches, activePaneId } = usePanes()
+const { paneMatches, activePaneId, colorOf } = usePanes()
 const matches = computed(() => paneMatches(props.sourceId, props.node.path))
 // 활성 패널에 열려 있는 문서는 트리에서도 한 번 더 눈에 띄어야, 트리 클릭이
 // 어디로 반영될지 예측하기 쉽다(FR-004/FR-012 연장선) — 점 크기와 함께
 // 행 배경에 옅은 색 틴트를 준다.
 const activeMatch = computed(() => matches.value.find((m) => m.paneId === activePaneId.value))
 const activeMatchTint = computed(() => (activeMatch.value ? paneColorClass(activeMatch.value.color, 'tint') : ''))
+// mouseover 시 배경색을 현재 활성 패널의 색으로 보여줘서, 트리를 클릭하면
+// 어느 패널에 반영될지 hover만으로도 미리 알 수 있게 한다.
+const activePaneHoverClass = computed(() => paneColorClass(colorOf(activePaneId.value), 'hover'))
 
 const open = ref(true)
 const fileBtn = ref<HTMLButtonElement | null>(null)
@@ -88,7 +91,12 @@ watch(
         flashing.value = false
       }, 1200)
     }
-  }
+  },
+  // 트리 소스를 전환하면(다른 패널 클릭 → 다른 저장소 문서로 reveal) 트리 데이터가
+  // 비동기로 새로 로드된 뒤에야 이 노드들이 마운트된다. immediate가 없으면 그 사이
+  // reveal() 호출로 이미 바뀐 토큰을 놓쳐 아무 반응도 하지 않는다 — 마운트 시점에
+  // 현재 revealPath를 한 번 더 확인해 이 레이스를 없앤다.
+  { immediate: true }
 )
 </script>
 
