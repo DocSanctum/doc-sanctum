@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 from backend.app.services.github import (
     _api_tree_url,
+    _content_api_url,
     _github_headers,
     _parse_github_url,
-    _raw_content_url,
 )
 
 
@@ -44,17 +44,20 @@ def test_api_tree_url_uses_enterprise_api_v3_prefix():
     )
 
 
-def test_raw_content_url_uses_public_raw_subdomain():
+def test_content_api_url_uses_public_api_host():
     assert (
-        _raw_content_url("github.com", "owner", "repo", "docs/intro.md")
-        == "https://raw.githubusercontent.com/owner/repo/HEAD/docs/intro.md"
+        _content_api_url("github.com", "owner", "repo", "docs/intro.md")
+        == "https://api.github.com/repos/owner/repo/contents/docs/intro.md"
     )
 
 
-def test_raw_content_url_uses_enterprise_raw_path():
+def test_content_api_url_uses_enterprise_api_v3_prefix():
+    """raw.<host> vs <host>/raw depends on GHE subdomain isolation, so file
+    content is fetched through the same versioned API host as the tree
+    instead of guessing a raw-content URL shape."""
     assert (
-        _raw_content_url("github.mycompany.com", "owner", "repo", "docs/intro.md")
-        == "https://github.mycompany.com/raw/owner/repo/HEAD/docs/intro.md"
+        _content_api_url("github.mycompany.com", "owner", "repo", "docs/intro.md")
+        == "https://github.mycompany.com/api/v3/repos/owner/repo/contents/docs/intro.md"
     )
 
 
