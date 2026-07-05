@@ -12,8 +12,6 @@
           <select v-model="form.type" class="input">
             <option v-if="!isScaleout" value="local">로컬 폴더</option>
             <option value="github">GitHub 저장소</option>
-            <option value="http">HTTP/HTTPS URL</option>
-            <option value="localhost">Localhost URL</option>
           </select>
         </div>
         <div class="mb-3">
@@ -67,13 +65,11 @@ watch(isScaleout, (scaleout) => {
   }
 })
 
-const defaultPoll = computed(() => ({ local: 300, github: 600, http: 300, localhost: 300 }[form.value.type]))
+const defaultPoll = computed(() => ({ local: 300, github: 600 }[form.value.type as 'local' | 'github']))
 const pathPlaceholder = computed(() => ({
   local: '/Users/alice/documents',
   github: 'https://github.com/owner/repo',
-  http: 'https://example.com/docs',
-  localhost: 'http://localhost:9090',
-}[form.value.type]))
+}[form.value.type as 'local' | 'github']))
 
 async function submit() {
   error.value = ''
