@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-xl mx-auto px-8 py-10">
+  <div class="max-w-3xl mx-auto px-8 py-10">
     <h1 class="text-xl font-bold mb-8 text-gray-900 dark:text-white">설정</h1>
 
     <!-- App theme -->

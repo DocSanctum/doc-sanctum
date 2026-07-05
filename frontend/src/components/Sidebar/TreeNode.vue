@@ -24,16 +24,16 @@
       <button
         ref="fileBtn"
         class="flex items-center gap-1.5 text-xs w-full text-left py-0.5 px-1 rounded truncate text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-        :class="{ 'tree-reveal-flash': flashing }"
+        :class="[{ 'tree-reveal-flash': flashing }, activeMatchTint]"
         @click="$emit('select-file', node.path)"
       >
         <span v-if="matches.length" class="flex items-center gap-0.5 shrink-0">
           <span
             v-for="m in matches"
             :key="m.paneId"
-            class="pane-match-dot inline-block w-1.5 h-1.5 rounded-full"
-            :class="paneColorClass(m.color, 'bg')"
-            :title="`패널 ${m.paneId}에서 열림`"
+            class="pane-match-dot inline-block rounded-full"
+            :class="[paneColorClass(m.color, 'bg'), m.paneId === activePaneId ? 'w-2 h-2' : 'w-1.5 h-1.5']"
+            :title="`패널 ${m.paneId}에서 열림${m.paneId === activePaneId ? ' (활성)' : ''}`"
           />
         </span>
         <span class="truncate">{{ node.name }}</span>
@@ -55,8 +55,13 @@ const props = defineProps<{
 }>()
 defineEmits<{ 'select-file': [path: string] }>()
 
-const { paneMatches } = usePanes()
+const { paneMatches, activePaneId } = usePanes()
 const matches = computed(() => paneMatches(props.sourceId, props.node.path))
+// 활성 패널에 열려 있는 문서는 트리에서도 한 번 더 눈에 띄어야, 트리 클릭이
+// 어디로 반영될지 예측하기 쉽다(FR-004/FR-012 연장선) — 점 크기와 함께
+// 행 배경에 옅은 색 틴트를 준다.
+const activeMatch = computed(() => matches.value.find((m) => m.paneId === activePaneId.value))
+const activeMatchTint = computed(() => (activeMatch.value ? paneColorClass(activeMatch.value.color, 'tint') : ''))
 
 const open = ref(true)
 const fileBtn = ref<HTMLButtonElement | null>(null)

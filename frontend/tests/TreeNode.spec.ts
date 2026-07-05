@@ -53,4 +53,20 @@ describe('TreeNode pane color indicators', () => {
     const wrapper = mount(TreeNode, { props: { node: { ...leafNode, path: 'b.md' }, sourceId: 'src-1' } })
     expect(wrapper.findAll('.pane-match-dot')).toHaveLength(0)
   })
+
+  it('emphasizes the indicator and tints the row for the active pane, not the inactive one', () => {
+    const { openInActivePane, addPane, setActivePane } = usePanes()
+    openInActivePane('src-1', 'a.md')
+    addPane()
+    setActivePane(2)
+    openInActivePane('src-1', 'a.md')
+    // pane 2 (amber) is active; switch focus back to pane 1 (blue)
+    setActivePane(1)
+
+    const wrapper = mount(TreeNode, { props: { node: leafNode, sourceId: 'src-1' } })
+    const dots = wrapper.findAll('.pane-match-dot')
+    expect(dots[0].classes()).toContain('w-2') // active (pane 1)
+    expect(dots[1].classes()).toContain('w-1.5') // inactive (pane 2)
+    expect(wrapper.find('button').classes()).toContain('bg-blue-500/10')
+  })
 })

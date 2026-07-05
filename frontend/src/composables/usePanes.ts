@@ -6,20 +6,22 @@ const MAX_PANES = 2
 
 const PANE_COLOR: Record<PaneId, PaneColor> = { 1: 'blue', 2: 'amber' }
 
-const PANE_COLOR_CLASSES: Record<PaneColor, { border: string; bg: string; text: string }> = {
+const PANE_COLOR_CLASSES: Record<PaneColor, { border: string; bg: string; text: string; tint: string }> = {
   blue: {
     border: 'border-blue-500 dark:border-blue-400',
     bg: 'bg-blue-500 dark:bg-blue-400',
     text: 'text-blue-500 dark:text-blue-400',
+    tint: 'bg-blue-500/10 dark:bg-blue-400/10',
   },
   amber: {
     border: 'border-amber-500 dark:border-amber-400',
     bg: 'bg-amber-500 dark:bg-amber-400',
     text: 'text-amber-500 dark:text-amber-400',
+    tint: 'bg-amber-500/10 dark:bg-amber-400/10',
   },
 }
 
-export function paneColorClass(color: PaneColor, kind: 'border' | 'bg' | 'text'): string {
+export function paneColorClass(color: PaneColor, kind: 'border' | 'bg' | 'text' | 'tint'): string {
   return PANE_COLOR_CLASSES[color][kind]
 }
 
