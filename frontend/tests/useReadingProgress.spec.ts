@@ -45,6 +45,17 @@ describe('useReadingProgress', () => {
     expect(showBackToTop.value).toBe(true)
   })
 
+  it('snaps ratio to 1 at the bottom even if y falls a sub-pixel fraction short of the scrollable max', async () => {
+    const el = mockScrollableElement(2000, 1000) // scrollable distance = 1000
+    const containerRef = ref<HTMLElement | null>(el)
+    const { ratio } = useReadingProgress(containerRef)
+
+    scrollTo(el, 999.6)
+    await wait(150)
+
+    expect(ratio.value).toBe(1)
+  })
+
   it('returns 0 ratio when there is no container', () => {
     const containerRef = ref<HTMLElement | null>(null)
     const { ratio, showBackToTop } = useReadingProgress(containerRef)

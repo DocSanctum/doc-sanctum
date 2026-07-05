@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
@@ -100,9 +100,11 @@ import ChangelogPage from './components/Settings/ChangelogPage.vue'
 import ViewerPane from './components/Viewer/ViewerPane.vue'
 import { useSources } from './composables/useSources'
 import { usePanes } from './composables/usePanes'
+import { useTreeReveal } from './composables/useTreeReveal'
 
 const { sourcesQuery, remove } = useSources()
-const { panes, openInActivePane, clearSource } = usePanes()
+const { panes, activePaneId, openInActivePane, clearSource } = usePanes()
+const { reveal } = useTreeReveal()
 
 const showAdd = ref(false)
 const pendingDeleteId = ref<string | null>(null)
@@ -111,10 +113,20 @@ const pendingDeleteSource = computed(() =>
 )
 const view = ref<'viewer' | 'settings' | 'changelog'>('viewer')
 
-// 좌측 트리는 화면에 하나만 존재하며(스펙 Assumptions), 어느 패널의 문서를
-// 보여주고 있는지와 무관하게 사용자가 사이드바에서 선택한 소스를 기준으로
-// 표시된다. 최초 로드 시에는 패널 1의 소스를 기준으로 초기화한다.
+// 좌측 트리는 화면에 하나만 존재하며(스펙 Assumptions), 기본적으로는 사용자가
+// 사이드바에서 직접 선택한 소스를 기준으로 표시된다. 최초 로드 시에는 패널 1의
+// 소스를 기준으로 초기화한다.
 const treeSourceId = ref<string | null>(panes.value[0]?.sourceId ?? null)
+
+// 분할 보기에서 다른 패널을 클릭해 활성 패널이 바뀌면, 그 패널이 어느 소스의
+// 문서를 보고 있는지 트리에서 바로 확인할 수 있도록 트리를 해당 소스로 전환하고
+// 그 문서 항목까지 펼쳐서 보여준다(reveal). 패널이 비어 있으면 트리는 그대로 둔다.
+watch(activePaneId, (id) => {
+  const pane = panes.value.find((p) => p.id === id)
+  if (!pane?.sourceId || !pane.filePath) return
+  treeSourceId.value = pane.sourceId
+  reveal(pane.filePath)
+})
 
 const mainRef = ref<HTMLElement | null>(null)
 
