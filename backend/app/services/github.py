@@ -43,15 +43,19 @@ def _content_api_url(host: str, owner: str, repo: str, path: str) -> str:
     return f"{_api_base_url(host)}/repos/{owner}/{repo}/contents/{path}"
 
 
-def _build_tree(flat_files: list[str]) -> list[dict[str, Any]]:
+def _build_tree(blobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     root: dict[str, Any] = {}
-    for path in flat_files:
-        parts = path.split("/")
+    for blob in blobs:
+        parts = blob["path"].split("/")
         node = root
         for i, part in enumerate(parts):
             if part not in node:
                 is_last = i == len(parts) - 1
-                node[part] = {"__is_file": is_last, "__children": {}}
+                node[part] = {
+                    "__is_file": is_last,
+                    "__children": {},
+                    "__sha": blob["sha"] if is_last else None,
+                }
             node = node[part]["__children"]
 
     def to_nodes(d: dict, prefix: str) -> list[dict[str, Any]]:
@@ -68,6 +72,7 @@ def _build_tree(flat_files: list[str]) -> list[dict[str, Any]]:
                         "is_dir": False,
                         "size": None,
                         "modified_at": None,
+                        "sha": info["__sha"],
                     }
                 )
             else:
@@ -93,8 +98,8 @@ async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
         resp = await client.get(api_url, headers=_github_headers())
         resp.raise_for_status()
     data = resp.json()
-    md_paths = [
-        item["path"]
+    md_blobs = [
+        {"path": item["path"], "sha": item["sha"]}
         for item in data.get("tree", [])
         if item["path"].endswith(".md") and item["type"] == "blob"
     ]
@@ -104,6 +109,6 @@ async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
             "path": "",
             "name": f"{owner}/{repo}",
             "is_dir": True,
-            "children": _build_tree(md_paths),
+            "children": _build_tree(md_blobs),
         },
     }

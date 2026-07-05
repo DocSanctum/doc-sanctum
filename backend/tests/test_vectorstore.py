@@ -181,8 +181,10 @@ def _source(source_id: str = "src-1") -> Source:
 @pytest.fixture(autouse=True)
 def reset_doc_hashes():
     indexer_module._doc_hashes.clear()
+    indexer_module._doc_shas.clear()
     yield
     indexer_module._doc_hashes.clear()
+    indexer_module._doc_shas.clear()
 
 
 @pytest.fixture
@@ -260,23 +262,71 @@ async def test_sync_source_index_skips_unchanged_reindexes_changed_removes_delet
 
 
 @pytest.mark.asyncio
+async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
+    fake_client, monkeypatch
+):
+    """github docs carry a blob sha alongside the path. When it matches the
+    last-indexed sha, the document must be skipped without ever calling
+    read_with_cache (i.e. without downloading its content)."""
+    docs = [{"path": "a.md", "sha": "sha-a1"}, {"path": "b.md", "sha": "sha-b1"}]
+    contents = {"a.md": "content A", "b.md": "content B"}
+    read_calls: list[str] = []
+
+    async def fake_list_documents(source):
+        return list(docs)
+
+    async def fake_read_with_cache(source, path):
+        read_calls.append(path)
+        return contents[path], None
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+
+    source = _source()
+
+    # First sync: both new -> each downloaded exactly once and indexed, shas recorded
+    await indexer_module.sync_source_index(source)
+    assert sorted(read_calls) == ["a.md", "b.md"]
+    assert indexer_module._doc_shas["src-1"] == {"a.md": "sha-a1", "b.md": "sha-b1"}
+
+    # Second sync: sha unchanged for both -> no download, no re-upsert at all
+    read_calls.clear()
+    fake_client.upserted.clear()
+    await indexer_module.sync_source_index(source)
+    assert read_calls == []
+    assert fake_client.upserted == []
+
+    # b.md's blob sha changes upstream -> only b.md is downloaded/reindexed
+    docs[1]["sha"] = "sha-b2"
+    contents["b.md"] = "content B changed"
+    await indexer_module.sync_source_index(source)
+    assert read_calls == ["b.md"]
+    assert fake_client.upserted == [("src-1", "b.md", 1)]
+    assert indexer_module._doc_shas["src-1"]["b.md"] == "sha-b2"
+
+
+@pytest.mark.asyncio
 async def test_remove_document_clears_hash_and_deletes(fake_client):
     indexer_module._doc_hashes["src-1"] = {"a.md": "somehash"}
+    indexer_module._doc_shas["src-1"] = {"a.md": "someblobsha"}
 
     await indexer_module.remove_document(_source(), "a.md")
 
     assert "a.md" not in indexer_module._doc_hashes.get("src-1", {})
+    assert "a.md" not in indexer_module._doc_shas.get("src-1", {})
     assert fake_client.deleted_docs == [("src-1", "a.md")]
 
 
 @pytest.mark.asyncio
 async def test_delete_source_index_clears_all_state(fake_client):
     indexer_module._doc_hashes["src-1"] = {"a.md": "somehash"}
+    indexer_module._doc_shas["src-1"] = {"a.md": "someblobsha"}
 
     await indexer_module.delete_source_index("src-1")
 
     assert fake_client.deleted_collections == ["src-1"]
     assert "src-1" not in indexer_module._doc_hashes
+    assert "src-1" not in indexer_module._doc_shas
 
 
 @pytest.mark.asyncio
