@@ -6,7 +6,26 @@
     @focusin="activate"
   >
     <div class="viewer-pane-toolbar absolute top-2 right-2 z-10 flex items-center gap-1.5">
-      <span class="inline-block w-2.5 h-2.5 rounded-full" :class="paneBgClass" :title="`패널 ${paneId} 색상`" />
+      <span ref="colorPickerWrapperRef" class="relative inline-block">
+        <button
+          type="button"
+          class="block w-2.5 h-2.5 rounded-full cursor-pointer"
+          :class="paneBgClass"
+          :title="`패널 ${paneId} 색상 변경`"
+          @click.stop="showColorPicker = !showColorPicker"
+        />
+        <div v-if="showColorPicker" class="pane-color-picker absolute right-0 top-full mt-1.5 flex gap-1 p-1.5 rounded-lg shadow-lg" @click.stop>
+          <button
+            v-for="c in colorOptions"
+            :key="c"
+            type="button"
+            class="w-4 h-4 rounded-full cursor-pointer"
+            :class="[paneColorClass(c, 'bg'), c === colorOf(paneId) ? 'pane-color-swatch-selected' : '']"
+            :title="c"
+            @click="selectColor(c)"
+          />
+        </div>
+      </span>
       <button
         v-if="showAddButton"
         type="button"
@@ -38,15 +57,17 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { PaneId } from '../../types'
-import { usePanes, paneColorClass } from '../../composables/usePanes'
+import { onClickOutside } from '@vueuse/core'
+import type { PaneColor, PaneId } from '../../types'
+import { usePanes, paneColorClass, PANE_COLOR_OPTIONS } from '../../composables/usePanes'
 import MarkdownViewer from './MarkdownViewer.vue'
 import EmptyState from './EmptyState.vue'
 import ReadingProgressBar from './ReadingProgressBar.vue'
 
 const props = defineProps<{ paneId: PaneId }>()
 
-const { panes, activePaneId, colorOf, setActivePane, setPaneDocument, canAddPane, addPane, closePane } = usePanes()
+const { panes, activePaneId, colorOf, setPaneColor, setActivePane, setPaneDocument, canAddPane, addPane, closePane } =
+  usePanes()
 
 const pane = computed(() => panes.value.find((p) => p.id === props.paneId)!)
 const isActive = computed(() => activePaneId.value === props.paneId)
@@ -56,6 +77,16 @@ const showAddButton = computed(() => panes.value.length === 1 && canAddPane())
 const showCloseButton = computed(() => panes.value.length > 1)
 
 const scrollRef = ref<HTMLElement | null>(null)
+
+const colorOptions = PANE_COLOR_OPTIONS
+const showColorPicker = ref(false)
+const colorPickerWrapperRef = ref<HTMLElement | null>(null)
+onClickOutside(colorPickerWrapperRef, () => { showColorPicker.value = false })
+
+function selectColor(color: PaneColor) {
+  setPaneColor(props.paneId, color)
+  showColorPicker.value = false
+}
 
 function activate() {
   setActivePane(props.paneId)
@@ -87,5 +118,18 @@ function onNavigate(path: string) {
 .pane-toolbar-btn:focus-visible {
   color: #3b82f6;
   border-color: #3b82f6;
+}
+.pane-color-picker {
+  background: white;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+:root.dark .pane-color-picker {
+  background: #111827;
+}
+.pane-color-swatch-selected {
+  box-shadow: 0 0 0 2px white, 0 0 0 3.5px rgba(107, 114, 128, 0.8);
+}
+:root.dark .pane-color-swatch-selected {
+  box-shadow: 0 0 0 2px #111827, 0 0 0 3.5px rgba(209, 213, 219, 0.8);
 }
 </style>

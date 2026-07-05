@@ -4,7 +4,10 @@ import type { PaneColor, PaneId, PaneMatch, ViewerPaneState } from '../types'
 
 const MAX_PANES = 2
 
-const PANE_COLOR: Record<PaneId, PaneColor> = { 1: 'blue', 2: 'amber' }
+const DEFAULT_PANE_COLOR: Record<PaneId, PaneColor> = { 1: 'blue', 2: 'amber' }
+
+// 선택 가능한 패널 색상 팔레트 — 색상 원을 클릭하면 이 목록에서 고를 수 있다.
+export const PANE_COLOR_OPTIONS: PaneColor[] = ['blue', 'sky', 'amber', 'orange', 'red', 'purple', 'gray']
 
 const PANE_COLOR_CLASSES: Record<
   PaneColor,
@@ -25,6 +28,46 @@ const PANE_COLOR_CLASSES: Record<
     tint: 'bg-amber-500/10 dark:bg-amber-400/10',
     hover: 'hover:bg-amber-500/15 dark:hover:bg-amber-400/20',
     solidHover: 'hover:bg-amber-600 dark:hover:bg-amber-500',
+  },
+  orange: {
+    border: 'border-orange-500 dark:border-orange-400',
+    bg: 'bg-orange-500 dark:bg-orange-400',
+    text: 'text-orange-500 dark:text-orange-400',
+    tint: 'bg-orange-500/10 dark:bg-orange-400/10',
+    hover: 'hover:bg-orange-500/15 dark:hover:bg-orange-400/20',
+    solidHover: 'hover:bg-orange-600 dark:hover:bg-orange-500',
+  },
+  sky: {
+    border: 'border-sky-500 dark:border-sky-400',
+    bg: 'bg-sky-500 dark:bg-sky-400',
+    text: 'text-sky-500 dark:text-sky-400',
+    tint: 'bg-sky-500/10 dark:bg-sky-400/10',
+    hover: 'hover:bg-sky-500/15 dark:hover:bg-sky-400/20',
+    solidHover: 'hover:bg-sky-600 dark:hover:bg-sky-500',
+  },
+  red: {
+    border: 'border-red-500 dark:border-red-400',
+    bg: 'bg-red-500 dark:bg-red-400',
+    text: 'text-red-500 dark:text-red-400',
+    tint: 'bg-red-500/10 dark:bg-red-400/10',
+    hover: 'hover:bg-red-500/15 dark:hover:bg-red-400/20',
+    solidHover: 'hover:bg-red-600 dark:hover:bg-red-500',
+  },
+  purple: {
+    border: 'border-purple-500 dark:border-purple-400',
+    bg: 'bg-purple-500 dark:bg-purple-400',
+    text: 'text-purple-500 dark:text-purple-400',
+    tint: 'bg-purple-500/10 dark:bg-purple-400/10',
+    hover: 'hover:bg-purple-500/15 dark:hover:bg-purple-400/20',
+    solidHover: 'hover:bg-purple-600 dark:hover:bg-purple-500',
+  },
+  gray: {
+    border: 'border-gray-500 dark:border-gray-400',
+    bg: 'bg-gray-500 dark:bg-gray-400',
+    text: 'text-gray-500 dark:text-gray-400',
+    tint: 'bg-gray-500/10 dark:bg-gray-400/10',
+    hover: 'hover:bg-gray-500/15 dark:hover:bg-gray-400/20',
+    solidHover: 'hover:bg-gray-600 dark:hover:bg-gray-500',
   },
 }
 
@@ -51,6 +94,10 @@ function initialPanes(): ViewerPaneState[] {
 // 패널 목록을 전역 공유 상태로 둔다(FR-003 최대 2개, FR-007 최소 1개 유지).
 const panes = ref<ViewerPaneState[]>(initialPanes())
 const activePaneId = ref<PaneId>(panes.value.length === 2 ? viewerUrl.getActivePane() : 1)
+// 패널 색상 원을 클릭해 사용자가 직접 바꿀 수 있다 — id별 기본값(파랑/노랑)에서
+// 시작하되, 분할을 닫아 패널 1개로 돌아가면 다음에 다시 열 때 헷갈리지 않도록
+// 기본값으로 리셋한다(closePane 참고).
+const paneColors = ref<Record<PaneId, PaneColor>>({ ...DEFAULT_PANE_COLOR })
 
 function syncUrl() {
   const pane1 = panes.value.find((p) => p.id === 1) ?? null
@@ -62,7 +109,12 @@ function syncUrl() {
 
 export function usePanes() {
   function colorOf(paneId: PaneId): PaneColor {
-    return PANE_COLOR[paneId]
+    return paneColors.value[paneId]
+  }
+
+  function setPaneColor(paneId: PaneId, color: PaneColor) {
+    if (!panes.value.some((p) => p.id === paneId)) return
+    paneColors.value = { ...paneColors.value, [paneId]: color }
   }
 
   function paneMatches(sourceId: string, filePath: string): PaneMatch[] {
@@ -113,6 +165,7 @@ export function usePanes() {
     if (!remaining) return
     panes.value = [{ id: 1, sourceId: remaining.sourceId, filePath: remaining.filePath }]
     activePaneId.value = 1
+    paneColors.value = { ...DEFAULT_PANE_COLOR }
     syncUrl()
   }
 
@@ -134,6 +187,7 @@ export function usePanes() {
     panes,
     activePaneId,
     colorOf,
+    setPaneColor,
     paneMatches,
     setActivePane,
     setPaneDocument,

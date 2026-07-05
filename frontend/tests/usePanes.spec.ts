@@ -57,10 +57,25 @@ describe('usePanes', () => {
     expect(panes.value).toHaveLength(2)
   })
 
-  it('assigns a fixed color per pane id', () => {
+  it('assigns a default color per pane id', () => {
     const { addPane, colorOf } = usePanes()
     addPane()
     expect(colorOf(1)).toBe('blue')
+    expect(colorOf(2)).toBe('amber')
+  })
+
+  it('lets a pane color be changed, and resets colors to defaults when closing back to one pane', () => {
+    const { addPane, colorOf, setPaneColor, closePane } = usePanes()
+    addPane()
+
+    setPaneColor(2, 'purple')
+    expect(colorOf(2)).toBe('purple')
+    expect(colorOf(1)).toBe('blue')
+
+    closePane(2)
+    expect(colorOf(1)).toBe('blue')
+
+    addPane()
     expect(colorOf(2)).toBe('amber')
   })
 
