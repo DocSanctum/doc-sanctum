@@ -11,6 +11,7 @@ from ..mcp.cache import set_cached
 from ..models.source import Source
 from ..vectorstore.indexer import sync_source_index
 from .github import fetch_github_tree
+from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
 from .watcher import _queues
 
@@ -21,6 +22,8 @@ async def _poll_source(source: Source) -> None:
     try:
         if source.type == "github":
             tree = await fetch_github_tree(source.path, source.id)
+        elif source.type == "gitlab":
+            tree = await fetch_gitlab_tree(source.path, source.id)
         else:
             tree = await fetch_manifest_tree(source.path, source.id, source.name)
         set_cached(source.id, tree)

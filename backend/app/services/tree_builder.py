@@ -5,6 +5,7 @@ from typing import Any
 
 from ..models.source import Source
 from .github import fetch_github_tree
+from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
 
 
@@ -45,6 +46,8 @@ def _scan_dir(abs_dir: str, rel_dir: str) -> list[dict[str, Any]]:
 async def build_remote_tree(source: Source) -> dict[str, Any]:
     if source.type == "github":
         return await fetch_github_tree(source.path, source.id)
+    if source.type == "gitlab":
+        return await fetch_gitlab_tree(source.path, source.id)
     return await fetch_manifest_tree(source.path, source.id, source.name)
 
 

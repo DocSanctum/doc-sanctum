@@ -7,9 +7,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_session
+from ..mcp.tools.list_documents import _get_tree_with_cache
 from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
-from ..services.tree_builder import build_local_tree, build_remote_tree
 
 router = APIRouter(tags=["files"])
 
@@ -38,9 +38,8 @@ async def get_tree(
         raise HTTPException(
             status_code=503, detail=source.error_message or "Source error"
         )
-    if source.type == "local":
-        return build_local_tree(source)
-    return await build_remote_tree(source)
+    tree, _warning = await _get_tree_with_cache(source)
+    return tree
 
 
 @router.get("/sources/{source_id}/file", response_class=PlainTextResponse)
