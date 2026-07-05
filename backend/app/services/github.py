@@ -15,12 +15,26 @@ def _github_headers() -> dict[str, str]:
     return headers
 
 
-def _parse_github_url(url: str) -> tuple[str, str]:
-    """Extract owner and repo from a GitHub URL."""
-    m = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$", url)
+def _parse_github_url(url: str) -> tuple[str, str, str]:
+    """Extract host, owner, and repo from a github.com or GitHub Enterprise URL."""
+    m = re.match(r"https?://([^/]+)/([^/]+)/([^/]+?)(?:\.git)?/?$", url)
     if not m:
         raise ValueError(f"Invalid GitHub URL: {url}")
-    return m.group(1), m.group(2)
+    return m.group(1), m.group(2), m.group(3)
+
+
+def _api_tree_url(host: str, owner: str, repo: str) -> str:
+    """Build the git-tree API URL, using the GHE `/api/v3` prefix off-github.com."""
+    if host == "github.com":
+        return f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+    return f"https://{host}/api/v3/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+
+
+def _raw_content_url(host: str, owner: str, repo: str, path: str) -> str:
+    """Build the raw file URL, using GHE's `/raw` path (no raw.* subdomain)."""
+    if host == "github.com":
+        return f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{path}"
+    return f"https://{host}/raw/{owner}/{repo}/HEAD/{path}"
 
 
 def _build_tree(flat_files: list[str]) -> list[dict[str, Any]]:
@@ -67,8 +81,8 @@ def _build_tree(flat_files: list[str]) -> list[dict[str, Any]]:
 
 
 async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
-    owner, repo = _parse_github_url(url)
-    api_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+    host, owner, repo = _parse_github_url(url)
+    api_url = _api_tree_url(host, owner, repo)
     async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(api_url, headers=_github_headers())
         resp.raise_for_status()

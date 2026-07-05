@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from ...core.database import async_session_factory
 from ...models.source import Source
-from ...services.github import _github_headers, _parse_github_url
+from ...services.github import _github_headers, _parse_github_url, _raw_content_url
 from ..cache import get_cached_content, mark_stale_content, set_cached_content
 
 
@@ -24,8 +24,8 @@ async def _read_local(source: Source, path: str) -> str:
 
 
 async def _read_github(source: Source, path: str) -> str:
-    owner, repo = _parse_github_url(source.path)
-    url = f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{path}"
+    host, owner, repo = _parse_github_url(source.path)
+    url = _raw_content_url(host, owner, repo, path)
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(url, headers=_github_headers())
     if resp.status_code == 404:
