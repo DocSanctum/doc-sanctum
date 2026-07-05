@@ -62,10 +62,14 @@ def test_content_api_url_uses_enterprise_api_v3_prefix():
 
 
 def test_github_headers_includes_token_from_env(monkeypatch):
-    """PAT가 컨테이너 환경변수로 전달되면 Authorization 헤더에 실리는지 확인."""
+    """PAT가 컨테이너 환경변수로 전달되면 Authorization 헤더에 실리는지 확인.
+
+    `token` scheme (not `Bearer`) is used since some older self-hosted GHE
+    instances only accept the former.
+    """
     monkeypatch.setenv("GITHUB_TOKEN", "ghp_test123")
     headers = _github_headers()
-    assert headers["Authorization"] == "Bearer ghp_test123"
+    assert headers["Authorization"] == "token ghp_test123"
 
 
 def test_github_headers_omits_auth_when_no_token(monkeypatch):
