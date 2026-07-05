@@ -20,7 +20,8 @@ def test_parse_github_com_url_with_git_suffix():
 
 
 def test_parse_github_enterprise_url():
-    """GHE는 github.com이 아닌 사내 도메인을 쓰므로 파싱이 실패하던 버그 재현 및 수정 확인."""
+    """Reproduces and verifies the fix for a bug where parsing failed because
+    GHE uses a corporate domain instead of github.com."""
     host, owner, repo = _parse_github_url("https://github.mycompany.com/owner/repo")
     assert (host, owner, repo) == ("github.mycompany.com", "owner", "repo")
 
@@ -62,7 +63,8 @@ def test_content_api_url_uses_enterprise_api_v3_prefix():
 
 
 def test_github_headers_includes_token_from_env(monkeypatch):
-    """PAT가 컨테이너 환경변수로 전달되면 Authorization 헤더에 실리는지 확인.
+    """Verifies the PAT is carried into the Authorization header once it
+    reaches the container as an environment variable.
 
     `token` scheme (not `Bearer`) is used since some older self-hosted GHE
     instances only accept the former.
