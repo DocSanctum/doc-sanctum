@@ -23,18 +23,21 @@ def _parse_github_url(url: str) -> tuple[str, str, str]:
     return m.group(1), m.group(2), m.group(3)
 
 
+def _api_base_url(host: str) -> str:
+    """github.com serves the REST API off api.github.com; GHE serves it off
+    the same host under /api/v3 — unlike raw-content URLs, this doesn't
+    depend on whether the GHE instance has subdomain isolation enabled."""
+    if host == "github.com":
+        return "https://api.github.com"
+    return f"https://{host}/api/v3"
+
+
 def _api_tree_url(host: str, owner: str, repo: str) -> str:
-    """Build the git-tree API URL, using the GHE `/api/v3` prefix off-github.com."""
-    if host == "github.com":
-        return f"https://api.github.com/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
-    return f"https://{host}/api/v3/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
+    return f"{_api_base_url(host)}/repos/{owner}/{repo}/git/trees/HEAD?recursive=1"
 
 
-def _raw_content_url(host: str, owner: str, repo: str, path: str) -> str:
-    """Build the raw file URL, using GHE's `/raw` path (no raw.* subdomain)."""
-    if host == "github.com":
-        return f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{path}"
-    return f"https://{host}/raw/{owner}/{repo}/HEAD/{path}"
+def _content_api_url(host: str, owner: str, repo: str, path: str) -> str:
+    return f"{_api_base_url(host)}/repos/{owner}/{repo}/contents/{path}"
 
 
 def _build_tree(flat_files: list[str]) -> list[dict[str, Any]]:

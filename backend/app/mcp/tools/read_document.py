@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from ...core.database import async_session_factory
 from ...models.source import Source
-from ...services.github import _github_headers, _parse_github_url, _raw_content_url
+from ...services.github import _content_api_url, _github_headers, _parse_github_url
 from ..cache import get_cached_content, mark_stale_content, set_cached_content
 
 
@@ -25,9 +25,13 @@ async def _read_local(source: Source, path: str) -> str:
 
 async def _read_github(source: Source, path: str) -> str:
     host, owner, repo = _parse_github_url(source.path)
-    url = _raw_content_url(host, owner, repo, path)
+    url = _content_api_url(host, owner, repo, path)
+    # Accept: application/vnd.github.v3.raw returns the raw file bytes
+    # directly from the Contents API, instead of a JSON envelope with the
+    # content base64-encoded.
+    headers = {**_github_headers(), "Accept": "application/vnd.github.v3.raw"}
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(url, headers=_github_headers())
+        resp = await client.get(url, headers=headers)
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
     resp.raise_for_status()
