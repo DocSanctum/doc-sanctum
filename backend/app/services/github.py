@@ -11,7 +11,10 @@ def _github_headers() -> dict[str, str]:
     headers = {"Accept": "application/vnd.github+json"}
     token = os.getenv("GITHUB_TOKEN")
     if token:
-        headers["Authorization"] = f"Bearer {token}"
+        # `token` (not `Bearer`) is the scheme supported since the original
+        # v3 API and still accepted on github.com today; some older
+        # self-hosted GHE instances don't accept `Bearer`.
+        headers["Authorization"] = f"token {token}"
     return headers
 
 
