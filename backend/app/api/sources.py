@@ -26,6 +26,12 @@ router = APIRouter(tags=["sources"])
 
 _DEFAULT_POLL: dict[str, int] = {"github": 600, "http": 300, "localhost": 300}
 
+# The generic index.json-manifest source types require the doc server
+# operator to hand-author and keep a manifest file in sync with every file
+# change, which turned out to be too much upkeep in practice. Disabled until
+# a lower-friction replacement (e.g. more git-hosting providers) ships.
+_DISABLED_SOURCE_TYPES = {"http", "localhost"}
+
 
 class RegisterSourceRequest(BaseModel):
     name: str | None = None
@@ -48,6 +54,14 @@ def _reject_local_source_in_scaleout(source_type: str) -> None:
         raise HTTPException(
             status_code=422,
             detail="Local sources are not supported in scaleout deployment mode",
+        )
+
+
+def _reject_disabled_source_type(source_type: str) -> None:
+    if source_type in _DISABLED_SOURCE_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Source type '{source_type}' is currently disabled",
         )
 
 
@@ -98,6 +112,7 @@ async def register_source(
     req: RegisterSourceRequest, session: AsyncSession = Depends(get_session)
 ) -> dict:
     _reject_local_source_in_scaleout(req.type)
+    _reject_disabled_source_type(req.type)
     name = req.name or req.path.rstrip("/").split("/")[-1]
     poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
     is_local = req.type == "local"
