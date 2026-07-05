@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="$emit('close')">
+  <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="!loading && $emit('close')">
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96 shadow-xl">
       <h2 class="text-gray-900 dark:text-white font-semibold mb-4">소스 경로 추가</h2>
       <form @submit.prevent="submit">
@@ -26,11 +26,14 @@
         </div>
         <p v-if="error" class="text-red-400 text-xs mb-3">{{ error }}</p>
         <div class="flex gap-2 justify-end">
-          <button type="button" class="btn-secondary" @click="$emit('close')">취소</button>
+          <button type="button" class="btn-secondary" :disabled="loading" @click="$emit('close')">취소</button>
           <button type="submit" class="btn-primary" :disabled="loading">
             {{ loading ? '등록 중...' : '등록' }}
           </button>
         </div>
+        <p v-if="loading && form.type !== 'local'" class="text-gray-400 text-xs mt-2">
+          문서 목록을 확인하는 중입니다. 등록 후에는 목록에 바로 표시되며, 검색 색인은 백그라운드에서 계속 진행됩니다.
+        </p>
       </form>
     </div>
   </div>

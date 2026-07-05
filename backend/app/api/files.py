@@ -1,11 +1,13 @@
 import os
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_session
+from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
 from ..services.tree_builder import build_local_tree, build_remote_tree
 
@@ -48,6 +50,21 @@ async def get_file(
     session: AsyncSession = Depends(get_session),
 ) -> str:
     source = await _get_source_or_404(session, source_id)
+
+    if source.type != "local":
+        # github/http/localhost sources have no local file to stat — fetch
+        # (and cache) the content over the network instead (previously this
+        # endpoint only handled "local" and always 404'd for remote sources).
+        try:
+            content, _warning = await read_with_cache(source, path)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Failed to fetch file from source: {exc}"
+            ) from exc
+        return content
+
     # Path traversal guard
     expanded = os.path.expanduser(source.path)
     safe_root = os.path.realpath(expanded)

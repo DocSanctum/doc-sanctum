@@ -1,5 +1,6 @@
 import asyncio
 import functools
+import logging
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
-from ..core.database import get_session
+from ..core.database import async_session_factory, get_session
 from ..models.source import Source, SourceType
 from ..services.poller import poll_now
 from ..services.watcher import register_index_listener, start_watching, stop_watching
@@ -18,6 +19,8 @@ from ..vectorstore.indexer import (
     delete_source_index,
     handle_watch_event,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sources"])
 
@@ -63,6 +66,33 @@ async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
     return Source.from_row(dict(row))
 
 
+async def _finish_remote_registration(source: Source) -> None:
+    """Build the initial vector index for a newly registered remote source in
+    the background (FR-011) so POST /sources can respond immediately instead
+    of blocking on a full-repo crawl + embed, which for a large GitHub repo
+    could take minutes with no progress feedback to the caller. Mirrors the
+    status handling already used by refresh_source/poll_now."""
+    try:
+        warnings = await create_index(source)
+        status, error_msg = "active", None
+        if warnings:
+            logger.warning(
+                "Initial index for source %s completed with %d warning(s)",
+                source.id,
+                len(warnings),
+            )
+    except Exception as exc:
+        logger.exception("Failed to build initial index for source %s", source.id)
+        status, error_msg = "error", str(exc)
+
+    async with async_session_factory() as session:
+        await session.execute(
+            text("UPDATE source SET status = :s, error_message = :e WHERE id = :id"),
+            {"s": status, "e": error_msg, "id": source.id},
+        )
+        await session.commit()
+
+
 @router.post("/sources", status_code=201)
 async def register_source(
     req: RegisterSourceRequest, session: AsyncSession = Depends(get_session)
@@ -70,14 +100,24 @@ async def register_source(
     _reject_local_source_in_scaleout(req.type)
     name = req.name or req.path.rstrip("/").split("/")[-1]
     poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
+    is_local = req.type == "local"
     source = Source(
-        name=name, type=req.type, path=req.path, polling_interval_seconds=poll
+        name=name,
+        type=req.type,
+        path=req.path,
+        polling_interval_seconds=poll,
+        status="active" if is_local else "syncing",
     )
 
-    try:
-        index_warnings = await create_index(source)
-    except EngineUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    index_warnings: list[dict] | None = None
+    if is_local:
+        # Local sources read straight from disk (no network round-trips), so
+        # indexing them synchronously is cheap enough to keep failing fast
+        # and clean, before anything is persisted.
+        try:
+            index_warnings = await create_index(source)
+        except EngineUnavailableError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
         await session.execute(
@@ -89,17 +129,20 @@ async def register_source(
         )
         await session.commit()
     except Exception as exc:
-        await delete_source_index(source.id)
+        if is_local:
+            await delete_source_index(source.id)
         if "UNIQUE" in str(exc):
             raise HTTPException(status_code=409, detail="Path already registered")
         raise
 
-    if source.type == "local":
+    if is_local:
         watch_root = os.path.expanduser(source.path)
         start_watching(source.id, watch_root)
         register_index_listener(
             source.id, functools.partial(handle_watch_event, source, watch_root)
         )
+    else:
+        asyncio.create_task(_finish_remote_registration(source))
 
     result = source.to_dict()
     if index_warnings:
