@@ -20,6 +20,7 @@ def _flatten_tree(
                 "source_id": source.id,
                 "source_name": source.name,
                 "source_type": source.type,
+                "sha": node.get("sha"),
             }
         )
         return

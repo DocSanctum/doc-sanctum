@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 from backend.app.services.github import (
     _api_tree_url,
+    _build_tree,
     _content_api_url,
     _github_headers,
     _parse_github_url,
@@ -78,3 +79,23 @@ def test_github_headers_omits_auth_when_no_token(monkeypatch):
     monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     headers = _github_headers()
     assert "Authorization" not in headers
+
+
+def test_build_tree_carries_blob_sha_on_files_only():
+    """Each leaf file node must expose the git blob sha from the tree API so
+    sync_source_index can detect unchanged files without downloading them;
+    directory nodes have no sha of their own."""
+    nodes = _build_tree(
+        [
+            {"path": "docs/intro.md", "sha": "sha-intro"},
+            {"path": "README.md", "sha": "sha-readme"},
+        ]
+    )
+    by_name = {n["name"]: n for n in nodes}
+
+    assert by_name["README.md"]["sha"] == "sha-readme"
+    assert "sha" not in by_name["docs"]
+
+    intro = by_name["docs"]["children"][0]
+    assert intro["path"] == "docs/intro.md"
+    assert intro["sha"] == "sha-intro"
