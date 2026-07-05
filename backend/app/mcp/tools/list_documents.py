@@ -6,7 +6,7 @@ from sqlalchemy import text
 from ...core.database import async_session_factory
 from ...models.source import Source
 from ...services.tree_builder import build_local_tree, build_remote_tree
-from ..cache import get_cached, mark_stale, set_cached
+from ..cache import get_cached, get_tree_lock, mark_stale, set_cached
 
 
 def _flatten_tree(
@@ -39,46 +39,54 @@ async def _get_tree_with_cache(
     if cached is not None and not cached["stale"]:
         return cached["data"], None
 
-    try:
-        tree = await build_remote_tree(source)
-        set_cached(source.id, tree)
-        return tree, None
-    except httpx.HTTPStatusError as exc:
-        if exc.response.status_code in (403, 429):
-            mark_stale(source.id)
-            stale = get_cached(source.id)
+    async with get_tree_lock(source.id):
+        # Re-check: another coroutine may have populated the cache while we
+        # were waiting for the lock (e.g. the initial indexing task and a
+        # frontend tree-view request racing right after registration).
+        cached = get_cached(source.id)
+        if cached is not None and not cached["stale"]:
+            return cached["data"], None
+
+        try:
+            tree = await build_remote_tree(source)
+            set_cached(source.id, tree)
+            return tree, None
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code in (403, 429):
+                mark_stale(source.id)
+                stale = get_cached(source.id)
+                warning = {
+                    "source_id": source.id,
+                    "source_name": source.name,
+                    "reason": "rate_limit",
+                    "message": "GitHub API rate limit exceeded. Serving cached data.",
+                    "stale": True,
+                }
+                if stale:
+                    return stale["data"], warning
             warning = {
                 "source_id": source.id,
                 "source_name": source.name,
-                "reason": "rate_limit",
-                "message": "GitHub API rate limit exceeded. Serving cached data.",
-                "stale": True,
+                "reason": "access_error",
+                "message": str(exc),
+                "stale": False,
             }
-            if stale:
-                return stale["data"], warning
-        warning = {
-            "source_id": source.id,
-            "source_name": source.name,
-            "reason": "access_error",
-            "message": str(exc),
-            "stale": False,
-        }
-        return {
-            "source_id": source.id,
-            "root": {"is_dir": True, "children": []},
-        }, warning
-    except Exception as exc:
-        warning = {
-            "source_id": source.id,
-            "source_name": source.name,
-            "reason": "access_error",
-            "message": str(exc),
-            "stale": False,
-        }
-        return {
-            "source_id": source.id,
-            "root": {"is_dir": True, "children": []},
-        }, warning
+            return {
+                "source_id": source.id,
+                "root": {"is_dir": True, "children": []},
+            }, warning
+        except Exception as exc:
+            warning = {
+                "source_id": source.id,
+                "source_name": source.name,
+                "reason": "access_error",
+                "message": str(exc),
+                "stale": False,
+            }
+            return {
+                "source_id": source.id,
+                "root": {"is_dir": True, "children": []},
+            }, warning
 
 
 async def list_documents_handler(source_id: str | None = None) -> str:

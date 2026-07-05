@@ -22,9 +22,8 @@
           </span>
         </span>
         <button
-          v-if="source.type !== 'local'"
+          v-if="source.type !== 'local' && source.status !== 'syncing'"
           class="text-xs text-gray-400 hover:text-white ml-2 shrink-0"
-          :disabled="source.status === 'syncing'"
           @click.stop="$emit('refresh-source', source.id)"
         >↻</button>
         <button

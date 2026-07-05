@@ -8,6 +8,8 @@ from sqlalchemy import text
 from ...core.database import async_session_factory
 from ...models.source import Source
 from ...services.github import _content_api_url, _github_headers, _parse_github_url
+from ...services.gitlab import _content_raw_url, _gitlab_headers, _parse_gitlab_url
+from ...services.tree_utils import request_with_auth_fallback
 from ..cache import get_cached_content, mark_stale_content, set_cached_content
 
 
@@ -29,9 +31,32 @@ async def _read_github(source: Source, path: str) -> str:
     # Accept: application/vnd.github.v3.raw returns the raw file bytes
     # directly from the Contents API, instead of a JSON envelope with the
     # content base64-encoded.
-    headers = {**_github_headers(), "Accept": "application/vnd.github.v3.raw"}
+    raw_accept = {"Accept": "application/vnd.github.v3.raw"}
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(url, headers=headers)
+        resp = await request_with_auth_fallback(
+            client,
+            url,
+            no_auth_headers=raw_accept,
+            auth_headers={**_github_headers(), **raw_accept},
+            token_configured=bool(os.getenv("GITHUB_TOKEN")),
+        )
+    if resp.status_code == 404:
+        raise ValueError(f"File not found: {path}")
+    resp.raise_for_status()
+    return resp.text
+
+
+async def _read_gitlab(source: Source, path: str) -> str:
+    host, project_path = _parse_gitlab_url(source.path)
+    url = _content_raw_url(host, project_path, path)
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await request_with_auth_fallback(
+            client,
+            url,
+            no_auth_headers={},
+            auth_headers=_gitlab_headers(),
+            token_configured=bool(os.getenv("GITLAB_TOKEN")),
+        )
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
     resp.raise_for_status()
@@ -52,6 +77,8 @@ async def _read_http(source: Source, path: str) -> str:
 async def _fetch_remote(source: Source, path: str) -> str:
     if source.type == "github":
         return await _read_github(source, path)
+    if source.type == "gitlab":
+        return await _read_gitlab(source, path)
     return await _read_http(source, path)
 
 

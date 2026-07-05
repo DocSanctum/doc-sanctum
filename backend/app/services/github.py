@@ -6,9 +6,13 @@ from typing import Any
 
 import httpx
 
+from .tree_utils import build_blob_tree, request_with_auth_fallback
+
+_NO_AUTH_HEADERS = {"Accept": "application/vnd.github+json"}
+
 
 def _github_headers() -> dict[str, str]:
-    headers = {"Accept": "application/vnd.github+json"}
+    headers = dict(_NO_AUTH_HEADERS)
     token = os.getenv("GITHUB_TOKEN")
     if token:
         # `token` (not `Bearer`) is the scheme supported since the original
@@ -43,59 +47,17 @@ def _content_api_url(host: str, owner: str, repo: str, path: str) -> str:
     return f"{_api_base_url(host)}/repos/{owner}/{repo}/contents/{path}"
 
 
-def _build_tree(blobs: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    root: dict[str, Any] = {}
-    for blob in blobs:
-        parts = blob["path"].split("/")
-        node = root
-        for i, part in enumerate(parts):
-            if part not in node:
-                is_last = i == len(parts) - 1
-                node[part] = {
-                    "__is_file": is_last,
-                    "__children": {},
-                    "__sha": blob["sha"] if is_last else None,
-                }
-            node = node[part]["__children"]
-
-    def to_nodes(d: dict, prefix: str) -> list[dict[str, Any]]:
-        nodes = []
-        for name, info in sorted(
-            d.items(), key=lambda x: (not x[1]["__is_file"], x[0].lower())
-        ):
-            rel = f"{prefix}/{name}".lstrip("/")
-            if info["__is_file"]:
-                nodes.append(
-                    {
-                        "path": rel,
-                        "name": name,
-                        "is_dir": False,
-                        "size": None,
-                        "modified_at": None,
-                        "sha": info["__sha"],
-                    }
-                )
-            else:
-                children = to_nodes(info["__children"], rel)
-                if children:
-                    nodes.append(
-                        {
-                            "path": rel,
-                            "name": name,
-                            "is_dir": True,
-                            "children": children,
-                        }
-                    )
-        return nodes
-
-    return to_nodes(root, "")
-
-
 async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
     host, owner, repo = _parse_github_url(url)
     api_url = _api_tree_url(host, owner, repo)
     async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.get(api_url, headers=_github_headers())
+        resp = await request_with_auth_fallback(
+            client,
+            api_url,
+            no_auth_headers=_NO_AUTH_HEADERS,
+            auth_headers=_github_headers(),
+            token_configured=bool(os.getenv("GITHUB_TOKEN")),
+        )
         resp.raise_for_status()
     data = resp.json()
     md_blobs = [
@@ -109,6 +71,6 @@ async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
             "path": "",
             "name": f"{owner}/{repo}",
             "is_dir": True,
-            "children": _build_tree(md_blobs),
+            "children": build_blob_tree(md_blobs),
         },
     }

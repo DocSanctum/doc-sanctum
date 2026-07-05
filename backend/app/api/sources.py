@@ -24,7 +24,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sources"])
 
-_DEFAULT_POLL: dict[str, int] = {"github": 600, "http": 300, "localhost": 300}
+_DEFAULT_POLL: dict[str, int] = {
+    "github": 600,
+    "gitlab": 600,
+    "http": 300,
+    "localhost": 300,
+}
 
 # The generic index.json-manifest source types require the doc server
 # operator to hand-author and keep a manifest file in sync with every file

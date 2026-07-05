@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import Any
 
@@ -5,6 +6,16 @@ TTL = 60.0
 
 _cache: dict[str, dict[str, Any]] = {}
 _content_cache: dict[str, dict[str, Any]] = {}
+_locks: dict[str, asyncio.Lock] = {}
+
+
+def get_tree_lock(source_id: str) -> asyncio.Lock:
+    """Per-source lock so concurrent tree-fetch callers (e.g. the initial
+    indexing task and a frontend tree-view request racing right after
+    registration) coalesce into a single upstream fetch instead of each
+    independently re-walking a slow paginated API (e.g. GitLab's tree
+    endpoint for a large repo)."""
+    return _locks.setdefault(source_id, asyncio.Lock())
 
 
 def get_cached(source_id: str) -> dict[str, Any] | None:
@@ -59,6 +70,7 @@ def mark_stale_content(source_id: str, path: str) -> None:
 def clear_source(source_id: str) -> None:
     """Remove all tree and content cache entries for a deleted source (FR-012)."""
     _cache.pop(source_id, None)
+    _locks.pop(source_id, None)
     prefix = f"{source_id}:"
     for key in [k for k in _content_cache if k.startswith(prefix)]:
         _content_cache.pop(key, None)

@@ -6,6 +6,7 @@ from backend.app.mcp.cache import (
     clear_source,
     get_cached,
     get_cached_content,
+    get_tree_lock,
     mark_stale,
     mark_stale_content,
     set_cached,
@@ -17,9 +18,11 @@ from backend.app.mcp.cache import (
 def clear_cache():
     cache_module._cache.clear()
     cache_module._content_cache.clear()
+    cache_module._locks.clear()
     yield
     cache_module._cache.clear()
     cache_module._content_cache.clear()
+    cache_module._locks.clear()
 
 
 def test_set_and_get_within_ttl():
@@ -119,3 +122,20 @@ def test_clear_source_removes_tree_and_content_entries():
 
 def test_clear_source_nonexistent_is_noop():
     clear_source("nonexistent")  # should not raise
+
+
+# --- Per-source tree-fetch lock (single-flight for concurrent tree fetches) ---
+
+
+def test_get_tree_lock_returns_same_instance_for_same_source():
+    assert get_tree_lock("src-10") is get_tree_lock("src-10")
+
+
+def test_get_tree_lock_returns_different_instance_for_different_source():
+    assert get_tree_lock("src-11") is not get_tree_lock("src-12")
+
+
+def test_clear_source_removes_lock_entry():
+    lock = get_tree_lock("src-13")
+    clear_source("src-13")
+    assert get_tree_lock("src-13") is not lock

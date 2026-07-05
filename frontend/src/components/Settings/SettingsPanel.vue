@@ -251,7 +251,7 @@ const RECENT_COUNT = 5
 const recentChangelog = computed(() => changelog.slice(0, RECENT_COUNT))
 const currentCodeTheme = ref(localStorage.getItem('ds-code-theme') ?? 'github-dark')
 
-const DEFAULT_POLL: Record<string, number> = { github: 600, http: 300, localhost: 300 }
+const DEFAULT_POLL: Record<string, number> = { github: 600, gitlab: 600, http: 300, localhost: 300 }
 
 const allSources = computed(() => sourcesQuery.data.value ?? [])
 const remoteSources = computed(() => allSources.value.filter(s => s.type !== 'local'))

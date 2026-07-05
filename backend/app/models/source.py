@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal
 
-SourceType = Literal["local", "github", "http", "localhost"]
+SourceType = Literal["local", "github", "gitlab", "http", "localhost"]
 SourceStatus = Literal["active", "error", "syncing"]
 
 
