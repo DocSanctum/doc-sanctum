@@ -24,7 +24,7 @@ export const api = {
   deleteSource: (id: string) =>
     request<void>(`/sources/${id}`, { method: 'DELETE' }),
 
-  patchSource: (id: string, patch: Partial<Pick<Source, 'name' | 'polling_interval_seconds'>>) =>
+  patchSource: (id: string, patch: Partial<Pick<Source, 'name' | 'polling_interval_seconds' | 'icon'>>) =>
     request<Source>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   getTree: (sourceId: string) =>

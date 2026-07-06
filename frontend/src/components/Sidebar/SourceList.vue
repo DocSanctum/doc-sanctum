@@ -29,6 +29,11 @@
           @click.stop="$emit('refresh-source', source.id)"
         >↻</button>
         <button
+          class="text-xs text-gray-400 hover:text-white ml-1 shrink-0"
+          title="소스 정보 수정"
+          @click.stop="$emit('edit-source', source.id)"
+        >✎</button>
+        <button
           class="text-xs text-gray-400 hover:text-red-400 ml-1 shrink-0"
           @click.stop="$emit('delete-source', source.id)"
         >✕</button>
@@ -45,6 +50,7 @@ defineProps<{ selectedSourceId: string | null }>()
 defineEmits<{
   'select-source': [id: string]
   'refresh-source': [id: string]
+  'edit-source': [id: string]
   'delete-source': [id: string]
 }>()
 

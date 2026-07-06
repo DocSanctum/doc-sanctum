@@ -19,6 +19,7 @@
           @select-source="selectSource"
           @delete-source="requestDelete"
           @refresh-source="refreshSource"
+          @edit-source="requestEdit"
         />
         <div v-if="treeSourceId" class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
           <FileTree
@@ -79,6 +80,11 @@
     </main>
 
     <AddSourceModal v-if="showAdd" @close="showAdd = false" />
+    <EditSourceModal
+      v-if="pendingEditSource"
+      :source="pendingEditSource"
+      @close="pendingEditId = null"
+    />
     <ConfirmDeleteModal
       v-if="pendingDeleteSource"
       :source-name="pendingDeleteSource.name"
@@ -94,6 +100,7 @@ import { ref, computed, watch } from 'vue'
 import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
+import EditSourceModal from './components/Sidebar/EditSourceModal.vue'
 import ConfirmDeleteModal from './components/Sidebar/ConfirmDeleteModal.vue'
 import SettingsPanel from './components/Settings/SettingsPanel.vue'
 import ChangelogPage from './components/Settings/ChangelogPage.vue'
@@ -110,6 +117,10 @@ const showAdd = ref(false)
 const pendingDeleteId = ref<string | null>(null)
 const pendingDeleteSource = computed(() =>
   sourcesQuery.data.value?.find((s) => s.id === pendingDeleteId.value) ?? null
+)
+const pendingEditId = ref<string | null>(null)
+const pendingEditSource = computed(() =>
+  sourcesQuery.data.value?.find((s) => s.id === pendingEditId.value) ?? null
 )
 const view = ref<'viewer' | 'settings' | 'changelog'>('viewer')
 
@@ -176,6 +187,10 @@ function selectFile(sourceId: string, path: string) {
 
 function requestDelete(id: string) {
   pendingDeleteId.value = id
+}
+
+function requestEdit(id: string) {
+  pendingEditId.value = id
 }
 
 function cancelDelete() {

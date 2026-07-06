@@ -206,7 +206,7 @@ async def patch_source(
         updates["name"] = req.name
     if req.polling_interval_seconds is not None:
         updates["polling_interval_seconds"] = req.polling_interval_seconds
-    if req.icon is not None:
+    if "icon" in req.model_fields_set:
         updates["icon"] = req.icon
     if updates:
         set_clause = ", ".join(f"{k} = :{k}" for k in updates)
