@@ -9,17 +9,7 @@
         </div>
         <div class="mb-3">
           <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">아이콘 (선택)</label>
-          <div class="flex flex-wrap gap-1">
-            <button
-              v-for="icon in iconOptions"
-              :key="icon"
-              type="button"
-              class="icon-option w-7 h-7 flex items-center justify-center rounded text-base"
-              :class="{ 'icon-option-selected': form.icon === icon }"
-              :title="icon"
-              @click="form.icon = form.icon === icon ? null : icon"
-            >{{ icon }}</button>
-          </div>
+          <IconPicker v-model="form.icon" :options="SOURCE_ICON_OPTIONS" />
         </div>
         <div class="mb-3">
           <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">유형 <span class="text-red-400">*</span></label>
@@ -53,8 +43,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useSources } from '../../composables/useSources'
+import { useSources, SOURCE_ICON_OPTIONS } from '../../composables/useSources'
 import { useDeploymentMode } from '../../composables/useDeploymentMode'
+import IconPicker from './IconPicker.vue'
 import type { SourceIcon, SourceType } from '../../types'
 
 const { register } = useSources()
@@ -65,8 +56,6 @@ const deploymentQuery = useDeploymentMode()
 const isScaleout = computed(() => deploymentQuery.data.value?.mode === 'scaleout')
 const loading = ref(false)
 const error = ref('')
-
-const iconOptions: SourceIcon[] = ['📁', '📦', '🐙', '🌐', '💻', '📚', '🚀', '🔧', '📝', '🗂️', '⭐', '🔥', '🎯', '📊', '🧩', '🔒']
 
 const form = ref<{ name: string; type: SourceType; path: string; polling_interval_seconds: number | null; icon: SourceIcon | null }>({
   name: '',
@@ -109,17 +98,3 @@ async function submit() {
 
 const emit = defineEmits<{ close: [] }>()
 </script>
-
-<style scoped>
-.icon-option {
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-.icon-option:hover {
-  background: rgba(148, 163, 184, 0.15);
-}
-.icon-option-selected {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.12);
-}
-</style>
