@@ -17,7 +17,9 @@
             :title="source.error_message ?? source.status"
           />
           <span class="flex flex-col min-w-0">
-            <span class="text-sm truncate">{{ source.name }}</span>
+            <span class="text-sm truncate">
+              <span v-if="source.icon" class="mr-1">{{ source.icon }}</span>{{ source.name }}
+            </span>
             <span class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ source.path }}</span>
           </span>
         </span>

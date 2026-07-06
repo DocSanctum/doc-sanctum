@@ -7,6 +7,10 @@ from typing import Literal
 
 SourceType = Literal["local", "github", "gitlab", "http", "localhost"]
 SourceStatus = Literal["active", "error", "syncing"]
+SourceIcon = Literal[
+    "📁", "📦", "🐙", "🌐", "💻", "📚", "🚀", "🔧",
+    "📝", "🗂️", "⭐", "🔥", "🎯", "📊", "🧩", "🔒",
+]
 
 
 @dataclass
@@ -21,6 +25,7 @@ class Source:
     )
     status: SourceStatus = "active"
     error_message: str | None = None
+    icon: SourceIcon | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -32,6 +37,7 @@ class Source:
             "created_at": self.created_at,
             "status": self.status,
             "error_message": self.error_message,
+            "icon": self.icon,
         }
 
     @classmethod
@@ -45,4 +51,5 @@ class Source:
             created_at=row["created_at"],
             status=row["status"],
             error_message=row["error_message"],
+            icon=row.get("icon"),
         )

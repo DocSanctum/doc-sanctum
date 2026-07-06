@@ -26,7 +26,8 @@ async def create_tables() -> None:
                 polling_interval_seconds INTEGER,
                 created_at TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'active',
-                error_message TEXT
+                error_message TEXT,
+                icon TEXT
             )
         """)
         )
