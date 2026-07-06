@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
 from ..core.database import async_session_factory, get_session
-from ..models.source import Source, SourceType
+from ..models.source import Source, SourceIcon, SourceType
 from ..services.poller import poll_now
 from ..services.watcher import register_index_listener, start_watching, stop_watching
 from ..vectorstore.indexer import (
@@ -38,11 +38,13 @@ class RegisterSourceRequest(BaseModel):
     type: SourceType
     path: str
     polling_interval_seconds: int | None = None
+    icon: SourceIcon | None = None
 
 
 class PatchSourceRequest(BaseModel):
     name: str | None = None
     polling_interval_seconds: int | None = None
+    icon: SourceIcon | None = None
 
 
 def _reject_local_source_in_scaleout(source_type: str) -> None:
@@ -122,6 +124,7 @@ async def register_source(
         path=req.path,
         polling_interval_seconds=poll,
         status="active" if is_local else "syncing",
+        icon=req.icon,
     )
 
     index_warnings: list[dict] | None = None
@@ -137,8 +140,8 @@ async def register_source(
     try:
         await session.execute(
             text(
-                "INSERT INTO source (id,name,type,path,polling_interval_seconds,created_at,status,error_message)"
-                " VALUES (:id,:name,:type,:path,:poll,:created_at,:status,:err)"
+                "INSERT INTO source (id,name,type,path,polling_interval_seconds,created_at,status,error_message,icon)"
+                " VALUES (:id,:name,:type,:path,:poll,:created_at,:status,:err,:icon)"
             ),
             {**source.to_dict(), "poll": poll, "err": None},
         )
@@ -198,6 +201,8 @@ async def patch_source(
         updates["name"] = req.name
     if req.polling_interval_seconds is not None:
         updates["polling_interval_seconds"] = req.polling_interval_seconds
+    if req.icon is not None:
+        updates["icon"] = req.icon
     if updates:
         set_clause = ", ".join(f"{k} = :{k}" for k in updates)
         await session.execute(

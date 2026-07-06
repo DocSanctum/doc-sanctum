@@ -1,5 +1,8 @@
 export type SourceType = 'local' | 'github' | 'http' | 'localhost'
 export type SourceStatus = 'active' | 'error' | 'syncing'
+export type SourceIcon =
+  | '📁' | '📦' | '🐙' | '🌐' | '💻' | '📚' | '🚀' | '🔧'
+  | '📝' | '🗂️' | '⭐' | '🔥' | '🎯' | '📊' | '🧩' | '🔒'
 
 export interface Source {
   id: string
@@ -10,6 +13,7 @@ export interface Source {
   created_at: string
   status: SourceStatus
   error_message: string | null
+  icon: SourceIcon | null
 }
 
 export interface FileEntry {
@@ -59,6 +63,7 @@ export interface RegisterSourcePayload {
   type: SourceType
   path: string
   polling_interval_seconds?: number | null
+  icon?: SourceIcon | null
 }
 
 export type DeploymentMode = 'standalone' | 'scaleout'
