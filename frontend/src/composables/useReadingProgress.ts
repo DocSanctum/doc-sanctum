@@ -1,5 +1,5 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
-import { useScroll } from '@vueuse/core'
+import { useScroll, useResizeObserver } from '@vueuse/core'
 
 const BACK_TO_TOP_THRESHOLD = 400
 // Safari's native rubber-band/momentum scrolling can settle several pixels short
@@ -9,10 +9,19 @@ const BACK_TO_TOP_THRESHOLD = 400
 const BOTTOM_ARRIVAL_TOLERANCE_PX = 12
 
 export function useReadingProgress(container: MaybeRefOrGetter<HTMLElement | null | undefined>) {
-  const { y, arrivedState } = useScroll(container, {
+  const { y, arrivedState, measure } = useScroll(container, {
     throttle: 100,
     offset: { bottom: BOTTOM_ARRIVAL_TOLERANCE_PX },
   })
+
+  // arrivedState is only recomputed on 'scroll' events, but the container's
+  // content can change height without one ever firing — e.g. the "loading…"
+  // placeholder is replaced by the real (much taller) document once it
+  // finishes fetching. With the tolerance above, that placeholder's height
+  // can sit within a few px of clientHeight and get mistaken for "already at
+  // the bottom", a false reading that then never corrects itself until the
+  // user scrolls. Re-measure on every size change so it stays accurate.
+  useResizeObserver(container, () => measure())
 
   const ratio = computed(() => {
     const el = toValue(container)

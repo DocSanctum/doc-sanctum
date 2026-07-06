@@ -28,38 +28,34 @@ const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(p
 
 <style scoped>
 /*
- * height:0 so this never adds to the scroll container's scrollHeight — a
- * non-zero height here always overflowed the container by that many pixels
- * (even for documents shorter than the pane), forcing a permanent scrollbar
- * to appear regardless of content length. The visible 3px bar is drawn by
- * .reading-progress-fill, absolutely positioned within this sticky wrapper.
+ * This renders as a sibling of the pane's scroll container (see
+ * ViewerPane.vue), not inside it, and is positioned absolutely against the
+ * pane's own `position: relative` root instead of `position: sticky` inside
+ * the scrollable element. Two reasons: a sticky child previously added to
+ * the container's scrollHeight, forcing a scrollbar even on documents
+ * shorter than the pane; and WebKit/Safari has long-standing bugs computing
+ * the scrollable max of a container that has a `position: sticky`
+ * descendant, which kept the reading-progress ratio from ever reaching 100%
+ * there. Living outside the scroll container sidesteps both.
  */
 .reading-progress-track {
-  position: sticky;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 0;
-  z-index: 20;
-}
-.reading-progress-fill {
   position: absolute;
   top: 0;
   left: 0;
+  right: 0;
   height: 3px;
+  pointer-events: none;
+  z-index: 20;
+}
+.reading-progress-fill {
+  height: 100%;
   transition: width 0.1s linear;
 }
-/*
- * Each pane has its own independent scroll container (multi-pane support),
- * so this button sticks to the bottom of its own scroll container instead
- * of being viewport-fixed — that way it never overlaps or gets ambiguous
- * about which pane it belongs to when two panes are open. The height:0
- * wrapper keeps it from affecting scroll height, and flex right-aligns it.
- */
 .back-to-top-anchor {
-  position: sticky;
+  position: absolute;
   bottom: 1.5rem;
-  height: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: flex-end;
   padding-right: 1.5rem;
