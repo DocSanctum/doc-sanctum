@@ -8,8 +8,22 @@ from typing import Literal
 SourceType = Literal["local", "github", "gitlab", "http", "localhost"]
 SourceStatus = Literal["active", "error", "syncing"]
 SourceIcon = Literal[
-    "📁", "📦", "🐙", "🌐", "💻", "📚", "🚀", "🔧",
-    "📝", "🗂️", "⭐", "🔥", "🎯", "📊", "🧩", "🔒",
+    "📁",
+    "📦",
+    "🐙",
+    "🌐",
+    "💻",
+    "📚",
+    "🚀",
+    "🔧",
+    "📝",
+    "🗂️",
+    "⭐",
+    "🔥",
+    "🎯",
+    "📊",
+    "🧩",
+    "🔒",
 ]
 
 
