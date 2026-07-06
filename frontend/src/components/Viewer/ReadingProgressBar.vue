@@ -27,25 +27,34 @@ const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(p
 </script>
 
 <style scoped>
+/*
+ * height:0 so this never adds to the scroll container's scrollHeight — a
+ * non-zero height here always overflowed the container by that many pixels
+ * (even for documents shorter than the pane), forcing a permanent scrollbar
+ * to appear regardless of content length. The visible 3px bar is drawn by
+ * .reading-progress-fill, absolutely positioned within this sticky wrapper.
+ */
 .reading-progress-track {
   position: sticky;
   top: 0;
   left: 0;
   right: 0;
-  height: 3px;
-  background: transparent;
+  height: 0;
   z-index: 20;
 }
 .reading-progress-fill {
-  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
   transition: width 0.1s linear;
 }
 /*
- * 패널마다 독립된 스크롤 컨테이너를 가지므로(멀티 패널 지원), 이 버튼은
- * 뷰포트 기준 fixed 대신 자신이 속한 스크롤 컨테이너 하단에 sticky로
- * 고정한다 — 패널이 2개 열려도 버튼이 겹치거나 어느 패널 것인지 모호해지지
- * 않는다. height:0 래퍼로 스크롤 높이에 영향을 주지 않게 하고, flex로
- * 우측 정렬한다.
+ * Each pane has its own independent scroll container (multi-pane support),
+ * so this button sticks to the bottom of its own scroll container instead
+ * of being viewport-fixed — that way it never overlaps or gets ambiguous
+ * about which pane it belongs to when two panes are open. The height:0
+ * wrapper keeps it from affecting scroll height, and flex right-aligns it.
  */
 .back-to-top-anchor {
   position: sticky;
