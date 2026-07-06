@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { initCodeTheme } from './useCodeTheme'
 
 type Theme = 'dark' | 'light'
 
@@ -8,6 +9,7 @@ function applyTheme(t: Theme) {
   theme.value = t
   localStorage.setItem('ds-theme', t)
   document.documentElement.classList.toggle('dark', t === 'dark')
+  initCodeTheme(t)
 }
 
 applyTheme(theme.value)
