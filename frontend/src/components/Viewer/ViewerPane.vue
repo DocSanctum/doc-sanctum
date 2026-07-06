@@ -41,8 +41,8 @@
         @click.stop="closePane(paneId)"
       >✕</button>
     </div>
+    <ReadingProgressBar v-if="pane.sourceId && pane.filePath" :container="() => scrollRef" :color="colorOf(paneId)" />
     <div ref="scrollRef" class="viewer-pane-scroll flex-1 overflow-y-auto min-h-0">
-      <ReadingProgressBar v-if="pane.sourceId && pane.filePath" :container="() => scrollRef" :color="colorOf(paneId)" />
       <MarkdownViewer
         v-if="pane.sourceId && pane.filePath"
         :source-id="pane.sourceId"
