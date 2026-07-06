@@ -235,7 +235,7 @@ import { ref, computed, reactive, watch, onMounted } from 'vue'
 defineEmits<{ 'open-changelog': [] }>()
 import { useTheme } from '../../composables/useTheme'
 import { useViewerSettings } from '../../composables/useViewerSettings'
-import { applyCodeTheme, THEME_OPTIONS } from '../../composables/useCodeTheme'
+import { useCodeTheme } from '../../composables/useCodeTheme'
 import { useSources } from '../../composables/useSources'
 import { changelog } from '../../data/changelog'
 import { api } from '../../services/api'
@@ -245,11 +245,11 @@ import pkg from '../../../package.json'
 const { theme, applyTheme } = useTheme()
 const { fontSize, setFontSize } = useViewerSettings()
 const { sourcesQuery, patch } = useSources()
+const { codeTheme: currentCodeTheme, THEME_OPTIONS, applyCodeTheme } = useCodeTheme()
 
 const currentVersion = pkg.version
 const RECENT_COUNT = 5
 const recentChangelog = computed(() => changelog.slice(0, RECENT_COUNT))
-const currentCodeTheme = ref(localStorage.getItem('ds-code-theme') ?? 'github-dark')
 
 const DEFAULT_POLL: Record<string, number> = { github: 600, gitlab: 600, http: 300, localhost: 300 }
 
@@ -292,7 +292,6 @@ function toggleVersion(version: string) {
 }
 
 function selectCodeTheme(value: string) {
-  currentCodeTheme.value = value
   applyCodeTheme(value)
 }
 
