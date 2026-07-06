@@ -2,18 +2,26 @@ import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import { useScroll } from '@vueuse/core'
 
 const BACK_TO_TOP_THRESHOLD = 400
+// Safari's native rubber-band/momentum scrolling can settle several pixels short
+// of the true scrollable max (worse than Chrome, which has no elastic overscroll),
+// so vueuse's own 1px arrivedState.bottom threshold isn't always enough there —
+// widen it via useScroll's offset so the bar still reaches 100% at the true bottom.
+const BOTTOM_ARRIVAL_TOLERANCE_PX = 12
 
 export function useReadingProgress(container: MaybeRefOrGetter<HTMLElement | null | undefined>) {
-  const { y, arrivedState } = useScroll(container, { throttle: 100 })
+  const { y, arrivedState } = useScroll(container, {
+    throttle: 100,
+    offset: { bottom: BOTTOM_ARRIVAL_TOLERANCE_PX },
+  })
 
   const ratio = computed(() => {
     const el = toValue(container)
     if (!el) return 0
-    // 서브픽셀 반올림/스크롤 이벤트 쓰로틀 지연 때문에 y.value가 이론적
-    // 최댓값(scrollHeight - clientHeight)에 정확히 도달하지 못하는 경우가 있어,
-    // 맨 끝까지 스크롤해도 진행률이 100%를 살짝 못 채우는 것처럼 보였다.
-    // useScroll이 이미 1px 오차로 판정하는 arrivedState.bottom을 그대로 신뢰해
-    // 바닥에 도달하면 무조건 100%로 스냅한다.
+    // Sub-pixel rounding and scroll-event throttling can leave y.value just
+    // short of the theoretical max (scrollHeight - clientHeight), making the
+    // ratio appear to fall a hair short of 100% even at the true bottom.
+    // Trust useScroll's own arrivedState.bottom and snap straight to 100%
+    // whenever it fires.
     if (arrivedState.bottom) return 1
     const scrollable = el.scrollHeight - el.clientHeight
     return scrollable > 0 ? Math.min(1, Math.max(0, y.value / scrollable)) : 0

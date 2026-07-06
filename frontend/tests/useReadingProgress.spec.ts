@@ -56,6 +56,17 @@ describe('useReadingProgress', () => {
     expect(ratio.value).toBe(1)
   })
 
+  it('snaps ratio to 1 when Safari-style rubber-band scrolling settles several pixels short of the max', async () => {
+    const el = mockScrollableElement(2000, 1000) // scrollable distance = 1000
+    const containerRef = ref<HTMLElement | null>(el)
+    const { ratio } = useReadingProgress(containerRef)
+
+    scrollTo(el, 990) // 10px short, beyond a plain 1px threshold
+    await wait(150)
+
+    expect(ratio.value).toBe(1)
+  })
+
   it('returns 0 ratio when there is no container', () => {
     const containerRef = ref<HTMLElement | null>(null)
     const { ratio, showBackToTop } = useReadingProgress(containerRef)
