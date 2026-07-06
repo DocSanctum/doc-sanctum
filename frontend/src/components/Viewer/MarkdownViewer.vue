@@ -19,6 +19,7 @@
       :entries="toc.entries.value"
       :active-id="toc.activeId.value"
       class="toc-column hidden lg:block"
+      :class="{ 'toc-column--collapsed': tocCollapsed }"
       @select="scrollToHeading"
     />
   </div>
@@ -43,7 +44,7 @@ const props = withDefaults(
 const emit = defineEmits<{ navigate: [path: string] }>()
 
 const { render } = useMarkdown()
-const { fontSize } = useViewerSettings()
+const { fontSize, tocCollapsed } = useViewerSettings()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
 const { copy, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
 
@@ -192,6 +193,10 @@ function handleClick(e: MouseEvent) {
   width: 14rem;
   flex-shrink: 0;
   padding: 2rem 1.5rem 2rem 0;
+}
+.toc-column--collapsed {
+  width: auto;
+  padding-right: 0.5rem;
 }
 
 /* Code blocks */

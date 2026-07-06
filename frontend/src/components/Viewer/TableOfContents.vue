@@ -1,7 +1,16 @@
 <template>
-  <nav v-if="entries.length > 0" class="toc" aria-label="목차">
-    <p class="toc-title">목차</p>
-    <ul>
+  <nav v-if="entries.length > 0" class="toc" :class="{ collapsed: tocCollapsed }" aria-label="목차">
+    <div class="toc-header">
+      <p v-if="!tocCollapsed" class="toc-title">목차</p>
+      <button
+        type="button"
+        class="toc-toggle"
+        :aria-expanded="!tocCollapsed"
+        :title="tocCollapsed ? '목차 펼치기' : '목차 접기'"
+        @click="toggleToc"
+      >{{ tocCollapsed ? '«' : '»' }}</button>
+    </div>
+    <ul v-if="!tocCollapsed">
       <li
         v-for="entry in entries"
         :key="entry.id"
@@ -21,9 +30,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { TocEntry } from '../../composables/useToc'
+import { useViewerSettings } from '../../composables/useViewerSettings'
 
 const props = defineProps<{ entries: TocEntry[]; activeId: string | null }>()
 defineEmits<{ select: [id: string] }>()
+
+const { tocCollapsed, toggleToc } = useViewerSettings()
 
 const minLevel = computed(() =>
   props.entries.length ? Math.min(...props.entries.map((e) => e.level)) : 1
@@ -40,13 +52,41 @@ const minLevel = computed(() =>
   padding-left: 1rem;
   border-left: 1px solid rgba(148, 163, 184, 0.3);
 }
+.toc.collapsed {
+  overflow: visible;
+}
+.toc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.toc.collapsed .toc-header {
+  justify-content: center;
+}
 .toc-title {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 0.7rem;
   color: #9ca3af;
-  margin: 0 0 0.5rem;
+  margin: 0;
+}
+.toc-toggle {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.2rem 0.35rem;
+  border-radius: 4px;
+}
+.toc-toggle:hover,
+.toc-toggle:focus-visible {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
 }
 .toc ul {
   list-style: none;
