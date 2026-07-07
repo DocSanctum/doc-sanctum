@@ -20,7 +20,7 @@ export const ko: MessageSchema = {
   app: {
     addSource: '소스 추가',
     settings: '설정',
-    openSearch: '검색',
+    openSearch: '검색 ({shortcut})',
   },
   sidebar: {
     sourceList: {
@@ -137,11 +137,12 @@ export const ko: MessageSchema = {
   search: {
     ariaLabel: '전역 검색',
     placeholder: '모든 소스에서 검색...',
-    shortcutHint: '{shortcut}로 검색',
+    shortcutHint: '{shortcut}로 열기 · Esc로 닫기',
     noSources: '검색할 등록된 소스가 없습니다',
     noResults: '검색 결과가 없습니다',
     loading: '검색 중...',
     moreMatches: '이 문서에 매치가 더 있습니다',
     warning: '{name}: {message}',
+    openInPane: '패널 {paneId}에서 열기',
   },
 }

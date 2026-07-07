@@ -3,6 +3,12 @@ import { useDebounceFn } from '@vueuse/core'
 import { api } from '../services/api'
 import type { SearchMatch, SearchWarning } from '../types'
 
+// macOS는 ⌘K, Windows/Linux는 Ctrl+K — 검색 버튼 툴팁과 팔레트 안내 문구에서
+// 공통으로 쓴다(App.vue, CommandPalette.vue). 플랫폼은 세션 중 바뀌지 않으므로
+// 모듈 로드 시 한 번만 계산한다.
+const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+export const searchShortcutLabel = isMac ? '⌘K' : 'Ctrl+K'
+
 // 모듈 스코프 싱글턴 상태 — usePanes.ts/useTreeReveal.ts와 동일한 패턴.
 // 검색 열기 버튼(App.vue)과 팔레트 본체(CommandPalette.vue)가 서로 다른
 // 컴포넌트 트리이므로 검색 세션 상태(data-model.md SearchSession)를 전역

@@ -12,7 +12,11 @@
       <div class="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-700">
         <span class="font-semibold text-sm">DocSanctum</span>
         <div class="flex items-center gap-2">
-          <button class="text-sm hover:text-blue-400" :title="t('app.openSearch')" @click="search.open()">🔍</button>
+          <button
+            class="text-sm hover:text-blue-400"
+            :title="t('app.openSearch', { shortcut: searchShortcutLabel })"
+            @click="search.open()"
+          >🔍</button>
           <button class="text-lg hover:text-blue-400" :title="t('app.addSource')" @click="showAdd = true">＋</button>
         </div>
       </div>
@@ -115,7 +119,7 @@ import CommandPalette from './components/CommandPalette/CommandPalette.vue'
 import { useSources } from './composables/useSources'
 import { usePanes } from './composables/usePanes'
 import { useTreeReveal } from './composables/useTreeReveal'
-import { useSearch } from './composables/useSearch'
+import { useSearch, searchShortcutLabel } from './composables/useSearch'
 
 const { t } = useI18n()
 const { sourcesQuery, remove } = useSources()

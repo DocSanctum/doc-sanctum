@@ -18,7 +18,7 @@ export const en = {
   app: {
     addSource: 'Add source',
     settings: 'Settings',
-    openSearch: 'Search',
+    openSearch: 'Search ({shortcut})',
   },
   sidebar: {
     sourceList: {
@@ -135,12 +135,13 @@ export const en = {
   search: {
     ariaLabel: 'Global search',
     placeholder: 'Search across all sources...',
-    shortcutHint: '{shortcut} to search',
+    shortcutHint: '{shortcut} to open · Esc to close',
     noSources: 'No registered sources to search',
     noResults: 'No results found',
     loading: 'Searching...',
     moreMatches: 'More matches in this document',
     warning: '{name}: {message}',
+    openInPane: 'Open in pane {paneId}',
   },
 }
 

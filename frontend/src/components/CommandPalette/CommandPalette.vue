@@ -18,6 +18,9 @@
           @keydown.up.prevent="moveActive(-1)"
           @keydown.enter.prevent="selectActive"
         />
+        <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 px-0.5">
+          {{ t('search.shortcutHint', { shortcut: searchShortcutLabel }) }}
+        </p>
       </div>
       <div class="overflow-y-auto flex-1 p-1">
         <p v-if="noSources" class="text-sm text-gray-400 px-3 py-4">{{ t('search.noSources') }}</p>
@@ -33,8 +36,10 @@
             <SearchResultItem
               :match="match"
               :active="index === search.activeIndex.value"
+              :pane-options="paneOptions"
               @select="selectResult(match)"
               @hover="search.activeIndex.value = index"
+              @open-in-pane="openInPane(match, $event)"
             />
             <p v-if="isLastInGroup(match, index) && isGroupTruncated(match)" class="text-xs text-gray-400 px-3 py-1">
               {{ t('search.moreMatches') }}
@@ -55,12 +60,12 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { onKeyStroke } from '@vueuse/core'
-import { useSearch } from '../../composables/useSearch'
+import { useSearch, searchShortcutLabel } from '../../composables/useSearch'
 import { useSearchReveal } from '../../composables/useSearchReveal'
 import { usePanes } from '../../composables/usePanes'
 import { useSources } from '../../composables/useSources'
 import SearchResultItem from './SearchResultItem.vue'
-import type { SearchMatch } from '../../types'
+import type { SearchMatch, PaneId } from '../../types'
 
 // backend/app/mcp/tools/search_documents.py의 MAX_MATCHES_PER_FILE과 일치해야
 // 한다(FR-012) — API 응답에는 별도의 "더 있음" 플래그가 없어 문서당 매치 개수가
@@ -70,12 +75,16 @@ const MAX_MATCHES_PER_FILE = 10
 const { t } = useI18n()
 const search = useSearch()
 const { reveal } = useSearchReveal()
-const { openInActivePane } = usePanes()
+const { panes, colorOf, openInActivePane, setPaneDocument, setActivePane } = usePanes()
 const { sourcesQuery } = useSources()
 
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const noSources = computed(() => (sourcesQuery.data.value?.length ?? 0) === 0)
+
+// 패널이 2개 이상 열려 있을 때만 결과 옆에 "이 패널에 열기" 아이콘을 보여준다
+// (SearchResultItem.vue 참조) — 패널이 하나면 행 클릭과 다를 게 없다.
+const paneOptions = computed(() => panes.value.map((p) => ({ id: p.id, color: colorOf(p.id) })))
 
 const groupCounts = computed(() => {
   const counts = new Map<string, number>()
@@ -105,6 +114,17 @@ function moveActive(delta: number) {
 
 function selectResult(match: SearchMatch) {
   openInActivePane(match.source_id, match.path)
+  reveal(match.source_id, match.path, match.line_number)
+  close()
+}
+
+// 결과 옆 패널 아이콘을 클릭하면, 활성 패널이 아니라 사용자가 고른 패널에 바로
+// 연다. MarkdownViewer의 하이라이트는 active 패널에서만 반응하므로(같은 문서가
+// 두 패널에 열려 있을 때 어느 쪽이 반응할지 명확히 하기 위함), 고른 패널을
+// 활성 패널로도 함께 전환해 하이라이트가 그 패널에서 확실히 보이게 한다.
+function openInPane(match: SearchMatch, paneId: PaneId) {
+  setPaneDocument(paneId, match.source_id, match.path)
+  setActivePane(paneId)
   reveal(match.source_id, match.path, match.line_number)
   close()
 }
