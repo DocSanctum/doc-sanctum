@@ -40,6 +40,11 @@ async def create_tables() -> None:
         """)
         )
 
+        result = await conn.execute(text("PRAGMA table_info(source)"))
+        existing_columns = {row[1] for row in result.fetchall()}
+        if "icon" not in existing_columns:
+            await conn.execute(text("ALTER TABLE source ADD COLUMN icon TEXT"))
+
 
 async def get_setting(key: str, default: str | None = None) -> str | None:
     async with async_session_factory() as session:
