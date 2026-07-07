@@ -11,7 +11,10 @@
     >
       <div class="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-700">
         <span class="font-semibold text-sm">DocSanctum</span>
-        <button class="text-lg hover:text-blue-400" :title="t('app.addSource')" @click="showAdd = true">＋</button>
+        <div class="flex items-center gap-2">
+          <button class="text-sm hover:text-blue-400" :title="t('app.openSearch')" @click="search.open()">🔍</button>
+          <button class="text-lg hover:text-blue-400" :title="t('app.addSource')" @click="showAdd = true">＋</button>
+        </div>
       </div>
       <div class="overflow-y-auto flex-1 py-2 sidebar-scroll">
         <SourceList
@@ -79,6 +82,8 @@
       </template>
     </main>
 
+    <CommandPalette />
+
     <AddSourceModal v-if="showAdd" @close="showAdd = false" />
     <EditSourceModal
       v-if="pendingEditSource"
@@ -106,14 +111,17 @@ import ConfirmDeleteModal from './components/Sidebar/ConfirmDeleteModal.vue'
 import SettingsPanel from './components/Settings/SettingsPanel.vue'
 import ChangelogPage from './components/Settings/ChangelogPage.vue'
 import ViewerPane from './components/Viewer/ViewerPane.vue'
+import CommandPalette from './components/CommandPalette/CommandPalette.vue'
 import { useSources } from './composables/useSources'
 import { usePanes } from './composables/usePanes'
 import { useTreeReveal } from './composables/useTreeReveal'
+import { useSearch } from './composables/useSearch'
 
 const { t } = useI18n()
 const { sourcesQuery, remove } = useSources()
 const { panes, activePaneId, openInActivePane, clearSource } = usePanes()
 const { reveal } = useTreeReveal()
+const search = useSearch()
 
 const showAdd = ref(false)
 const pendingDeleteId = ref<string | null>(null)

@@ -18,6 +18,7 @@ export const en = {
   app: {
     addSource: 'Add source',
     settings: 'Settings',
+    openSearch: 'Search',
   },
   sidebar: {
     sourceList: {
@@ -130,6 +131,16 @@ export const en = {
       back: '← Back',
       allHistory: 'Full Changelog',
     },
+  },
+  search: {
+    ariaLabel: 'Global search',
+    placeholder: 'Search across all sources...',
+    shortcutHint: '{shortcut} to search',
+    noSources: 'No registered sources to search',
+    noResults: 'No results found',
+    loading: 'Searching...',
+    moreMatches: 'More matches in this document',
+    warning: '{name}: {message}',
   },
 }
 
