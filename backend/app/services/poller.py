@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import text
 
 from ..core.database import async_session_factory
-from ..mcp.cache import set_cached
+from ..mcp.cache import get_tree_lock, set_cached
 from ..models.source import Source
 from ..vectorstore.indexer import sync_source_index
 from .github import fetch_github_tree
@@ -20,13 +20,18 @@ logger = logging.getLogger(__name__)
 
 async def _poll_source(source: Source) -> None:
     try:
-        if source.type == "github":
-            tree = await fetch_github_tree(source.path, source.id)
-        elif source.type == "gitlab":
-            tree = await fetch_gitlab_tree(source.path, source.id)
-        else:
-            tree = await fetch_manifest_tree(source.path, source.id, source.name)
-        set_cached(source.id, tree)
+        # Shares the lock with on-demand /tree requests (see
+        # mcp/cache.get_tree_lock) so a periodic poll and a manual tree
+        # fetch can't both independently re-walk a slow paginated remote
+        # API (e.g. GitLab's tree endpoint for a large repo) at once.
+        async with get_tree_lock(source.id):
+            if source.type == "github":
+                tree = await fetch_github_tree(source.path, source.id)
+            elif source.type == "gitlab":
+                tree = await fetch_gitlab_tree(source.path, source.id)
+            else:
+                tree = await fetch_manifest_tree(source.path, source.id, source.name)
+            set_cached(source.id, tree)
         status, error_msg = "active", None
     except Exception as exc:
         status, error_msg = "error", str(exc)

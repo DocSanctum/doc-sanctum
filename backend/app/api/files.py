@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_session
+from ..mcp.cache import get_cached
 from ..mcp.tools.list_documents import _get_tree_with_cache
 from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
@@ -35,6 +36,13 @@ async def get_tree(
 ) -> dict:
     source = await _get_source_or_404(session, source_id)
     if source.status == "error":
+        # A transient failure (e.g. one flaky page in a large paginated
+        # traversal) flips the source to "error", but a tree from an
+        # earlier successful poll may still be cached — serve that instead
+        # of a hard failure.
+        cached = get_cached(source_id, ignore_ttl=True)
+        if cached is not None:
+            return cached["data"]
         raise HTTPException(
             status_code=503, detail=source.error_message or "Source error"
         )
