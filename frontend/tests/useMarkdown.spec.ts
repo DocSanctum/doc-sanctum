@@ -12,6 +12,6 @@ describe('useMarkdown', () => {
 
     expect(sanitized).toContain('class="header-anchor"')
     expect(sanitized).toContain('class="code-copy-btn"')
-    expect(sanitized).toContain('aria-label="코드 복사"')
+    expect(sanitized).toContain('aria-label="Copy code"')
   })
 })

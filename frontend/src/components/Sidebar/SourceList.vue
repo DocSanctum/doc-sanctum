@@ -1,7 +1,7 @@
 <template>
   <div class="source-list">
-    <div v-if="sourcesQuery.isPending.value" class="text-sm text-gray-400 px-3 py-2">로딩 중...</div>
-    <div v-else-if="sourcesQuery.isError.value" class="text-sm text-red-400 px-3 py-2">소스 로드 실패</div>
+    <div v-if="sourcesQuery.isPending.value" class="text-sm text-gray-400 px-3 py-2">{{ t('sidebar.sourceList.loading') }}</div>
+    <div v-else-if="sourcesQuery.isError.value" class="text-sm text-red-400 px-3 py-2">{{ t('sidebar.sourceList.loadError') }}</div>
     <ul v-else>
       <li
         v-for="source in sourcesQuery.data.value"
@@ -30,7 +30,7 @@
         >↻</button>
         <button
           class="text-xs text-gray-400 hover:text-white ml-1 shrink-0"
-          title="소스 정보 수정"
+          :title="t('sidebar.sourceList.editSource')"
           @click.stop="$emit('edit-source', source.id)"
         >✎</button>
         <button
@@ -43,6 +43,7 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { SourceStatus } from '../../types'
 import { useSources } from '../../composables/useSources'
 
@@ -54,6 +55,7 @@ defineEmits<{
   'delete-source': [id: string]
 }>()
 
+const { t } = useI18n()
 const { sourcesQuery } = useSources()
 
 function statusDot(status: SourceStatus): string {

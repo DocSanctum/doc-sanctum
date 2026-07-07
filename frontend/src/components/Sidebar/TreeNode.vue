@@ -33,7 +33,9 @@
             :key="m.paneId"
             class="pane-match-dot inline-block rounded-full"
             :class="[paneColorClass(m.color, 'bg'), m.paneId === activePaneId ? 'w-2 h-2' : 'w-1.5 h-1.5']"
-            :title="`패널 ${m.paneId}에서 열림${m.paneId === activePaneId ? ' (활성)' : ''}`"
+            :title="m.paneId === activePaneId
+              ? t('sidebar.treeNode.paneOpenActive', { paneId: m.paneId })
+              : t('sidebar.treeNode.paneOpen', { paneId: m.paneId })"
           />
         </span>
         <span class="truncate">{{ node.name }}</span>
@@ -44,6 +46,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TreeNode as TreeNodeType } from '../../types'
 import { usePanes, paneColorClass } from '../../composables/usePanes'
 
@@ -55,6 +58,7 @@ const props = defineProps<{
 }>()
 defineEmits<{ 'select-file': [path: string] }>()
 
+const { t } = useI18n()
 const { paneMatches, activePaneId, colorOf } = usePanes()
 const matches = computed(() => paneMatches(props.sourceId, props.node.path))
 // 활성 패널에 열려 있는 문서는 트리에서도 한 번 더 눈에 띄어야, 트리 클릭이

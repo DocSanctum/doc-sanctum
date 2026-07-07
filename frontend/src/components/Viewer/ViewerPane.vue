@@ -11,7 +11,7 @@
           type="button"
           class="block w-2.5 h-2.5 rounded-full cursor-pointer"
           :class="paneBgClass"
-          :title="`패널 ${paneId} 색상 변경`"
+          :title="t('viewer.pane.changeColorTitle', { paneId })"
           @click.stop="showColorPicker = !showColorPicker"
         />
         <div v-if="showColorPicker" class="pane-color-picker absolute right-0 top-full mt-1.5 flex gap-1 p-1.5 rounded-lg shadow-lg" @click.stop>
@@ -30,14 +30,14 @@
         v-if="showAddButton"
         type="button"
         class="pane-toolbar-btn"
-        title="분할 보기 켜기"
+        :title="t('viewer.pane.splitViewTitle')"
         @click.stop="addPane()"
-      >⧉ 분할 보기</button>
+      >⧉ {{ t('viewer.pane.splitView') }}</button>
       <button
         v-if="showCloseButton"
         type="button"
         class="pane-toolbar-btn"
-        title="패널 닫기"
+        :title="t('viewer.pane.closeTitle')"
         @click.stop="closePane(paneId)"
       >✕</button>
     </div>
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onClickOutside } from '@vueuse/core'
 import type { PaneColor, PaneId } from '../../types'
 import { usePanes, paneColorClass, PANE_COLOR_OPTIONS } from '../../composables/usePanes'
@@ -66,6 +67,7 @@ import ReadingProgressBar from './ReadingProgressBar.vue'
 
 const props = defineProps<{ paneId: PaneId }>()
 
+const { t } = useI18n()
 const { panes, activePaneId, colorOf, setPaneColor, setActivePane, setPaneDocument, canAddPane, addPane, closePane } =
   usePanes()
 

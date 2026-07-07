@@ -4,6 +4,7 @@ import anchor from 'markdown-it-anchor'
 import footnote from 'markdown-it-footnote'
 import abbr from 'markdown-it-abbr'
 import hljs from 'highlight.js'
+import { i18n } from '../i18n'
 
 const md = new MarkdownIt({
   html: false,
@@ -13,7 +14,9 @@ const md = new MarkdownIt({
     const highlighted = lang && hljs.getLanguage(lang)
       ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
       : hljs.highlightAuto(code).value
-    return `<div class="code-block"><button type="button" class="code-copy-btn" aria-label="코드 복사">복사</button><pre class="hljs"><code>${highlighted}</code></pre></div>`
+    const copyCode = i18n.global.t('viewer.markdown.copyCode')
+    const copy = i18n.global.t('common.copy')
+    return `<div class="code-block"><button type="button" class="code-copy-btn" aria-label="${copyCode}">${copy}</button><pre class="hljs"><code>${highlighted}</code></pre></div>`
   },
 })
   .use(taskLists, { enabled: true })

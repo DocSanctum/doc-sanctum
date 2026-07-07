@@ -1,12 +1,12 @@
 <template>
-  <nav v-if="entries.length > 0" class="toc" :class="{ collapsed: tocCollapsed }" aria-label="목차">
+  <nav v-if="entries.length > 0" class="toc" :class="{ collapsed: tocCollapsed }" :aria-label="t('viewer.toc.ariaLabel')">
     <div class="toc-header">
-      <p v-if="!tocCollapsed" class="toc-title">목차</p>
+      <p v-if="!tocCollapsed" class="toc-title">{{ t('viewer.toc.title') }}</p>
       <button
         type="button"
         class="toc-toggle"
         :aria-expanded="!tocCollapsed"
-        :title="tocCollapsed ? '목차 펼치기' : '목차 접기'"
+        :title="tocCollapsed ? t('viewer.toc.expand') : t('viewer.toc.collapse')"
         @click="toggleToc"
       >{{ tocCollapsed ? '«' : '»' }}</button>
     </div>
@@ -29,12 +29,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { TocEntry } from '../../composables/useToc'
 import { useViewerSettings } from '../../composables/useViewerSettings'
 
 const props = defineProps<{ entries: TocEntry[]; activeId: string | null }>()
 defineEmits<{ select: [id: string] }>()
 
+const { t } = useI18n()
 const { tocCollapsed, toggleToc } = useViewerSettings()
 
 const minLevel = computed(() =>

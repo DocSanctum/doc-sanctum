@@ -1,7 +1,7 @@
 <template>
   <div class="markdown-viewer-layout flex">
     <div class="markdown-viewer px-8 py-8 max-w-4xl mx-auto flex-1 min-w-0">
-      <div v-if="loading" class="text-gray-400 text-sm">파일 로딩 중...</div>
+      <div v-if="loading" class="text-gray-400 text-sm">{{ t('viewer.markdownViewer.loading') }}</div>
       <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
       <template v-else>
         <Breadcrumb :path="filePath" />
@@ -27,6 +27,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
 import { useClipboard } from '@vueuse/core'
 import { api } from '../../services/api'
@@ -43,6 +44,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ navigate: [path: string] }>()
 
+const { t } = useI18n()
 const { render } = useMarkdown()
 const { fontSize, tocCollapsed } = useViewerSettings()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
@@ -70,7 +72,7 @@ async function load() {
   try {
     raw.value = await api.getFileContent(props.sourceId, props.filePath)
   } catch (e: any) {
-    fetchError.value = e.message ?? '문서를 찾을 수 없습니다'
+    fetchError.value = e.message ?? t('viewer.markdownViewer.notFound')
     loading.value = false
     suppressHashSync = false
     return
@@ -122,7 +124,7 @@ function scrollToHeading(id: string) {
 
 function flashFeedback(el: HTMLElement, ok: boolean) {
   const original = el.textContent
-  el.textContent = ok ? '복사됨' : '복사 실패'
+  el.textContent = ok ? t('common.copied') : t('common.copyFailed')
   el.classList.add(ok ? 'copy-ok' : 'copy-fail')
   window.setTimeout(() => {
     el.textContent = original

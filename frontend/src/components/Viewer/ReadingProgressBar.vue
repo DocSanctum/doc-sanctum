@@ -9,7 +9,7 @@
         type="button"
         class="back-to-top"
         :class="[paneColorClass(props.color, 'bg'), paneColorClass(props.color, 'solidHover')]"
-        aria-label="맨 위로 이동"
+        :aria-label="t('viewer.readingProgress.backToTop')"
         @click="scrollToTop"
       >↑</button>
     </Transition>
@@ -18,11 +18,13 @@
 
 <script setup lang="ts">
 import { toValue, type MaybeRefOrGetter } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useReadingProgress } from '../../composables/useReadingProgress'
 import { paneColorClass } from '../../composables/usePanes'
 import type { PaneColor } from '../../types'
 
 const props = defineProps<{ container: MaybeRefOrGetter<HTMLElement | null | undefined>; color: PaneColor }>()
+const { t } = useI18n()
 const { ratio, showBackToTop, scrollToTop } = useReadingProgress(() => toValue(props.container))
 </script>
 

@@ -8,3 +8,4 @@ python-multipart==0.0.9
 pydantic-settings==2.5.2
 mcp>=1.0.0
 chromadb==1.5.9
+geoip2fast==1.2.2

@@ -1,9 +1,9 @@
 <template>
   <div class="file-tree">
-    <div v-if="treeQuery.isPending.value" class="text-xs text-gray-400 px-3 py-1">파일 목록 로딩 중...</div>
+    <div v-if="treeQuery.isPending.value" class="text-xs text-gray-400 px-3 py-1">{{ t('sidebar.fileTree.loading') }}</div>
     <div v-else-if="treeQuery.isError.value" class="text-xs text-red-400 px-3 py-1">
-      파일 목록을 불러올 수 없습니다.
-      <button class="underline ml-1" @click="treeQuery.refetch()">다시 시도</button>
+      {{ t('sidebar.fileTree.loadError') }}
+      <button class="underline ml-1" @click="treeQuery.refetch()">{{ t('common.retry') }}</button>
     </div>
     <TreeNode
       v-else-if="treeQuery.data.value"
@@ -13,12 +13,13 @@
       :reveal-token="revealToken"
       @select-file="$emit('select-file', sourceId!, $event)"
     />
-    <div v-else class="text-xs text-gray-400 px-3 py-1">MD 파일 없음</div>
+    <div v-else class="text-xs text-gray-400 px-3 py-1">{{ t('sidebar.fileTree.empty') }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFileTree } from '../../composables/useFileTree'
 import { useSSE } from '../../composables/useSSE'
 import { useTreeReveal } from '../../composables/useTreeReveal'
@@ -30,6 +31,7 @@ const props = defineProps<{
 
 defineEmits<{ 'select-file': [sourceId: string, path: string] }>()
 
+const { t } = useI18n()
 const sourceIdRef = computed(() => props.sourceId)
 const { treeQuery } = useFileTree(sourceIdRef)
 useSSE(sourceIdRef)

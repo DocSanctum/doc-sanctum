@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult } from '../types'
 
 const BASE = '/api/v1'
 
@@ -45,4 +45,6 @@ export const api = {
     request<McpStatus>('/mcp/status', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 
   getDeploymentMode: () => request<DeploymentStatus>('/deployment'),
+
+  getLocale: () => request<LocaleResult>('/locale'),
 }
