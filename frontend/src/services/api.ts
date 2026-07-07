@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse } from '../types'
 
 const BASE = '/api/v1'
 
@@ -47,4 +47,10 @@ export const api = {
   getDeploymentMode: () => request<DeploymentStatus>('/deployment'),
 
   getLocale: () => request<LocaleResult>('/locale'),
+
+  search: (query: string, sourceId?: string) => {
+    const params = new URLSearchParams({ q: query })
+    if (sourceId) params.set('source_id', sourceId)
+    return request<SearchResponse>(`/search?${params.toString()}`)
+  },
 }

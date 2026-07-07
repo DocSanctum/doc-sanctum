@@ -35,6 +35,7 @@ import { useMarkdown } from '../../composables/useMarkdown'
 import { useViewerSettings } from '../../composables/useViewerSettings'
 import { useToc } from '../../composables/useToc'
 import { useViewerUrl } from '../../composables/useViewerUrl'
+import { useSearchReveal } from '../../composables/useSearchReveal'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
 
@@ -49,6 +50,7 @@ const { render } = useMarkdown()
 const { fontSize, tocCollapsed } = useViewerSettings()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
 const { copy, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
+const { revealTarget, revealToken } = useSearchReveal()
 
 const raw = ref('')
 const loading = ref(false)
@@ -91,6 +93,11 @@ async function load() {
   if (props.active) restoreScrollFromUrl()
   await toc.refresh(props.active ? getHeadingId() : null)
   suppressHashSync = false
+  // 검색 결과 선택으로 문서가 막 새로 열린 경우(008-search), 아직 반영하지
+  // 못한 reveal 신호가 있으면 여기서 처리한다 — load()가 비동기라 아래
+  // watch(revealToken, ...)가 콘텐츠 렌더링보다 먼저 실행될 수 있기 때문에,
+  // 그 경우 이 완료 시점에서 한 번 더 확인해 레이스를 없앤다.
+  tryApplyPendingReveal()
 }
 
 watch(() => [props.sourceId, props.filePath], load, { immediate: true })
@@ -121,6 +128,49 @@ function scrollToHeading(id: string) {
   toc.activeId.value = id
   setHeadingId(id)
 }
+
+// useMarkdown.ts가 매긴 data-line 속성 중 목표 줄 이하로 가장 가까운(=바로 그
+// 줄을 포함하는) 블록 요소를 찾는다. 후보는 DOM 순서 == 원문 순서이므로
+// 마지막으로 조건을 만족한 요소가 정답이다.
+function scrollToLine(lineNumber: number) {
+  if (!contentRef.value) return
+  const candidates = contentRef.value.querySelectorAll<HTMLElement>('[data-line]')
+  let target: HTMLElement | null = null
+  for (const el of candidates) {
+    if (Number(el.dataset.line) <= lineNumber) target = el
+    else break
+  }
+  if (!target) return
+  target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  target.classList.add('search-match-flash')
+  window.setTimeout(() => target?.classList.remove('search-match-flash'), 1200)
+}
+
+function tryApplyPendingReveal() {
+  if (!props.active) return
+  const target = revealTarget.value
+  if (!target) return
+  // reveal 신호가 지금 이 패널이 표시 중인 문서를 향한 것인지 확인한다 —
+  // sourceId/filePath로 대상을 명시해두었으므로, load()가 아직 진행 중이라
+  // MarkdownViewer가 막 마운트되는 시점이든, 이미 같은 문서를 보고 있어
+  // load()가 재실행되지 않는 시점이든 상관없이 안전하게 판단할 수 있다.
+  if (target.sourceId !== props.sourceId || target.filePath !== props.filePath) return
+  scrollToLine(target.lineNumber)
+}
+
+// immediate: 컴포넌트가 마운트되기 전에(=이 watch가 등록되기 전에) reveal()이
+// 이미 호출돼 revealToken이 증가해 있을 수 있다(TreeNode.vue의 reveal-token
+// 레이스와 동일) — 마운트 시점에 한 번 더 확인해 그 레이스를 없앤다.
+watch(
+  revealToken,
+  () => {
+    // load()가 진행 중이면(다른 문서로 막 전환된 경우) load() 완료 시점에서
+    // tryApplyPendingReveal()이 한 번 더 호출되므로 여기서는 건너뛴다.
+    if (loading.value) return
+    nextTick(() => tryApplyPendingReveal())
+  },
+  { immediate: true }
+)
 
 function flashFeedback(el: HTMLElement, ok: boolean) {
   const original = el.textContent
@@ -323,6 +373,20 @@ function handleClick(e: MouseEvent) {
   padding-top: 1rem;
   font-size: 0.85em;
   color: #9ca3af;
+}
+
+/* Search reveal (008-search) — TreeNode.vue의 tree-reveal-flash와 동일한 패턴 */
+.prose .search-match-flash {
+  animation: search-match-flash 1.2s ease-out;
+}
+@keyframes search-match-flash {
+  0%,
+  40% {
+    background-color: rgba(59, 130, 246, 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 
 /* Blockquote */

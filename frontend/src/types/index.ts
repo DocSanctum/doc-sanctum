@@ -89,3 +89,25 @@ export interface PaneMatch {
   paneId: PaneId
   color: PaneColor
 }
+
+export interface SearchMatch {
+  source_id: string
+  source_name: string
+  path: string
+  line_number: number
+  line: string
+  context: string[]
+}
+
+export interface SearchWarning {
+  source_id?: string
+  source_name?: string
+  reason?: string
+  message: string
+}
+
+export interface SearchResponse {
+  query: string
+  matches: SearchMatch[]
+  warnings: SearchWarning[]
+}
