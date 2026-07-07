@@ -18,11 +18,15 @@ def get_tree_lock(source_id: str) -> asyncio.Lock:
     return _locks.setdefault(source_id, asyncio.Lock())
 
 
-def get_cached(source_id: str) -> dict[str, Any] | None:
+def get_cached(source_id: str, *, ignore_ttl: bool = False) -> dict[str, Any] | None:
     entry = _cache.get(source_id)
     if entry is None:
         return None
-    if not entry["stale"] and (time.monotonic() - entry["fetched_at"]) > TTL:
+    if (
+        not ignore_ttl
+        and not entry["stale"]
+        and (time.monotonic() - entry["fetched_at"]) > TTL
+    ):
         return None
     return entry
 
