@@ -70,4 +70,8 @@ async def search(
         if warning:
             all_warnings.append(warning)
 
-    return SearchResponse(query=q, matches=all_matches, warnings=all_warnings)
+    return SearchResponse(
+        query=q,
+        matches=[SearchMatch(**m) for m in all_matches],
+        warnings=[SearchWarning(**w) for w in all_warnings],
+    )
