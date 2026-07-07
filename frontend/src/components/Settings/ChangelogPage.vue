@@ -5,9 +5,9 @@
         class="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-white transition-colors"
         @click="$emit('back')"
       >
-        ← 돌아가기
+        {{ t('settings.changelog.back') }}
       </button>
-      <h1 class="text-lg font-semibold text-gray-900 dark:text-white">전체 변경 이력</h1>
+      <h1 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('settings.changelog.allHistory') }}</h1>
     </div>
 
     <div class="space-y-4">
@@ -22,7 +22,7 @@
             <span
               v-if="entry.version === currentVersion"
               class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded"
-            >현재</span>
+            >{{ t('common.current') }}</span>
           </div>
           <span class="text-xs text-gray-400 dark:text-gray-500">{{ entry.date }}</span>
         </div>
@@ -42,10 +42,12 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { changelog } from '../../data/changelog'
 import pkg from '../../../package.json'
 
 defineEmits<{ back: [] }>()
 
+const { t } = useI18n()
 const currentVersion = pkg.version
 </script>

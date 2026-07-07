@@ -72,6 +72,10 @@ export interface DeploymentStatus {
   mode: DeploymentMode
 }
 
+export interface LocaleResult {
+  locale: 'ko' | 'en' | 'unknown'
+}
+
 export type PaneId = 1 | 2
 export type PaneColor = 'blue' | 'amber' | 'orange' | 'sky' | 'red' | 'purple' | 'gray'
 

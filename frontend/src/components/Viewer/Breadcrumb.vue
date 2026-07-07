@@ -1,5 +1,5 @@
 <template>
-  <nav v-if="items.length" class="breadcrumb" aria-label="문서 경로">
+  <nav v-if="items.length" class="breadcrumb" :aria-label="t('viewer.breadcrumb.ariaLabel')">
     <template v-for="(item, i) in items" :key="i">
       <span v-if="item.type === 'ellipsis'" class="crumb-ellipsis">…</span>
       <button
@@ -16,10 +16,12 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useTreeReveal } from '../../composables/useTreeReveal'
 
 const props = defineProps<{ path: string }>()
 const emit = defineEmits<{ 'select-segment': [path: string] }>()
+const { t } = useI18n()
 const { reveal } = useTreeReveal()
 
 function onSegmentClick(fullPath: string) {

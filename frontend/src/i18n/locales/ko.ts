@@ -1,0 +1,136 @@
+import type { MessageSchema } from './en'
+
+export const ko: MessageSchema = {
+  common: {
+    cancel: '취소',
+    save: '저장',
+    saving: '저장 중...',
+    delete: '삭제',
+    deleting: '삭제 중...',
+    register: '등록',
+    registering: '등록 중...',
+    loading: '로딩 중...',
+    retry: '다시 시도',
+    current: '현재',
+    optional: '(선택)',
+    copy: '복사',
+    copied: '복사됨',
+    copyFailed: '복사 실패',
+  },
+  app: {
+    addSource: '소스 추가',
+    settings: '설정',
+  },
+  sidebar: {
+    sourceList: {
+      loading: '로딩 중...',
+      loadError: '소스 로드 실패',
+      editSource: '소스 정보 수정',
+    },
+    fileTree: {
+      loading: '파일 목록 로딩 중...',
+      loadError: '파일 목록을 불러올 수 없습니다.',
+      empty: 'MD 파일 없음',
+    },
+    treeNode: {
+      paneOpen: '패널 {paneId}에서 열림',
+      paneOpenActive: '패널 {paneId}에서 열림 (활성)',
+    },
+    addSourceModal: {
+      title: '소스 경로 추가',
+      name: '이름',
+      icon: '아이콘',
+      type: '유형',
+      typeLocal: '로컬 폴더',
+      typeGithub: 'GitHub 저장소',
+      typeGitlab: 'GitLab 저장소',
+      path: '경로 / URL',
+      pollInterval: '폴링 간격 (초)',
+      indexingNotice:
+        '문서 목록을 확인하는 중입니다. 등록 후에는 목록에 바로 표시되며, 검색 색인은 백그라운드에서 계속 진행됩니다.',
+      registerFailed: '등록 실패',
+    },
+    editSourceModal: {
+      title: '소스 정보 수정',
+      name: '이름',
+      saveFailed: '저장 실패',
+    },
+    confirmDeleteModal: {
+      title: '소스 삭제',
+      body: '{name}을(를) 정말 삭제하시겠습니까? 인덱싱된 데이터가 함께 제거되며 되돌릴 수 없습니다.',
+    },
+  },
+  viewer: {
+    emptyState: '좌측에서 MD 파일을 선택하세요',
+    breadcrumb: {
+      ariaLabel: '문서 경로',
+    },
+    markdownViewer: {
+      loading: '파일 로딩 중...',
+      notFound: '문서를 찾을 수 없습니다',
+    },
+    readingProgress: {
+      backToTop: '맨 위로 이동',
+    },
+    toc: {
+      ariaLabel: '목차',
+      title: '목차',
+      expand: '목차 펼치기',
+      collapse: '목차 접기',
+    },
+    pane: {
+      changeColorTitle: '패널 {paneId} 색상 변경',
+      splitView: '분할 보기',
+      splitViewTitle: '분할 보기 켜기',
+      closeTitle: '패널 닫기',
+    },
+    markdown: {
+      copyCode: '코드 복사',
+    },
+  },
+  settings: {
+    title: '설정',
+    language: {
+      label: '언어',
+      korean: '한국어',
+      english: 'English',
+    },
+    theme: {
+      label: '앱 테마',
+      dark: '다크',
+      light: '라이트',
+    },
+    fontSize: {
+      label: '뷰어 폰트 크기',
+      small: '소',
+      medium: '중',
+      large: '대',
+    },
+    codeTheme: {
+      label: '코드 하이라이트 테마',
+      dark: '다크',
+      light: '라이트',
+    },
+    polling: {
+      label: '소스 폴링 주기',
+      description:
+        'GitHub, HTTP, Localhost 소스에만 적용됩니다. Local 소스는 파일시스템 감지로 실시간 반영됩니다.',
+      empty: '등록된 소스가 없습니다.',
+      realtime: '실시간 감지',
+      seconds: '초',
+    },
+    mcp: {
+      label: 'MCP Server',
+      enabled: '사용 중',
+      disabled: '사용 안 함',
+      enableBtn: '활성화',
+      disableBtn: '비활성화',
+      tools: '도구 ({count}개)',
+    },
+    changelog: {
+      viewAll: '전체 이력 보기 →',
+      back: '← 돌아가기',
+      allHistory: '전체 변경 이력',
+    },
+  },
+}
