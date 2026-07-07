@@ -67,9 +67,9 @@ import { useSources } from '../../composables/useSources'
 import SearchResultItem from './SearchResultItem.vue'
 import type { SearchMatch, PaneId } from '../../types'
 
-// backend/app/mcp/tools/search_documents.py의 MAX_MATCHES_PER_FILE과 일치해야
-// 한다(FR-012) — API 응답에는 별도의 "더 있음" 플래그가 없어 문서당 매치 개수가
-// 이 상수에 도달했는지로 잘림 여부를 추정한다.
+// Must match MAX_MATCHES_PER_FILE in backend/app/mcp/tools/search_documents.py
+// (FR-012) — the API response has no explicit "truncated" flag, so we infer
+// it by checking whether a document's match count hit this cap.
 const MAX_MATCHES_PER_FILE = 10
 
 const { t } = useI18n()
@@ -82,8 +82,9 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const noSources = computed(() => (sourcesQuery.data.value?.length ?? 0) === 0)
 
-// 패널이 2개 이상 열려 있을 때만 결과 옆에 "이 패널에 열기" 아이콘을 보여준다
-// (SearchResultItem.vue 참조) — 패널이 하나면 행 클릭과 다를 게 없다.
+// Only show the "open in this pane" icons next to a result when 2+ panes
+// are open (see SearchResultItem.vue) — with a single pane it's no
+// different from just clicking the row.
 const paneOptions = computed(() => panes.value.map((p) => ({ id: p.id, color: colorOf(p.id) })))
 
 const groupCounts = computed(() => {
@@ -99,8 +100,9 @@ function isGroupTruncated(match: SearchMatch): boolean {
   return (groupCounts.value.get(`${match.source_id}:${match.path}`) ?? 0) >= MAX_MATCHES_PER_FILE
 }
 
-// 매치 목록은 소스→문서 순서로 연속 배치되므로(api/search.py가 소스별로 순회하며
-// extend), 같은 (source_id, path)의 마지막 항목 뒤에만 "더 있음"을 표시한다.
+// Matches are laid out in contiguous source→document runs (api/search.py
+// iterates per source and extends the list), so only show "more matches"
+// after the last item of a given (source_id, path) run.
 function isLastInGroup(match: SearchMatch, index: number): boolean {
   const next = search.results.value[index + 1]
   return !next || next.source_id !== match.source_id || next.path !== match.path
@@ -118,10 +120,11 @@ function selectResult(match: SearchMatch) {
   close()
 }
 
-// 결과 옆 패널 아이콘을 클릭하면, 활성 패널이 아니라 사용자가 고른 패널에 바로
-// 연다. MarkdownViewer의 하이라이트는 active 패널에서만 반응하므로(같은 문서가
-// 두 패널에 열려 있을 때 어느 쪽이 반응할지 명확히 하기 위함), 고른 패널을
-// 활성 패널로도 함께 전환해 하이라이트가 그 패널에서 확실히 보이게 한다.
+// Clicking a pane icon next to a result opens it directly in the pane the
+// user picked, not the active one. MarkdownViewer's highlight only reacts in
+// the active pane (so it's unambiguous which pane reacts when the same
+// document is open in both), so also switch the chosen pane to active to
+// guarantee the highlight is visible there.
 function openInPane(match: SearchMatch, paneId: PaneId) {
   setPaneDocument(paneId, match.source_id, match.path)
   setActivePane(paneId)
@@ -145,7 +148,7 @@ watch(
   }
 )
 
-// FR-001: 화면 어디서든 Cmd+K(macOS)/Ctrl+K(Windows·Linux)로 검색을 열고 닫는다.
+// FR-001: open/close search from anywhere on screen via Cmd+K (macOS) / Ctrl+K (Windows·Linux).
 onKeyStroke('k', (e) => {
   if (!(e.metaKey || e.ctrlKey)) return
   e.preventDefault()
@@ -153,7 +156,7 @@ onKeyStroke('k', (e) => {
   else search.open()
 })
 
-// FR-011: Esc는 팔레트가 열려 있을 때만 닫으며, 닫는 행위 자체는 패널 상태를 바꾸지 않는다.
+// FR-011: Esc only closes the palette while it's open; closing itself never changes pane state.
 onKeyStroke('Escape', () => {
   if (search.isOpen.value) close()
 })

@@ -155,7 +155,7 @@ describe('CommandPalette', () => {
 
     const { addPane, setActivePane, panes, activePaneId } = usePanes()
     addPane()
-    setActivePane(1) // 활성 패널은 1이지만, 결과는 패널 2 아이콘으로 연다.
+    setActivePane(1) // active pane is 1, but the result is opened via pane 2's icon.
 
     wrapper = mountPalette()
     useSearch().open()
@@ -166,12 +166,12 @@ describe('CommandPalette', () => {
     await flushPromises()
 
     const paneButtons = wrapper.findAll('.search-result-row button')
-    expect(paneButtons).toHaveLength(2) // 패널이 2개면 아이콘도 2개
+    expect(paneButtons).toHaveLength(2) // 2 panes means 2 icons
     await paneButtons[1].trigger('click')
 
-    expect(panes.value[0]).toMatchObject({ sourceId: null, filePath: null }) // 패널 1은 그대로
+    expect(panes.value[0]).toMatchObject({ sourceId: null, filePath: null }) // pane 1 untouched
     expect(panes.value[1]).toMatchObject({ sourceId: 's1', filePath: 'a.md' })
-    expect(activePaneId.value).toBe(2) // 고른 패널이 활성 패널로도 전환됨
+    expect(activePaneId.value).toBe(2) // the chosen pane also becomes active
     expect(useSearch().isOpen.value).toBe(false)
   })
 

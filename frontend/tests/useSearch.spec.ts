@@ -40,7 +40,7 @@ describe('useSearch', () => {
     setQuery('auth')
     await wait(300)
 
-    // 디바운스 동안의 중간 입력값이 아니라 마지막 입력값 하나로만 호출된다.
+    // Only the last input value is called with, not the intermediate ones typed during the debounce.
     expect(api.search).toHaveBeenCalledTimes(1)
     expect(api.search).toHaveBeenCalledWith('auth')
     expect(results.value).toHaveLength(1)
@@ -95,7 +95,7 @@ describe('useSearch', () => {
     const { setQuery, results } = useSearch()
 
     setQuery('first')
-    await wait(300) // 첫 번째 요청이 나가고 아직 응답 대기 중
+    await wait(300) // first request has gone out and is still awaiting a response
 
     vi.mocked(api.search).mockResolvedValueOnce({
       query: 'second',
@@ -103,9 +103,9 @@ describe('useSearch', () => {
       warnings: [],
     })
     setQuery('second')
-    await wait(300) // 두 번째 요청까지 완료
+    await wait(300) // second request has also completed
 
-    // 첫 번째 요청이 뒤늦게 응답으로 도착해도 최신 결과를 덮어쓰지 않는다.
+    // Even if the first request's response arrives late, it must not overwrite the newer result.
     resolveFirst({ query: 'first', matches: [{ source_id: 's1', source_name: 'docs-a', path: 'first.md', line_number: 1, line: 'x', context: ['x'] }], warnings: [] })
     await wait(10)
 

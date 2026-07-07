@@ -33,12 +33,13 @@ const md = new MarkdownIt({
 
 export function useMarkdown() {
   function render(src: string): string {
-    // 검색 결과에서 특정 원문 줄로 스크롤하려면(008-search) 렌더링된 블록
-    // 요소가 원문의 몇 번째 줄에서 시작하는지 알아야 한다. markdown-it은
-    // 블록 토큰마다 원문 라인 범위(token.map)를 이미 갖고 있으므로, 별도
-    // 파서 없이 md.render() 한 번 호출 대신 parse → data-line 속성 부여 →
-    // renderer.render 3단계로 나눠 이 정보를 DOM에 실어 보낸다. inline
-    // 토큰은 부모 블록 태그 안에서 렌더링될 뿐 자신의 태그가 없으므로 제외한다.
+    // Scrolling to a specific source line from a search result (008-search)
+    // requires knowing which source line a rendered block element starts at.
+    // markdown-it already tracks each block token's source line range
+    // (token.map), so instead of a single md.render() call, split it into
+    // parse → attach data-line attributes → renderer.render so that
+    // information rides along into the DOM. Inline tokens are excluded since
+    // they render inside their parent block's tag and have no tag of their own.
     const env = {}
     const tokens = md.parse(src, env)
     for (const token of tokens) {
