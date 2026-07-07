@@ -19,8 +19,8 @@
         :class="line === match.line ? 'text-gray-900 dark:text-white font-semibold' : 'text-gray-500 dark:text-gray-400'"
       >{{ line }}<br /></span></pre>
     </div>
-    <!-- 패널이 2개 이상일 때만 노출 — 패널이 하나면 행 클릭과 다를 게 없어
-         굳이 선택지를 보여줄 필요가 없다. -->
+    <!-- Only shown when 2+ panes are open — with a single pane there's no
+         real choice to offer, so it would just be visual clutter. -->
     <div v-if="paneOptions.length > 1" class="flex items-center gap-1 shrink-0 pt-0.5">
       <button
         v-for="p in paneOptions"

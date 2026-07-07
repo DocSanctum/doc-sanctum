@@ -93,10 +93,11 @@ async function load() {
   if (props.active) restoreScrollFromUrl()
   await toc.refresh(props.active ? getHeadingId() : null)
   suppressHashSync = false
-  // 검색 결과 선택으로 문서가 막 새로 열린 경우(008-search), 아직 반영하지
-  // 못한 reveal 신호가 있으면 여기서 처리한다 — load()가 비동기라 아래
-  // watch(revealToken, ...)가 콘텐츠 렌더링보다 먼저 실행될 수 있기 때문에,
-  // 그 경우 이 완료 시점에서 한 번 더 확인해 레이스를 없앤다.
+  // If the document was just opened by picking a search result (008-search),
+  // apply any reveal signal that hasn't been handled yet — since load() is
+  // async, the watch(revealToken, ...) below can run before the content
+  // actually renders, so check again here once loading finishes to close
+  // that race.
   tryApplyPendingReveal()
 }
 
@@ -129,9 +130,10 @@ function scrollToHeading(id: string) {
   setHeadingId(id)
 }
 
-// useMarkdown.ts가 매긴 data-line 속성 중 목표 줄 이하로 가장 가까운(=바로 그
-// 줄을 포함하는) 블록 요소를 찾는다. 후보는 DOM 순서 == 원문 순서이므로
-// 마지막으로 조건을 만족한 요소가 정답이다.
+// Finds the block element with the closest data-line (as set by
+// useMarkdown.ts) at or before the target line — i.e. the element that
+// actually contains that line. Candidates are in DOM order == source order,
+// so the last one that still satisfies the condition is the answer.
 function scrollToLine(lineNumber: number) {
   if (!contentRef.value) return
   const candidates = contentRef.value.querySelectorAll<HTMLElement>('[data-line]')
@@ -150,22 +152,24 @@ function tryApplyPendingReveal() {
   if (!props.active) return
   const target = revealTarget.value
   if (!target) return
-  // reveal 신호가 지금 이 패널이 표시 중인 문서를 향한 것인지 확인한다 —
-  // sourceId/filePath로 대상을 명시해두었으므로, load()가 아직 진행 중이라
-  // MarkdownViewer가 막 마운트되는 시점이든, 이미 같은 문서를 보고 있어
-  // load()가 재실행되지 않는 시점이든 상관없이 안전하게 판단할 수 있다.
+  // Check whether the reveal signal is actually meant for the document this
+  // pane is showing right now. Since the target carries sourceId/filePath,
+  // this is safe to check regardless of whether load() is still in flight
+  // (MarkdownViewer just mounting) or the same document was already open and
+  // load() never re-ran.
   if (target.sourceId !== props.sourceId || target.filePath !== props.filePath) return
   scrollToLine(target.lineNumber)
 }
 
-// immediate: 컴포넌트가 마운트되기 전에(=이 watch가 등록되기 전에) reveal()이
-// 이미 호출돼 revealToken이 증가해 있을 수 있다(TreeNode.vue의 reveal-token
-// 레이스와 동일) — 마운트 시점에 한 번 더 확인해 그 레이스를 없앤다.
+// immediate: reveal() may have already been called (and revealToken already
+// incremented) before this component mounted and this watch was registered
+// (the same race useTreeReveal.ts's reveal-token handles) — check once more
+// at mount time to close that race.
 watch(
   revealToken,
   () => {
-    // load()가 진행 중이면(다른 문서로 막 전환된 경우) load() 완료 시점에서
-    // tryApplyPendingReveal()이 한 번 더 호출되므로 여기서는 건너뛴다.
+    // Skip here if load() is in flight (switching to a different document) —
+    // its own completion will call tryApplyPendingReveal() once more.
     if (loading.value) return
     nextTick(() => tryApplyPendingReveal())
   },
@@ -375,7 +379,7 @@ function handleClick(e: MouseEvent) {
   color: #9ca3af;
 }
 
-/* Search reveal (008-search) — TreeNode.vue의 tree-reveal-flash와 동일한 패턴 */
+/* Search reveal (008-search) — same pattern as TreeNode.vue's tree-reveal-flash */
 .prose .search-match-flash {
   animation: search-match-flash 1.2s ease-out;
 }

@@ -3,16 +3,16 @@ import { useDebounceFn } from '@vueuse/core'
 import { api } from '../services/api'
 import type { SearchMatch, SearchWarning } from '../types'
 
-// macOS는 ⌘K, Windows/Linux는 Ctrl+K — 검색 버튼 툴팁과 팔레트 안내 문구에서
-// 공통으로 쓴다(App.vue, CommandPalette.vue). 플랫폼은 세션 중 바뀌지 않으므로
-// 모듈 로드 시 한 번만 계산한다.
+// macOS uses ⌘K, Windows/Linux uses Ctrl+K — shared by the search button
+// tooltip and the palette hint text (App.vue, CommandPalette.vue). The
+// platform never changes during a session, so compute it once at module load.
 const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
 export const searchShortcutLabel = isMac ? '⌘K' : 'Ctrl+K'
 
-// 모듈 스코프 싱글턴 상태 — usePanes.ts/useTreeReveal.ts와 동일한 패턴.
-// 검색 열기 버튼(App.vue)과 팔레트 본체(CommandPalette.vue)가 서로 다른
-// 컴포넌트 트리이므로 검색 세션 상태(data-model.md SearchSession)를 전역
-// 공유 상태로 둔다.
+// Module-scope singleton state — same pattern as usePanes.ts/useTreeReveal.ts.
+// The search-open button (App.vue) and the palette itself (CommandPalette.vue)
+// live in different component trees, so the search session state
+// (data-model.md SearchSession) is kept as shared global state.
 const isOpen = ref(false)
 const query = ref('')
 const results = ref<SearchMatch[]>([])
@@ -20,12 +20,12 @@ const warnings = ref<SearchWarning[]>([])
 const loading = ref(false)
 const activeIndex = ref(0)
 
-// 응답이 늦게 도착한 이전 요청이 최신 입력 결과를 덮어쓰지 않도록 토큰으로 구분한다.
+// Tokenized so a slow, older request can't overwrite results from a newer one.
 let requestToken = 0
 
 async function runSearch(q: string) {
   const trimmed = q.trim()
-  // FR-013: 검색어가 비어있거나 공백뿐이면 요청 자체를 보내지 않는다.
+  // FR-013: don't send a request at all when the query is empty or whitespace-only.
   if (!trimmed) {
     requestToken++
     results.value = []
