@@ -3,7 +3,7 @@ import { useSearch } from '../src/composables/useSearch'
 import { api } from '../src/services/api'
 
 vi.mock('../src/services/api', () => ({
-  api: { search: vi.fn() },
+  api: { search: vi.fn(), semanticSearch: vi.fn() },
 }))
 
 function wait(ms: number): Promise<void> {
@@ -13,7 +13,11 @@ function wait(ms: number): Promise<void> {
 describe('useSearch', () => {
   beforeEach(() => {
     vi.mocked(api.search).mockReset()
+    vi.mocked(api.semanticSearch).mockReset()
     useSearch().close()
+    // mode intentionally persists across close() (FR-010), so it must be
+    // reset explicitly between tests to avoid leaking state.
+    useSearch().setMode('keyword')
   })
 
   it('does not call the API when the query is blank or whitespace-only', async () => {
@@ -111,5 +115,70 @@ describe('useSearch', () => {
 
     expect(results.value).toHaveLength(1)
     expect(results.value[0].path).toBe('second.md')
+  })
+
+  it('does not call semanticSearch when the query is blank or whitespace-only', async () => {
+    const { setMode, setQuery } = useSearch()
+
+    setMode('semantic')
+    setQuery('   ')
+    await wait(300)
+
+    expect(api.semanticSearch).not.toHaveBeenCalled()
+  })
+
+  it('populates semanticResults/semanticWarnings from the API response, independent of keyword results', async () => {
+    vi.mocked(api.semanticSearch).mockResolvedValue({
+      query: 'auth flow',
+      results: [
+        { source_id: 's1', source_name: 'docs-a', path: 'a.md', chunk_index: 0, score: 0.8, excerpt: 'OAuth2 login flow...' },
+      ],
+      warnings: [],
+    })
+    const { setMode, setQuery, semanticResults, results } = useSearch()
+
+    setMode('semantic')
+    setQuery('how does login work')
+    await wait(300)
+
+    expect(api.semanticSearch).toHaveBeenCalledWith('how does login work')
+    expect(semanticResults.value).toHaveLength(1)
+    expect(semanticResults.value[0].excerpt).toBe('OAuth2 login flow...')
+    // Switching to semantic mode never touches the (empty) keyword results.
+    expect(results.value).toEqual([])
+  })
+
+  it('setMode keeps the current query and re-searches under the new mode immediately (FR-009)', async () => {
+    vi.mocked(api.search).mockResolvedValue({
+      query: 'auth',
+      matches: [{ source_id: 's1', source_name: 'docs-a', path: 'a.md', line_number: 1, line: 'auth', context: ['auth'] }],
+      warnings: [],
+    })
+    vi.mocked(api.semanticSearch).mockResolvedValue({
+      query: 'auth',
+      results: [{ source_id: 's1', source_name: 'docs-a', path: 'b.md', chunk_index: 0, score: 0.5, excerpt: 'auth related excerpt' }],
+      warnings: [],
+    })
+    const { setQuery, setMode, query, results, semanticResults } = useSearch()
+
+    setQuery('auth')
+    await wait(300)
+    expect(results.value).toHaveLength(1)
+
+    setMode('semantic')
+    await wait(10) // setMode re-searches immediately, no debounce needed
+
+    expect(query.value).toBe('auth')
+    expect(api.semanticSearch).toHaveBeenCalledWith('auth')
+    expect(semanticResults.value).toHaveLength(1)
+  })
+
+  it('does not reset mode when the palette closes (FR-010)', () => {
+    const { setMode, close, mode } = useSearch()
+
+    setMode('semantic')
+    close()
+
+    expect(mode.value).toBe('semantic')
   })
 })

@@ -10,6 +10,10 @@
           ref="inputRef"
           class="input w-full"
           type="text"
+          autocomplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          data-form-type="other"
           :value="search.query.value"
           :placeholder="t('search.placeholder')"
           :aria-label="t('search.ariaLabel')"
@@ -17,19 +21,40 @@
           @keydown.down.prevent="moveActive(1)"
           @keydown.up.prevent="moveActive(-1)"
           @keydown.enter.prevent="selectActive"
+          @keydown.tab.prevent="toggleMode"
         />
+        <div class="flex items-center gap-1 mt-2">
+          <button
+            type="button"
+            class="text-xs px-2 py-1 rounded transition-colors"
+            :class="search.mode.value === 'keyword'
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'"
+            @click="search.setMode('keyword')"
+          >{{ t('search.modeKeyword') }}</button>
+          <button
+            type="button"
+            class="text-xs px-2 py-1 rounded transition-colors"
+            :class="search.mode.value === 'semantic'
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'"
+            @click="search.setMode('semantic')"
+          >{{ t('search.modeSemantic') }}</button>
+        </div>
         <p class="text-xs text-gray-400 dark:text-gray-500 mt-1.5 px-0.5">
-          {{ t('search.shortcutHint', { shortcut: searchShortcutLabel }) }}
+          {{ t('search.shortcutHint', { shortcut: searchShortcutLabel }) }} · {{ t('search.tabSwitchHint', { mode: nextModeLabel }) }}
         </p>
       </div>
       <div class="overflow-y-auto flex-1 p-1">
         <p v-if="noSources" class="text-sm text-gray-400 px-3 py-4">{{ t('search.noSources') }}</p>
-        <template v-else-if="search.loading.value">
+
+        <template v-else-if="isLoading">
           <p class="text-sm text-gray-400 px-3 py-4">{{ t('search.loading') }}</p>
         </template>
-        <template v-else>
+
+        <template v-else-if="search.mode.value === 'keyword'">
           <p
-            v-if="search.query.value.trim() && search.results.value.length === 0"
+            v-if="hasQuery && search.results.value.length === 0"
             class="text-sm text-gray-400 px-3 py-4"
           >{{ t('search.noResults') }}</p>
           <template v-for="(match, index) in search.results.value" :key="`${match.source_id}:${match.path}:${match.line_number}:${index}`">
@@ -45,12 +70,35 @@
               {{ t('search.moreMatches') }}
             </p>
           </template>
+          <div v-if="search.warnings.value.length" class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
+            <p v-for="(w, i) in search.warnings.value" :key="i" class="text-xs text-amber-500 px-3 py-1">
+              {{ t('search.warning', { name: w.source_name ?? '', message: w.message }) }}
+            </p>
+          </div>
         </template>
-        <div v-if="search.warnings.value.length" class="border-t border-gray-200 dark:border-gray-700 mt-1 pt-1">
-          <p v-for="(w, i) in search.warnings.value" :key="i" class="text-xs text-amber-500 px-3 py-1">
-            {{ t('search.warning', { name: w.source_name ?? '', message: w.message }) }}
+
+        <template v-else>
+          <!-- FR-007: distinct from "no results" — the engine itself being
+               unavailable is a different situation from a query that simply
+               has no matching documents. -->
+          <p v-if="hasEngineUnavailableWarning" class="text-sm text-amber-500 px-3 py-4">
+            {{ t('search.engineUnavailable') }}
           </p>
-        </div>
+          <p
+            v-else-if="hasQuery && search.semanticResults.value.length === 0"
+            class="text-sm text-gray-400 px-3 py-4"
+          >{{ t('search.noResults') }}</p>
+          <template v-for="(match, index) in search.semanticResults.value" :key="`${match.source_id}:${match.path}:${match.chunk_index}`">
+            <SemanticResultItem
+              :match="match"
+              :active="index === search.activeIndex.value"
+              :pane-options="paneOptions"
+              @select="selectSemanticResult(match)"
+              @hover="search.activeIndex.value = index"
+              @open-in-pane="openSemanticInPane(match, $event)"
+            />
+          </template>
+        </template>
       </div>
     </div>
   </div>
@@ -65,7 +113,8 @@ import { useSearchReveal } from '../../composables/useSearchReveal'
 import { usePanes } from '../../composables/usePanes'
 import { useSources } from '../../composables/useSources'
 import SearchResultItem from './SearchResultItem.vue'
-import type { SearchMatch, PaneId } from '../../types'
+import SemanticResultItem from './SemanticResultItem.vue'
+import type { SearchMatch, SemanticMatch, PaneId } from '../../types'
 
 // Must match MAX_MATCHES_PER_FILE in backend/app/mcp/tools/search_documents.py
 // (FR-012) — the API response has no explicit "truncated" flag, so we infer
@@ -81,6 +130,28 @@ const { sourcesQuery } = useSources()
 const inputRef = ref<HTMLInputElement | null>(null)
 
 const noSources = computed(() => (sourcesQuery.data.value?.length ?? 0) === 0)
+const hasQuery = computed(() => search.query.value.trim().length > 0)
+const isLoading = computed(() =>
+  search.mode.value === 'keyword' ? search.loading.value : search.semanticLoading.value
+)
+// Semantic search never surfaces per-source failure warnings (research.md #3
+// — no live network call happens at query time, unlike keyword search's
+// GitHub-rate-limit-style failures), so this is the only warning shape to
+// check for in semantic mode.
+const hasEngineUnavailableWarning = computed(() =>
+  search.semanticWarnings.value.some((w) => w.reason === 'engine_unavailable')
+)
+
+// Label of the mode Tab would switch *to*, shown in the hint text below the
+// mode tabs so the hint always describes the next press rather than a
+// generic "Tab switches mode" message.
+const nextModeLabel = computed(() =>
+  search.mode.value === 'keyword' ? t('search.modeSemantic') : t('search.modeKeyword')
+)
+
+function toggleMode() {
+  search.setMode(search.mode.value === 'keyword' ? 'semantic' : 'keyword')
+}
 
 // Only show the "open in this pane" icons next to a result when 2+ panes
 // are open (see SearchResultItem.vue) — with a single pane it's no
@@ -108,8 +179,14 @@ function isLastInGroup(match: SearchMatch, index: number): boolean {
   return !next || next.source_id !== match.source_id || next.path !== match.path
 }
 
+function activeResultsLength(): number {
+  return search.mode.value === 'keyword'
+    ? search.results.value.length
+    : search.semanticResults.value.length
+}
+
 function moveActive(delta: number) {
-  const len = search.results.value.length
+  const len = activeResultsLength()
   if (!len) return
   search.activeIndex.value = (search.activeIndex.value + delta + len) % len
 }
@@ -132,9 +209,28 @@ function openInPane(match: SearchMatch, paneId: PaneId) {
   close()
 }
 
+// Semantic results are chunk-level excerpts, not exact source lines, so
+// unlike selectResult()/openInPane() above there's no reveal() call here —
+// the document just opens without a line-level scroll/highlight (Assumptions).
+function selectSemanticResult(match: SemanticMatch) {
+  openInActivePane(match.source_id, match.path)
+  close()
+}
+
+function openSemanticInPane(match: SemanticMatch, paneId: PaneId) {
+  setPaneDocument(paneId, match.source_id, match.path)
+  setActivePane(paneId)
+  close()
+}
+
 function selectActive() {
-  const match = search.results.value[search.activeIndex.value]
-  if (match) selectResult(match)
+  if (search.mode.value === 'keyword') {
+    const match = search.results.value[search.activeIndex.value]
+    if (match) selectResult(match)
+  } else {
+    const match = search.semanticResults.value[search.activeIndex.value]
+    if (match) selectSemanticResult(match)
+  }
 }
 
 function close() {
