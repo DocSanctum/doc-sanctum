@@ -3,10 +3,11 @@ import { useDebounceFn } from '@vueuse/core'
 import { api } from '../services/api'
 import type { SearchMatch, SearchWarning, SearchMode, SemanticMatch } from '../types'
 
-// Shown together rather than switched by platform, so the shortcut hint
-// (search button tooltip and palette hint text — App.vue, CommandPalette.vue)
-// works whether the user reads it on macOS or Windows/Linux.
-export const searchShortcutLabel = '⌘K / Ctrl+K'
+// macOS uses ⌘K, Windows/Linux uses Ctrl+K — shared by the search button
+// tooltip and the palette hint text (App.vue, CommandPalette.vue). The
+// platform never changes during a session, so compute it once at module load.
+const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
+export const searchShortcutLabel = isMac ? '⌘K' : 'Ctrl+K'
 
 // Module-scope singleton state — same pattern as usePanes.ts/useTreeReveal.ts.
 // The search-open button (App.vue) and the palette itself (CommandPalette.vue)
