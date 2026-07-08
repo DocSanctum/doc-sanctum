@@ -260,9 +260,6 @@ function handleClick(e: MouseEvent) {
   position: relative;
   margin: 1.5rem 0;
 }
-.prose .code-block pre.hljs {
-  margin: 0;
-}
 .prose pre.hljs {
   border-radius: 8px;
   padding: 1.25rem 1.5rem;

@@ -10,14 +10,6 @@ const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
-  highlight(code, lang) {
-    const highlighted = lang && hljs.getLanguage(lang)
-      ? hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
-      : hljs.highlightAuto(code).value
-    const copyCode = i18n.global.t('viewer.markdown.copyCode')
-    const copy = i18n.global.t('common.copy')
-    return `<div class="code-block"><button type="button" class="code-copy-btn" aria-label="${copyCode}">${copy}</button><pre class="hljs"><code>${highlighted}</code></pre></div>`
-  },
 })
   .use(taskLists, { enabled: true })
   .use(anchor, {
@@ -30,6 +22,25 @@ const md = new MarkdownIt({
   })
   .use(footnote)
   .use(abbr)
+
+// markdown-it's default fence renderer wraps whatever `options.highlight`
+// returns in its own `<pre><code>` unless that string starts with literal
+// `<pre` — and even then it drops the token's own attrs (our data-line,
+// used to scroll a search result into view). Overriding the fence rule
+// directly avoids both: a single <pre> per code block, with data-line kept.
+md.renderer.rules.fence = (tokens, idx) => {
+  const token = tokens[idx]
+  const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
+  const langName = info.split(/\s+/)[0] ?? ''
+  const highlighted = langName && hljs.getLanguage(langName)
+    ? hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
+    : hljs.highlightAuto(token.content).value
+  const copyCode = i18n.global.t('viewer.markdown.copyCode')
+  const copy = i18n.global.t('common.copy')
+  const dataLine = token.attrGet('data-line')
+  const dataLineAttr = dataLine ? ` data-line="${md.utils.escapeHtml(dataLine)}"` : ''
+  return `<pre class="hljs code-block"${dataLineAttr}><button type="button" class="code-copy-btn" aria-label="${copyCode}">${copy}</button><code>${highlighted}</code></pre>`
+}
 
 export function useMarkdown() {
   function render(src: string): string {
