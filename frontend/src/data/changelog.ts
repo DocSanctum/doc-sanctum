@@ -6,6 +6,26 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.7.0',
+    date: '2026-07-09',
+    changes: [
+      'Global keyword search command palette, with shortcut hint and per-pane open targets',
+      'Split-view multi-pane markdown viewer, with a per-pane color picker matching tree hover and reading-progress highlighting',
+      'i18n support: Korean/English UI, defaulting by IP',
+      'GitLab added as a source type; HTTP/localhost source types disabled',
+      'Users can edit a registered source’s name and pick an emoji icon',
+      'Table of contents panel can now be collapsed',
+      'Perf: skip re-downloading unchanged GitHub files using their blob sha',
+      'Fix: GitHub token auth scheme, Enterprise URL support, and Contents API for file reads (raw-domain guessing was unreliable)',
+      'Fix: source tree requests no longer hard-503 or race the background poller; remote files now index in the background',
+      'Fix: code highlight theme now follows the app theme by default',
+      'Fix: reading progress bar getting stuck / never reaching 100% in Safari, and a phantom scrollbar in the viewer',
+      'Fix: missing icon column backfilled on existing source databases',
+      'Fix: light-theme code blocks now use a light gray background instead of white',
+      'Fix: fenced code blocks were silently double-wrapped in an extra dark <pre>, which also broke the data-line attribute used to scroll a search result into view',
+    ],
+  },
+  {
     version: '0.6.0',
     date: '2026-07-04',
     changes: [
