@@ -7,6 +7,11 @@
 services:
   backend:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      # Bind-mount the source over the image's baked-in copy of it, so
+      # --reload actually has something on disk to watch for changes.
+      # Without this, edits on the host never reach the running container.
+      - ./backend:/app
 
   frontend:
     build:
@@ -15,6 +20,12 @@ services:
       - "5173:5173"
       - "${FRONTEND_PORT:-3000}:5173"
     command: npm run dev -- --host
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume over node_modules: keeps the image's own (Linux)
+      # install from being shadowed by the bind mount above — the host's
+      # node_modules, if it has one, may be built for a different OS.
+      - /app/node_modules
     healthcheck:
       # 127.0.0.1, not localhost: musl (alpine) resolves localhost to ::1
       # first; see docker-compose.prod.yml for the same fix on nginx.
