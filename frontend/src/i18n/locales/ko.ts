@@ -144,5 +144,10 @@ export const ko: MessageSchema = {
     moreMatches: '이 문서에 매치가 더 있습니다',
     warning: '{name}: {message}',
     openInPane: '패널 {paneId}에서 열기',
+    openInLabel: '열기:',
+    modeKeyword: '키워드',
+    modeSemantic: '의미 기반',
+    tabSwitchHint: 'Tab로 {mode} 모드 전환',
+    engineUnavailable: '지금은 의미 기반 검색을 사용할 수 없습니다(로컬 임베딩 엔진이 실행되고 있지 않습니다).',
   },
 }

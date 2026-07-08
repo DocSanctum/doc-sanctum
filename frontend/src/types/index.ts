@@ -111,3 +111,20 @@ export interface SearchResponse {
   matches: SearchMatch[]
   warnings: SearchWarning[]
 }
+
+export type SearchMode = 'keyword' | 'semantic'
+
+export interface SemanticMatch {
+  source_id: string
+  source_name: string
+  path: string
+  chunk_index: number
+  score: number
+  excerpt: string
+}
+
+export interface SemanticSearchResponse {
+  query: string
+  results: SemanticMatch[]
+  warnings: SearchWarning[]
+}

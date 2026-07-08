@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse } from '../types'
 
 const BASE = '/api/v1'
 
@@ -52,5 +52,12 @@ export const api = {
     const params = new URLSearchParams({ q: query })
     if (sourceId) params.set('source_id', sourceId)
     return request<SearchResponse>(`/search?${params.toString()}`)
+  },
+
+  semanticSearch: (query: string, sourceId?: string, topK?: number) => {
+    const params = new URLSearchParams({ q: query })
+    if (sourceId) params.set('source_id', sourceId)
+    if (topK) params.set('top_k', String(topK))
+    return request<SemanticSearchResponse>(`/semantic-search?${params.toString()}`)
   },
 }

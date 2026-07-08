@@ -142,6 +142,11 @@ export const en = {
     moreMatches: 'More matches in this document',
     warning: '{name}: {message}',
     openInPane: 'Open in pane {paneId}',
+    openInLabel: 'Open in:',
+    modeKeyword: 'Keyword',
+    modeSemantic: 'Semantic',
+    tabSwitchHint: 'Tab to switch to {mode} mode',
+    engineUnavailable: 'Semantic search is unavailable right now (local embedding engine is not running).',
   },
 }
 
