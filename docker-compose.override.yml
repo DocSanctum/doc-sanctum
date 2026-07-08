@@ -15,3 +15,9 @@ services:
       - "5173:5173"
       - "${FRONTEND_PORT:-3000}:5173"
     command: npm run dev -- --host
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5173/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
