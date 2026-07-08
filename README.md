@@ -62,17 +62,13 @@ Point your MCP client at whichever one it supports, and it can list your registe
 
 Contributions are welcome — bug reports, fixes, and features alike. A few things that make this easier:
 
-1. Run the dev stack instead of the production one — it runs the Vite dev server and `uvicorn --reload` rather than the minified/nginx build:
+1. Run the dev stack instead of the production one — it runs the Vite dev server and `uvicorn --reload` against your working tree (bind-mounted into the containers), so edits show up immediately without a rebuild:
 
    ```bash
    ./start.sh --dev
    ```
 
-   The containers don't bind-mount your working tree, so edits aren't picked up live. After making changes, re-run with `--build` to rebuild and restart:
-
-   ```bash
-   ./start.sh --dev --build
-   ```
+   You only need `./start.sh --dev --build` again if you change a dependency (`requirements.txt`/`package.json`), since those are installed at image build time.
 
 2. Before opening a PR, run the checks CI runs. These are the same commands as `.github/workflows/backend-ci.yml` and `frontend-ci.yml`:
 
