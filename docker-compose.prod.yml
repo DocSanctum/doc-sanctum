@@ -5,9 +5,38 @@
 # This is the default stack `./start.sh` runs (merged on top of
 # docker-compose.yml). For local development instead, run `./start.sh --dev`,
 # which uses docker-compose.override.yml in place of this file.
+#
+# Also layers on production-only hardening that dev doesn't need: capped,
+# rotated logs (dev logs are short-lived and actively tailed) and a memory/
+# CPU ceiling on the backend (embedding/indexing is CPU-heavy — this stops
+# one runaway job from starving the host or the other containers).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  backend:
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "${BACKEND_CPU_LIMIT:-2}"
+          memory: ${BACKEND_MEMORY_LIMIT:-2g}
+
   frontend:
     build:
       target: prod
     ports:
       - "${FRONTEND_PORT:-3000}:80"
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  vectorstore:
+    logging: *default-logging

@@ -32,6 +32,14 @@ services:
     volumes:
       - vectorstore_data:/chroma/chroma
     restart: unless-stopped
+    healthcheck:
+      # The image only ships bash (no curl/wget/python), so this checks the
+      # port accepts a connection rather than hitting a specific HTTP route.
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/127.0.0.1/8000"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   backend:
     build:
@@ -65,6 +73,15 @@ services:
       # run instead of trying to write into the read-only host HOME mount.
       - embedding_model_cache:${HOME}/.cache/chroma
     restart: unless-stopped
+    healthcheck:
+      # /api/v1/deployment is a trivial, dependency-free route (just echoes
+      # the configured mode) — enough to confirm the ASGI app is up and
+      # routing without exercising the database or vector store.
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/deployment', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # frontend build target/ports/command are dev/prod-specific — see
   # docker-compose.override.yml (dev, auto-merged) and docker-compose.prod.yml
@@ -78,7 +95,8 @@ services:
     environment:
       - VITE_API_BASE=http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
