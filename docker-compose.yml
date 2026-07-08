@@ -64,25 +64,21 @@ services:
       # so Docker auto-populates this named volume from the image on first
       # run instead of trying to write into the read-only host HOME mount.
       - embedding_model_cache:${HOME}/.cache/chroma
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
+  # frontend build target/ports/command are dev/prod-specific — see
+  # docker-compose.override.yml (dev, auto-merged) and docker-compose.prod.yml
   frontend:
     build:
       context: ./frontend
-      target: dev
       args:
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
-    ports:
-      - "5173:5173"
-      - "${FRONTEND_PORT:-3000}:5173"
     environment:
       - VITE_API_BASE=http://localhost:8000
     depends_on:
       - backend
-    command: npm run dev -- --host
     restart: unless-stopped
 
 volumes:

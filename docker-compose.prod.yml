@@ -1,0 +1,12 @@
+# Production-shaped stack: nginx serves the prebuilt/minified frontend and
+# reverse-proxies /api and /sse to the backend (see frontend/nginx.conf), and
+# the backend runs without the dev auto-reload watcher.
+#
+# Run via `./start.sh --prod`, which merges this file on top of
+# docker-compose.yml (skipping docker-compose.override.yml).
+services:
+  frontend:
+    build:
+      target: prod
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
