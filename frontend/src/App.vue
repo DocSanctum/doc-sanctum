@@ -43,7 +43,7 @@
           :class="view === 'settings' || view === 'changelog'
             ? 'bg-blue-600 text-white'
             : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'"
-          @click="view = 'settings'"
+          @click="toggleSettings"
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -67,8 +67,8 @@
       class="flex-1 flex overflow-auto"
       :class="{ 'select-none': dragging || paneDragging }"
     >
-      <ChangelogPage v-if="view === 'changelog'" class="flex-1 overflow-y-auto" @back="view = 'settings'" />
-      <SettingsPanel v-else-if="view === 'settings'" class="flex-1 overflow-y-auto" @open-changelog="view = 'changelog'" />
+      <ChangelogPage v-if="view === 'changelog'" class="flex-1 overflow-y-auto viewer-pane-scroll" @back="view = 'settings'" />
+      <SettingsPanel v-else-if="view === 'settings'" class="flex-1 overflow-y-auto viewer-pane-scroll" @open-changelog="view = 'changelog'" />
       <template v-else>
         <template v-for="(pane, i) in panes" :key="pane.id">
           <div
@@ -107,6 +107,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { onKeyStroke } from '@vueuse/core'
 import SourceList from './components/Sidebar/SourceList.vue'
 import FileTree from './components/Sidebar/FileTree.vue'
 import AddSourceModal from './components/Sidebar/AddSourceModal.vue'
@@ -137,6 +138,17 @@ const pendingEditSource = computed(() =>
   sourcesQuery.data.value?.find((s) => s.id === pendingEditId.value) ?? null
 )
 const view = ref<'viewer' | 'settings' | 'changelog'>('viewer')
+
+// Clicking the settings button again while already viewing settings (or its
+// changelog subview) toggles back to the viewer instead of doing nothing.
+function toggleSettings() {
+  view.value = view.value === 'viewer' ? 'settings' : 'viewer'
+}
+
+// Esc closes the settings/changelog view and returns to the document viewer.
+onKeyStroke('Escape', () => {
+  if (view.value !== 'viewer') view.value = 'viewer'
+})
 
 // 좌측 트리는 화면에 하나만 존재하며(스펙 Assumptions), 기본적으로는 사용자가
 // 사이드바에서 직접 선택한 소스를 기준으로 표시된다. 최초 로드 시에는 패널 1의
