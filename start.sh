@@ -4,10 +4,11 @@
 # commit this script built at (e.g. after `git pull`), or when switching
 # between dev/prod mode. Pass --build to force a rebuild regardless.
 #
-# Dev (default): docker-compose.yml + docker-compose.override.yml
+# Prod (default): docker-compose.yml + docker-compose.prod.yml
+#   (nginx-served prebuilt frontend, no backend auto-reload) — what real
+#   deployments should run.
+# Dev (--dev): docker-compose.yml + docker-compose.override.yml
 #   (auto-merged by docker compose) — Vite dev server, backend auto-reload.
-# Prod (--prod): docker-compose.yml + docker-compose.prod.yml
-#   (nginx-served prebuilt frontend, no backend auto-reload).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -15,29 +16,29 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 STATE_FILE=".docker_last_build"
 MODE_STATE_FILE=".docker_last_mode"
 FORCE_BUILD=false
-PROD=false
+DEV=false
 
 for arg in "$@"; do
   case "$arg" in
     --build)
       FORCE_BUILD=true
       ;;
-    --prod)
-      PROD=true
+    --dev)
+      DEV=true
       ;;
     *)
       echo "Unknown option: $arg" >&2
-      echo "Usage: $0 [--build] [--prod]" >&2
+      echo "Usage: $0 [--build] [--dev]" >&2
       exit 1
       ;;
   esac
 done
 
-CURRENT_MODE="dev"
-COMPOSE=(docker compose)
-if $PROD; then
-  CURRENT_MODE="prod"
-  COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+CURRENT_MODE="prod"
+COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+if $DEV; then
+  CURRENT_MODE="dev"
+  COMPOSE=(docker compose)
 fi
 
 if [ ! -f .env ]; then
