@@ -1,10 +1,9 @@
 # Auto-merged on top of docker-compose.yml by plain `docker compose ...`
-# (and by ./start.sh with no flags) — this is the local development stack:
-# Vite dev server for the frontend, uvicorn auto-reload for the backend.
+# (and by `./start.sh --dev`) — this is the local development stack: Vite
+# dev server for the frontend, uvicorn auto-reload for the backend.
 #
-# For a production-shaped stack (prebuilt/minified frontend served by
-# nginx, no backend auto-reload), run `./start.sh --prod` instead, which
-# uses docker-compose.yml + docker-compose.prod.yml.
+# `./start.sh` with no flags runs the production-shaped stack instead
+# (docker-compose.yml + docker-compose.prod.yml) — see docker-compose.prod.yml.
 services:
   backend:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
