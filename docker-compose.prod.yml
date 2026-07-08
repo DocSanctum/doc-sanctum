@@ -32,7 +32,10 @@ services:
       - "${FRONTEND_PORT:-3000}:80"
     logging: *default-logging
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      # 127.0.0.1, not localhost: musl (alpine) resolves localhost to ::1
+      # first, but nginx only listens on IPv4, so wget would hit
+      # "Connection refused" trying the v6 loopback.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1/"]
       interval: 30s
       timeout: 5s
       retries: 3

@@ -16,7 +16,9 @@ services:
       - "${FRONTEND_PORT:-3000}:5173"
     command: npm run dev -- --host
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:5173/"]
+      # 127.0.0.1, not localhost: musl (alpine) resolves localhost to ::1
+      # first; see docker-compose.prod.yml for the same fix on nginx.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5173/"]
       interval: 30s
       timeout: 5s
       retries: 3
