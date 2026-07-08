@@ -269,7 +269,7 @@ function handleClick(e: MouseEvent) {
   overflow-x: auto;
 }
 :root.dark .prose pre.hljs { border: 1px solid #30363d; }
-:root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; }
+:root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; background: #f3f4f6; }
 
 .prose pre.hljs code {
   background: transparent;
