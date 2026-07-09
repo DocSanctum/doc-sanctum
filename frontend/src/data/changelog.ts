@@ -6,6 +6,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.8.0',
+    date: '2026-07-09',
+    changes: [
+      'Docker: split compose into dev/prod stacks; start.sh defaults to prod, --dev is opt-in',
+      'Docker: healthchecks, resource limits (BACKEND_CPU_LIMIT/BACKEND_MEMORY_LIMIT), and log rotation for the prod stack',
+      'Docker: optional corporate CA certificate support, for builds and runtime requests behind a TLS-intercepting proxy',
+      'Docker: bind-mounted dev containers for real hot reload (uvicorn --reload, Vite HMR)',
+      'Settings: per-source index status (indexing / complete / failed) shown in the source list',
+      'Markdown viewer: better readability for Korean text and wide tables in split-view panes',
+      'New top-level README covering purpose, features, setup, and contributing',
+      'Fix: search shortcut hint now shows the correct key for the user’s platform instead of always showing both',
+      'Fix: frontend healthcheck failing under musl (resolves localhost to ::1 first)',
+    ],
+  },
+  {
     version: '0.7.0',
     date: '2026-07-09',
     changes: [
