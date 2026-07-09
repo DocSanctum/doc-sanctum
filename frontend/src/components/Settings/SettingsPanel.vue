@@ -63,6 +63,26 @@
       </div>
     </section>
 
+    <!-- Code block line numbers -->
+    <section class="mb-8">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('settings.lineNumbers.label') }}</h2>
+        <div class="flex gap-2">
+          <button
+            v-for="opt in lineNumberOptions"
+            :key="opt.value.toString()"
+            class="px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            :class="lineNumbers === opt.value
+              ? 'bg-blue-600 border-blue-500 text-white'
+              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+            @click="setLineNumbers(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- Code theme -->
     <section class="mb-8">
       <div class="flex items-center justify-between mb-3">
@@ -274,7 +294,7 @@ import pkg from '../../../package.json'
 
 const { t } = useI18n()
 const { theme, applyTheme } = useTheme()
-const { fontSize, setFontSize } = useViewerSettings()
+const { fontSize, setFontSize, lineNumbers, setLineNumbers } = useViewerSettings()
 const { sourcesQuery, patch } = useSources()
 const { codeTheme: currentCodeTheme, THEME_OPTIONS, applyCodeTheme } = useCodeTheme()
 const { locale, setLocale } = useLocale()
@@ -332,6 +352,11 @@ const fontSizes = computed(() => [
   { label: t('settings.fontSize.small'), value: 'sm' },
   { label: t('settings.fontSize.medium'), value: 'base' },
   { label: t('settings.fontSize.large'), value: 'lg' },
+])
+
+const lineNumberOptions = computed(() => [
+  { label: t('settings.lineNumbers.on'), value: true },
+  { label: t('settings.lineNumbers.off'), value: false },
 ])
 
 const openVersions = ref(new Set([currentVersion]))
