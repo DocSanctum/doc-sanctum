@@ -245,6 +245,20 @@ function handleClick(e: MouseEvent) {
 .markdown-viewer-layout {
   min-height: 100%;
 }
+
+/* Break at word/phrase boundaries for Korean text instead of mid-syllable;
+   overflow-wrap still allows unbreakable tokens (long URLs) to wrap so they
+   don't overflow the pane. Reset inside code, which needs its own
+   monospace-preserving behavior instead. */
+.prose {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+.prose pre,
+.prose code {
+  word-break: normal;
+  overflow-wrap: normal;
+}
 .toc-column {
   width: 14rem;
   flex-shrink: 0;
@@ -343,9 +357,14 @@ function handleClick(e: MouseEvent) {
   content: none;
 }
 
-/* Table */
+/* Table: keep the table's own natural width and let it scroll horizontally
+   rather than squeezing columns, so wide tables don't break the pane layout
+   (especially in narrow split-view panes). */
 .prose table {
-  width: 100%;
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
   border-collapse: collapse;
   font-size: 0.9em;
 }
