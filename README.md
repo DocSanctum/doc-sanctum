@@ -47,6 +47,7 @@ Copy `.env.example` to `.env` and adjust as needed. The defaults work for a sing
 
 - `GITHUB_TOKEN` / `GITLAB_TOKEN` — needed for private repos, and to raise GitHub's API rate limit from 60 to 5000 requests/hour.
 - `BACKEND_PORT`, `FRONTEND_PORT` — change these if the defaults are already taken on your machine.
+- `BACKEND_CPU_LIMIT` / `BACKEND_MEMORY_LIMIT` — cap the backend's CPU/memory in the production stack, so a large indexing job can't starve the rest of the machine.
 - `HTTP_PROXY` / `HTTPS_PROXY` — for building and running behind a corporate proxy.
 
 ## Using it from Claude or another MCP client
