@@ -39,6 +39,21 @@ async def create_tables() -> None:
             )
         """)
         )
+        # Keyword search index (011-keyword-search-fts). trigram tokenizer:
+        # substring-style matching without a language-specific analyzer,
+        # case-insensitive by default. source_id/path are UNINDEXED (stored
+        # but not tokenized) since they're only ever used for exact-match
+        # filtering/grouping, never full-text search.
+        await conn.execute(
+            text("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
+                source_id UNINDEXED,
+                path UNINDEXED,
+                content,
+                tokenize = 'trigram'
+            )
+        """)
+        )
 
         result = await conn.execute(text("PRAGMA table_info(source)"))
         existing_columns = {row[1] for row in result.fetchall()}

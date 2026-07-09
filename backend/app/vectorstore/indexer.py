@@ -5,6 +5,7 @@ import logging
 import os
 from typing import Any
 
+from ..keywordindex import client as keyword_client
 from ..mcp.cache import clear_source
 from ..mcp.tools.list_documents import _flatten_tree, _get_tree_with_cache
 from ..mcp.tools.read_document import read_with_cache
@@ -53,6 +54,7 @@ async def _index_document(
             _doc_shas.setdefault(source.id, {}).pop(path, None)
             return None
         await client.upsert_chunks(source.id, source.name, path, chunks)
+        await keyword_client.upsert_document(source.id, path, content)
         _doc_hashes.setdefault(source.id, {})[path] = _hash_content(content)
         if sha is not None:
             _doc_shas.setdefault(source.id, {})[path] = sha
@@ -67,6 +69,7 @@ async def _index_document(
 async def remove_document(source: Source, path: str) -> None:
     """Remove all chunks belonging to a single document (edge case: file deleted)."""
     await client.delete_document(source.id, path)
+    await keyword_client.delete_document(source.id, path)
     _doc_hashes.get(source.id, {}).pop(path, None)
     _doc_shas.get(source.id, {}).pop(path, None)
 
@@ -147,8 +150,10 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
 
 
 async def delete_source_index(source_id: str) -> None:
-    """Purge the vector collection and tree/content cache for a deleted source (FR-012)."""
+    """Purge the vector collection, keyword index, and tree/content cache for a
+    deleted source (FR-012)."""
     await client.delete_collection(source_id)
+    await keyword_client.delete_source(source_id)
     clear_source(source_id)
     _doc_hashes.pop(source_id, None)
     _doc_shas.pop(source_id, None)

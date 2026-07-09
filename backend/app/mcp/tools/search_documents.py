@@ -1,68 +1,25 @@
-import asyncio
 import json
 from typing import Any
 
 from sqlalchemy import text
 
 from ...core.database import async_session_factory
+from ...keywordindex import client as keyword_client
 from ...models.source import Source
-from .list_documents import _flatten_tree, _get_tree_with_cache
-from .read_document import read_with_cache
-
-MAX_MATCHES_PER_FILE = 10
-CONTEXT_LINES = 2
-
-
-def _search_lines(lines: list[str], query: str) -> list[dict[str, Any]]:
-    q = query.lower()
-    matches = []
-    for i, line in enumerate(lines):
-        if q in line.lower():
-            start = max(0, i - CONTEXT_LINES)
-            end = min(len(lines), i + CONTEXT_LINES + 1)
-            matches.append(
-                {
-                    "line_number": i + 1,
-                    "line": line.rstrip("\n"),
-                    "context": [ln.rstrip("\n") for ln in lines[start:end]],
-                }
-            )
-            if len(matches) >= MAX_MATCHES_PER_FILE:
-                break
-    return matches
-
-
-async def _read_content(source: Source, path: str) -> str | None:
-    try:
-        content, _warning = await read_with_cache(source, path)
-        return content
-    except Exception:
-        return None
 
 
 async def _search_source(
     source: Source, query: str
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
-    tree, warning = await _get_tree_with_cache(source)
-    doc_infos: list[dict[str, Any]] = []
-    if tree and tree.get("root"):
-        _flatten_tree(tree["root"], doc_infos, source)
-
-    async def search_file(doc: dict[str, Any]) -> list[dict[str, Any]]:
-        content = await _read_content(source, doc["path"])
-        if content is None:
-            return []
-        lines = content.splitlines(keepends=True)
-        hits = _search_lines(lines, query)
-        for hit in hits:
-            hit["path"] = doc["path"]
-            hit["source_id"] = source.id
-            hit["source_name"] = source.name
-        return hits
-
-    results = await asyncio.gather(*[search_file(d) for d in doc_infos])
-    matches = [hit for file_hits in results for hit in file_hits]
-    return matches, warning
+    """Search this source's already-indexed content for query (FR-001, FR-004,
+    011-keyword-search-fts) — no live access to the source (filesystem/remote
+    API) happens here; all matching is against the keyword index built by
+    vectorstore/indexer.py, so there's no "live fetch failed" warning case
+    anymore (contracts/search-contract.md)."""
+    hits = await keyword_client.query([source.id], query)
+    for hit in hits:
+        hit["source_name"] = source.name
+    return hits, None
 
 
 async def search_documents_handler(query: str, source_id: str | None = None) -> str:

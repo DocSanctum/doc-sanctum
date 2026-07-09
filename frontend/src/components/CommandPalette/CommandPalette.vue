@@ -116,7 +116,7 @@ import SearchResultItem from './SearchResultItem.vue'
 import SemanticResultItem from './SemanticResultItem.vue'
 import type { SearchMatch, SemanticMatch, PaneId } from '../../types'
 
-// Must match MAX_MATCHES_PER_FILE in backend/app/mcp/tools/search_documents.py
+// Must match MAX_MATCHES_PER_FILE in backend/app/keywordindex/client.py
 // (FR-012) — the API response has no explicit "truncated" flag, so we infer
 // it by checking whether a document's match count hit this cap.
 const MAX_MATCHES_PER_FILE = 10
