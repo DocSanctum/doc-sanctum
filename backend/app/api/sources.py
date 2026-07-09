@@ -114,6 +114,63 @@ async def _finish_remote_registration(source: Source) -> None:
         await session.commit()
 
 
+async def _resume_local_source(source: Source) -> None:
+    """Restore a single local source's file watcher and rebuild its vector
+    index in the background at startup. Both live only in process memory
+    (the watcher registry in watcher.py, the vector store as chromadb's
+    EphemeralClient) and are silently wiped on every backend restart, even
+    though the source's DB row still says "active" — without this,
+    semantic search over local sources would return nothing until the
+    source was deleted and re-registered."""
+    watch_root = os.path.expanduser(source.path)
+    start_watching(source.id, watch_root)
+    register_index_listener(
+        source.id, functools.partial(handle_watch_event, source, watch_root)
+    )
+
+    async with async_session_factory() as session:
+        await session.execute(
+            text("UPDATE source SET status = 'syncing' WHERE id = :id"),
+            {"id": source.id},
+        )
+        await session.commit()
+
+    try:
+        warnings = await create_index(source)
+        status, error_msg = "active", None
+        if warnings:
+            logger.warning(
+                "Startup reindex for source %s completed with %d warning(s)",
+                source.id,
+                len(warnings),
+            )
+    except Exception as exc:
+        logger.exception("Failed to rebuild index for source %s at startup", source.id)
+        status, error_msg = "error", str(exc)
+
+    async with async_session_factory() as session:
+        await session.execute(
+            text("UPDATE source SET status = :s, error_message = :e WHERE id = :id"),
+            {"s": status, "e": error_msg, "id": source.id},
+        )
+        await session.commit()
+
+
+async def resume_local_sources() -> None:
+    """Called once at app startup (main.py lifespan) to restore every
+    registered local source's watcher and vector index. Each source's
+    reindex runs as its own background task so a large vault doesn't delay
+    app startup / health checks."""
+    async with async_session_factory() as session:
+        rows = (
+            (await session.execute(text("SELECT * FROM source WHERE type = 'local'")))
+            .mappings()
+            .all()
+        )
+    for row in rows:
+        asyncio.create_task(_resume_local_source(Source.from_row(dict(row))))
+
+
 @router.post("/sources", status_code=201)
 async def register_source(
     req: RegisterSourceRequest, session: AsyncSession = Depends(get_session)
