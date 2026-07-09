@@ -8,7 +8,7 @@
         <div
           ref="contentRef"
           class="prose dark:prose-invert max-w-none"
-          :class="fontSize !== 'base' ? `prose-${fontSize}` : ''"
+          :class="[fontSize !== 'base' ? `prose-${fontSize}` : '', { 'show-line-numbers': lineNumbers }]"
           @click="handleClick"
           v-html="rendered"
         />
@@ -33,6 +33,7 @@ import { useClipboard } from '@vueuse/core'
 import { api } from '../../services/api'
 import { useMarkdown } from '../../composables/useMarkdown'
 import { useViewerSettings } from '../../composables/useViewerSettings'
+import { useTheme } from '../../composables/useTheme'
 import { useToc } from '../../composables/useToc'
 import { useViewerUrl } from '../../composables/useViewerUrl'
 import { useSearchReveal } from '../../composables/useSearchReveal'
@@ -47,7 +48,8 @@ const emit = defineEmits<{ navigate: [path: string] }>()
 
 const { t } = useI18n()
 const { render } = useMarkdown()
-const { fontSize, tocCollapsed } = useViewerSettings()
+const { fontSize, tocCollapsed, lineNumbers } = useViewerSettings()
+const { theme } = useTheme()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
 const { copy, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
 const { revealTarget, revealToken } = useSearchReveal()
@@ -65,6 +67,44 @@ let suppressHashSync = false
 const rendered = computed(() =>
   DOMPurify.sanitize(render(raw.value), { USE_PROFILES: { html: true } })
 )
+
+// Mermaid diagrams render on the client, outside the markdown-it → DOMPurify
+// pipeline: useMarkdown.ts emits a plain `<div class="mermaid">source</div>`
+// (mermaid.js's own convention) and this walks the DOM after each render to
+// turn those into SVG. Loaded lazily since mermaid is a large dependency
+// that most documents never need.
+let mermaid: typeof import('mermaid')['default'] | null = null
+
+async function renderMermaidBlocks() {
+  if (!contentRef.value) return
+  const blocks = Array.from(contentRef.value.querySelectorAll<HTMLElement>('.mermaid-block .mermaid'))
+  if (blocks.length === 0) return
+  if (!mermaid) mermaid = (await import('mermaid')).default
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    theme: theme.value === 'dark' ? 'dark' : 'default',
+  })
+  for (const el of blocks) {
+    // The hidden <code> sibling always holds the original source, so a
+    // previous run's SVG output can be discarded and re-parsed from scratch
+    // — needed both to retry after an edit and to re-render when the app
+    // theme changes.
+    const source = el.closest('.mermaid-block')?.querySelector('code')?.textContent ?? ''
+    el.removeAttribute('data-processed')
+    el.textContent = source
+    try {
+      await mermaid.run({ nodes: [el] })
+    } catch {
+      el.textContent = source
+      el.classList.add('mermaid-error')
+      el.setAttribute('data-mermaid-error-label', t('viewer.markdown.mermaidError'))
+    }
+  }
+}
+
+watch(rendered, () => nextTick(() => renderMermaidBlocks()))
+watch(theme, () => nextTick(() => renderMermaidBlocks()))
 
 async function load() {
   if (!props.sourceId || !props.filePath) return
@@ -274,10 +314,15 @@ function handleClick(e: MouseEvent) {
   position: relative;
   margin: 1.5rem 0;
 }
+.prose .code-block-body {
+  display: flex;
+}
 .prose pre.hljs {
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
+  flex: 1;
+  min-width: 0;
 }
 :root.dark .prose pre.hljs { border: 1px solid #30363d; }
 :root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; background: #f3f4f6; }
@@ -287,6 +332,61 @@ function handleClick(e: MouseEvent) {
   padding: 0;
   font-size: 0.875em;
   font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+}
+
+/* Line-numbers gutter: a flex sibling of <pre>, not inside it, so it stays
+   put while long lines scroll the <pre> horizontally. Always in the DOM and
+   toggled purely with CSS (via .show-line-numbers on the .prose root) so
+   flipping the viewer setting doesn't require re-rendering the markdown. */
+.prose .code-line-numbers {
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  padding: 1.25rem 0.75rem 1.25rem 1.25rem;
+  user-select: none;
+  color: #6b7280;
+  font-size: 0.875em;
+  font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  border-radius: 8px 0 0 8px;
+}
+.prose.show-line-numbers .code-line-numbers {
+  display: flex;
+}
+:root.dark .prose .code-line-numbers { background: #161b22; border: 1px solid #30363d; border-right: none; }
+:root:not(.dark) .prose .code-line-numbers { background: #e5e7eb; border: 1px solid #d1d5db; border-right: none; }
+.prose.show-line-numbers pre.hljs {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: none;
+}
+
+/* Mermaid diagrams: useMarkdown.ts emits <div class="mermaid">source</div>
+   here; MarkdownViewer.vue renders it into SVG client-side after mount. */
+.prose .mermaid-block {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow-x: auto;
+  border-radius: 8px;
+}
+:root.dark .prose .mermaid-block { border: 1px solid #30363d; background: #161b22; }
+:root:not(.dark) .prose .mermaid-block { border: 1px solid #d1d5db; background: #f9fafb; }
+.prose .mermaid-block .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+.prose .mermaid-error {
+  font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  color: #ef4444;
+}
+.prose .mermaid-error::before {
+  content: attr(data-mermaid-error-label);
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .prose .code-copy-btn {

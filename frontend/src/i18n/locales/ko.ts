@@ -87,6 +87,7 @@ export const ko: MessageSchema = {
     },
     markdown: {
       copyCode: '코드 복사',
+      mermaidError: 'Mermaid 다이어그램 오류',
     },
   },
   settings: {
@@ -106,6 +107,11 @@ export const ko: MessageSchema = {
       small: '소',
       medium: '중',
       large: '대',
+    },
+    lineNumbers: {
+      label: '코드 블록 줄번호',
+      on: '켜짐',
+      off: '꺼짐',
     },
     codeTheme: {
       label: '코드 하이라이트 테마',

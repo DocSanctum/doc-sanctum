@@ -27,19 +27,45 @@ const md = new MarkdownIt({
 // returns in its own `<pre><code>` unless that string starts with literal
 // `<pre` — and even then it drops the token's own attrs (our data-line,
 // used to scroll a search result into view). Overriding the fence rule
-// directly avoids both: a single <pre> per code block, with data-line kept.
+// directly avoids both: a single wrapper per code block, with data-line kept.
+//
+// The wrapper is a <div class="code-block">, not a <pre>, since mermaid
+// blocks need a plain <div class="mermaid"> (mermaid.js's own convention)
+// instead of a highlighted <pre><code>. A hidden <code> holding the raw
+// source is always included so the existing copy-button handler (which
+// does `.closest('.code-block').querySelector('code')`) works unchanged
+// for both cases.
 md.renderer.rules.fence = (tokens, idx) => {
   const token = tokens[idx]
   const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
   const langName = info.split(/\s+/)[0] ?? ''
-  const highlighted = langName && hljs.getLanguage(langName)
-    ? hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
-    : hljs.highlightAuto(token.content).value
   const copyCode = i18n.global.t('viewer.markdown.copyCode')
   const copy = i18n.global.t('common.copy')
   const dataLine = token.attrGet('data-line')
   const dataLineAttr = dataLine ? ` data-line="${md.utils.escapeHtml(dataLine)}"` : ''
-  return `<pre class="hljs code-block"${dataLineAttr}><button type="button" class="code-copy-btn" aria-label="${copyCode}">${copy}</button><code>${highlighted}</code></pre>`
+  const copyBtn = `<button type="button" class="code-copy-btn" aria-label="${copyCode}">${copy}</button>`
+  const rawSource = token.content.replace(/\n$/, '')
+
+  if (langName === 'mermaid') {
+    const escaped = md.utils.escapeHtml(rawSource)
+    return `<div class="code-block mermaid-block"${dataLineAttr}>${copyBtn}<code hidden>${escaped}</code><div class="mermaid">${escaped}</div></div>`
+  }
+
+  const highlighted = langName && hljs.getLanguage(langName)
+    ? hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
+    : hljs.highlightAuto(token.content).value
+  // One <span> per source line, rendered alongside <pre> in a flex row so it
+  // scrolls independently (numbers stay put while long lines scroll). Kept
+  // in the DOM unconditionally and toggled with CSS (via a class further up
+  // the tree) so the line-numbers setting doesn't need a re-render.
+  const lineNumbers = rawSource.split('\n').map((_, i) => `<span>${i + 1}</span>`).join('')
+  return (
+    `<div class="code-block"${dataLineAttr}>${copyBtn}` +
+    `<div class="code-block-body">` +
+    `<span class="code-line-numbers" aria-hidden="true">${lineNumbers}</span>` +
+    `<pre class="hljs"><code>${highlighted}</code></pre>` +
+    `</div></div>`
+  )
 }
 
 export function useMarkdown() {

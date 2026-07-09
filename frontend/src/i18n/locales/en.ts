@@ -85,6 +85,7 @@ export const en = {
     },
     markdown: {
       copyCode: 'Copy code',
+      mermaidError: 'Mermaid diagram error',
     },
   },
   settings: {
@@ -104,6 +105,11 @@ export const en = {
       small: 'S',
       medium: 'M',
       large: 'L',
+    },
+    lineNumbers: {
+      label: 'Code block line numbers',
+      on: 'On',
+      off: 'Off',
     },
     codeTheme: {
       label: 'Code highlight theme',
