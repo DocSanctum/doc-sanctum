@@ -111,6 +111,14 @@
             <div class="text-sm font-medium text-gray-900 dark:text-white truncate">{{ source.name }}</div>
             <div class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ source.path }}</div>
           </div>
+          <div
+            class="flex items-center gap-1.5 shrink-0 text-xs"
+            :class="indexStatusTextClass(source.status)"
+            :title="source.error_message ?? undefined"
+          >
+            <span class="inline-block w-1.5 h-1.5 rounded-full" :class="indexStatusDotClass(source.status)" />
+            {{ t(`settings.polling.status.${source.status}`) }}
+          </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <input
               :value="source.type === 'local' ? '' : pollingValues[source.id]"
@@ -261,7 +269,7 @@ import { useSources } from '../../composables/useSources'
 import { useLocale } from '../../composables/useLocale'
 import { changelog } from '../../data/changelog'
 import { api } from '../../services/api'
-import type { McpStatus } from '../../types'
+import type { McpStatus, SourceStatus } from '../../types'
 import pkg from '../../../package.json'
 
 const { t } = useI18n()
@@ -297,6 +305,22 @@ watch(remoteSources, (sources) => {
 
 function savePoll(id: string) {
   patch.mutate({ id, data: { polling_interval_seconds: pollingValues[id] } })
+}
+
+function indexStatusDotClass(status: SourceStatus): string {
+  return {
+    active: 'bg-green-500',
+    syncing: 'bg-yellow-400 animate-pulse',
+    error: 'bg-red-500',
+  }[status] ?? 'bg-gray-500'
+}
+
+function indexStatusTextClass(status: SourceStatus): string {
+  return {
+    active: 'text-green-600 dark:text-green-400',
+    syncing: 'text-yellow-600 dark:text-yellow-400',
+    error: 'text-red-600 dark:text-red-400',
+  }[status] ?? 'text-gray-400'
 }
 
 const appThemes = computed(() => [
