@@ -117,6 +117,11 @@ export const en = {
       empty: 'No registered sources.',
       realtime: 'Real-time detection',
       seconds: 'sec',
+      status: {
+        active: 'Indexing complete',
+        syncing: 'Indexing in progress',
+        error: 'Indexing failed',
+      },
     },
     mcp: {
       label: 'MCP Server',

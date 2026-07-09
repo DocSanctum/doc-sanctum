@@ -119,6 +119,11 @@ export const ko: MessageSchema = {
       empty: '등록된 소스가 없습니다.',
       realtime: '실시간 감지',
       seconds: '초',
+      status: {
+        active: '색인 완료',
+        syncing: '색인 중',
+        error: '색인 실패',
+      },
     },
     mcp: {
       label: 'MCP Server',
