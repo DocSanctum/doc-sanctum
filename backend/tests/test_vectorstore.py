@@ -174,6 +174,26 @@ class _FakeVectorClient:
         self.deleted_collections.append(source_id)
 
 
+class _FakeKeywordClient:
+    """Stands in for keywordindex/client.py here — that module's own upsert/
+    delete/query behavior is covered by test_keywordindex.py; these indexer
+    tests only need indexer.py's calls into it to not hit a real database."""
+
+    def __init__(self) -> None:
+        self.upserted: list[tuple[str, str]] = []
+        self.deleted_docs: list[tuple[str, str]] = []
+        self.deleted_sources: list[str] = []
+
+    async def upsert_document(self, source_id, path, content) -> None:
+        self.upserted.append((source_id, path))
+
+    async def delete_document(self, source_id, path) -> None:
+        self.deleted_docs.append((source_id, path))
+
+    async def delete_source(self, source_id) -> None:
+        self.deleted_sources.append(source_id)
+
+
 def _source(source_id: str = "src-1") -> Source:
     return Source(id=source_id, name="demo", type="local", path="/tmp/whatever")
 
@@ -190,7 +210,9 @@ def reset_doc_hashes():
 @pytest.fixture
 def fake_client(monkeypatch):
     fake = _FakeVectorClient()
+    fake.keyword = _FakeKeywordClient()
     monkeypatch.setattr(indexer_module, "client", fake)
+    monkeypatch.setattr(indexer_module, "keyword_client", fake.keyword)
     return fake
 
 
@@ -205,6 +227,7 @@ async def test_index_document_success_records_hash(fake_client, monkeypatch):
 
     assert warning is None
     assert fake_client.upserted == [("src-1", "a.md", 1)]
+    assert fake_client.keyword.upserted == [("src-1", "a.md")]
     assert indexer_module._doc_hashes["src-1"]["a.md"]
 
 
@@ -315,6 +338,7 @@ async def test_remove_document_clears_hash_and_deletes(fake_client):
     assert "a.md" not in indexer_module._doc_hashes.get("src-1", {})
     assert "a.md" not in indexer_module._doc_shas.get("src-1", {})
     assert fake_client.deleted_docs == [("src-1", "a.md")]
+    assert fake_client.keyword.deleted_docs == [("src-1", "a.md")]
 
 
 @pytest.mark.asyncio
@@ -325,6 +349,7 @@ async def test_delete_source_index_clears_all_state(fake_client):
     await indexer_module.delete_source_index("src-1")
 
     assert fake_client.deleted_collections == ["src-1"]
+    assert fake_client.keyword.deleted_sources == ["src-1"]
     assert "src-1" not in indexer_module._doc_hashes
     assert "src-1" not in indexer_module._doc_shas
 
