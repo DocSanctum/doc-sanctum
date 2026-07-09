@@ -45,7 +45,7 @@
           {{ t('search.shortcutHint', { shortcut: searchShortcutLabel }) }} · {{ t('search.tabSwitchHint', { mode: nextModeLabel }) }}
         </p>
       </div>
-      <div class="overflow-y-auto flex-1 p-1">
+      <div class="overflow-y-auto flex-1 p-1 viewer-pane-scroll">
         <p v-if="noSources" class="text-sm text-gray-400 px-3 py-4">{{ t('search.noSources') }}</p>
 
         <template v-else-if="isLoading">
