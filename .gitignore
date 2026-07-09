@@ -34,6 +34,10 @@ frontend/build/
 # Docker
 *.dockerignore
 .docker_last_build
+backend/certs/*
+!backend/certs/.gitkeep
+frontend/certs/*
+!frontend/certs/.gitkeep
 .docker_last_mode
 
 # OS

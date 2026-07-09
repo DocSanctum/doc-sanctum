@@ -20,8 +20,21 @@ ENV HTTP_PROXY=${HTTP_PROXY} \
 ARG HOME=/root
 ENV HOME=${HOME}
 
+# Optional corporate CA certificate(s), for TLS-intercepting proxies.
+# Drop PEM-encoded certs as backend/certs/*.crt (gitignored) before building;
+# an empty directory is a no-op. Trusts them for both `pip install` below
+# and the app's own outbound httpx requests to remote doc sources at runtime.
+COPY certs/ /usr/local/share/ca-certificates/corporate/
+RUN update-ca-certificates
+ENV PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# certifi ships its own bundled roots and ignores the OS trust store above,
+# so extend it with the same corporate CA(s) for libraries (httpx) that rely on it.
+RUN cat /usr/local/share/ca-certificates/corporate/*.crt 2>/dev/null >> "$(python -c 'import certifi; print(certifi.where())')" || true
 
 # Pre-download and warm the local semantic-search embedding model at build
 # time (research.md §2 deployment note) so registering a source doesn't pay

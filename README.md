@@ -48,7 +48,38 @@ Copy `.env.example` to `.env` and adjust as needed. The defaults work for a sing
 - `GITHUB_TOKEN` / `GITLAB_TOKEN` — needed for private repos, and to raise GitHub's API rate limit from 60 to 5000 requests/hour.
 - `BACKEND_PORT`, `FRONTEND_PORT` — change these if the defaults are already taken on your machine.
 - `BACKEND_CPU_LIMIT` / `BACKEND_MEMORY_LIMIT` — cap the backend's CPU/memory in the production stack, so a large indexing job can't starve the rest of the machine.
-- `HTTP_PROXY` / `HTTPS_PROXY` — for building and running behind a corporate proxy.
+- `HTTP_PROXY` / `HTTPS_PROXY` — for building and running behind a corporate proxy, see below.
+
+## Running behind a corporate proxy
+
+If your network only reaches the internet through a proxy, set these in `.env` before building:
+
+```bash
+HTTP_PROXY=http://proxy.internal.example.com:8080
+HTTPS_PROXY=http://proxy.internal.example.com:8080
+NO_PROXY=localhost,127.0.0.1
+```
+
+They're used in two places:
+
+- **At build time** — `pip install`, `npm install`, and the embedding model download all go through the proxy.
+- **At runtime** — the backend's outbound requests to remote GitHub/GitLab/HTTP sources go through it too.
+
+Because these are baked in as build args, changing them in `.env` only takes effect on the next rebuild: run `./start.sh --build` (or `./start.sh --dev --build`) after editing them.
+
+### Corporate CA certificates (TLS-intercepting proxies)
+
+Some corporate proxies intercept HTTPS and re-sign traffic with an internal CA. If that's your setup, `pip install`, `npm install`, and the backend's own outbound requests will all fail certificate verification until that CA is trusted — proxy settings alone don't fix this.
+
+To trust it, drop your PEM-encoded root/intermediate certificate(s) as `.crt` files into these gitignored directories before building, then rebuild:
+
+```bash
+cp your-corporate-ca.crt backend/certs/
+cp your-corporate-ca.crt frontend/certs/
+./start.sh --build
+```
+
+Leaving both directories empty is a no-op — nothing else changes. No `.env` variable is needed for this; it's picked up directly from the files at build time.
 
 ## Using it from Claude or another MCP client
 
