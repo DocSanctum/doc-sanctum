@@ -2,6 +2,7 @@ import asyncio
 import functools
 import logging
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -9,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
-from ..core.database import async_session_factory, get_session
+from ..core.database import async_session_factory, get_session, get_setting, set_setting
 from ..models.source import Source, SourceIcon, SourceType
 from ..services.poller import poll_now
 from ..services.watcher import register_index_listener, start_watching, stop_watching
@@ -23,6 +24,11 @@ from ..vectorstore.indexer import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["sources"])
+
+# backend/sample-docs, baked into the image (prod) or bind-mounted with the
+# rest of backend/ (dev) — see backend/Dockerfile and docker-compose.override.yml.
+_SAMPLE_DOCS_PATH = Path(__file__).resolve().parents[2] / "sample-docs"
+_SAMPLE_SOURCE_SEEDED_KEY = "sample_source_seeded"
 
 _DEFAULT_POLL: dict[str, int] = {
     "github": 600,
@@ -169,6 +175,53 @@ async def resume_local_sources() -> None:
         )
     for row in rows:
         asyncio.create_task(_resume_local_source(Source.from_row(dict(row))))
+
+
+async def seed_sample_source() -> None:
+    """Called once at app startup (main.py lifespan), after
+    resume_local_sources(). On a brand-new install (no sources registered
+    yet) this registers the bundled sample-docs/ folder as a local source so
+    first-run users land on a working example instead of an empty tree. Gated
+    by the `sample_source_seeded` setting so it only ever runs once per
+    database — deleting the sample source later doesn't bring it back."""
+    if await get_setting(_SAMPLE_SOURCE_SEEDED_KEY) is not None:
+        return
+    await set_setting(_SAMPLE_SOURCE_SEEDED_KEY, "true")
+
+    if settings.deployment_mode == "scaleout" or not _SAMPLE_DOCS_PATH.is_dir():
+        return
+
+    async with async_session_factory() as session:
+        source_count = (
+            await session.execute(text("SELECT COUNT(*) FROM source"))
+        ).scalar_one()
+    if source_count:
+        return
+
+    source = Source(
+        name="Sample Docs", type="local", path=str(_SAMPLE_DOCS_PATH), icon="📚"
+    )
+    try:
+        await create_index(source)
+    except EngineUnavailableError:
+        logger.warning("Skipped seeding sample source: vector store unavailable")
+        return
+
+    async with async_session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO source (id,name,type,path,polling_interval_seconds,created_at,status,error_message,icon)"
+                " VALUES (:id,:name,:type,:path,:poll,:created_at,:status,:err,:icon)"
+            ),
+            {**source.to_dict(), "poll": None, "err": None},
+        )
+        await session.commit()
+
+    watch_root = os.path.expanduser(source.path)
+    start_watching(source.id, watch_root)
+    register_index_listener(
+        source.id, functools.partial(handle_watch_event, source, watch_root)
+    )
 
 
 @router.post("/sources", status_code=201)
