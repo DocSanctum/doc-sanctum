@@ -59,7 +59,7 @@ async def fetch_gitlab_tree(url: str, source_id: str) -> dict[str, Any]:
     # page — re-probing anonymous-then-auth on each of a large repo's 100+
     # pages would double the request count for private repos.
     use_auth = False
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
         while True:
             tree_url = f"{base}/repository/tree"
             params: dict[str, str | int] = {

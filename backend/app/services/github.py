@@ -50,7 +50,7 @@ def _content_api_url(host: str, owner: str, repo: str, path: str) -> str:
 async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
     host, owner, repo = _parse_github_url(url)
     api_url = _api_tree_url(host, owner, repo)
-    async with httpx.AsyncClient(timeout=15) as client:
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
         resp = await request_with_auth_fallback(
             client,
             api_url,
