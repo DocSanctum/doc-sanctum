@@ -36,7 +36,12 @@ async def lifespan(app: FastAPI):
     init_engine()
     await resume_local_sources()
     await start_polling_all()
-    yield
+    # Starlette never forwards the "lifespan" scope to mounted sub-apps, so
+    # streamable_http_app()'s own lifespan (which starts this) never runs on
+    # its own; without it every /mcp-http request fails with
+    # "Task group is not initialized. Make sure to use run()."
+    async with mcp.session_manager.run():
+        yield
 
 
 app = FastAPI(title="DocSanctum", lifespan=lifespan)
