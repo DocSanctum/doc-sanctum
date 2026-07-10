@@ -1,0 +1,93 @@
+name: Dependency Audit
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  backend:
+    name: Backend Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pip-audit
+      - name: pip-audit
+        id: audit
+        run: |
+          set +e
+          pip-audit -r backend/requirements.txt > audit-output.txt 2>&1
+          echo "found=$?" >> "$GITHUB_OUTPUT"
+          cat audit-output.txt
+      - name: File or update tracking issue
+        if: steps.audit.outputs.found != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="chore: backend dependency vulnerabilities (automated audit)"
+          BODY_FILE="$(mktemp)"
+          {
+            echo "Weekly \`pip-audit -r backend/requirements.txt\` found known vulnerabilities:"
+            echo
+            echo '```'
+            cat audit-output.txt
+            echo '```'
+            echo
+            echo "_Filed automatically by the Dependency Audit workflow (run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}). Close this issue once the audit is clean; a new one will be filed if vulnerabilities reappear._"
+          } > "$BODY_FILE"
+          existing="$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$BODY_FILE"
+          else
+            gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+          fi
+
+  frontend:
+    name: Frontend Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: npm audit
+        id: audit
+        run: |
+          set +e
+          npm audit --audit-level=high > audit-output.txt 2>&1
+          echo "found=$?" >> "$GITHUB_OUTPUT"
+          cat audit-output.txt
+        working-directory: frontend
+      - name: File or update tracking issue
+        if: steps.audit.outputs.found != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TITLE="chore: frontend dependency vulnerabilities (automated audit)"
+          BODY_FILE="$(mktemp)"
+          {
+            echo "Weekly \`npm audit --audit-level=high\` in frontend/ found known vulnerabilities:"
+            echo
+            echo '```'
+            cat frontend/audit-output.txt
+            echo '```'
+            echo
+            echo "_Filed automatically by the Dependency Audit workflow (run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}). Close this issue once the audit is clean; a new one will be filed if vulnerabilities reappear._"
+          } > "$BODY_FILE"
+          existing="$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body-file "$BODY_FILE"
+          else
+            gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+          fi
