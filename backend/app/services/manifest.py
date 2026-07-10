@@ -68,7 +68,7 @@ async def fetch_manifest_tree(
     base_url: str, source_id: str, source_name: str
 ) -> dict[str, Any]:
     manifest_url = base_url.rstrip("/") + "/index.json"
-    async with httpx.AsyncClient(timeout=10) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
         resp = await client.get(manifest_url)
         if resp.status_code == 404:
             raise FileNotFoundError(f"index.json not found at {manifest_url}")

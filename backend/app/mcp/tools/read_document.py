@@ -32,7 +32,7 @@ async def _read_github(source: Source, path: str) -> str:
     # directly from the Contents API, instead of a JSON envelope with the
     # content base64-encoded.
     raw_accept = {"Accept": "application/vnd.github.v3.raw"}
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await request_with_auth_fallback(
             client,
             url,
@@ -49,7 +49,7 @@ async def _read_github(source: Source, path: str) -> str:
 async def _read_gitlab(source: Source, path: str) -> str:
     host, project_path = _parse_gitlab_url(source.path)
     url = _content_raw_url(host, project_path, path)
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await request_with_auth_fallback(
             client,
             url,
@@ -66,7 +66,7 @@ async def _read_gitlab(source: Source, path: str) -> str:
 async def _read_http(source: Source, path: str) -> str:
     base = source.path.rstrip("/")
     url = f"{base}/{path.lstrip('/')}"
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
         resp = await client.get(url)
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
