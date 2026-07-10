@@ -7,7 +7,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .api import deployment, files, locale, search, sources, sse
 from .api import mcp as mcp_api
-from .api.sources import resume_local_sources
+from .api.sources import resume_local_sources, seed_sample_source
 from .core.database import create_tables
 from .mcp.server import mcp
 from .services.poller import start_polling_all
@@ -35,6 +35,7 @@ async def lifespan(app: FastAPI):
     await create_tables()
     init_engine()
     await resume_local_sources()
+    await seed_sample_source()
     await start_polling_all()
     yield
 
