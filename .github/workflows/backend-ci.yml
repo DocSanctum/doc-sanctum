@@ -67,3 +67,19 @@ jobs:
           push: false
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install pip-audit
+      # Non-blocking for now: known vulnerabilities already exist in pinned
+      # deps (starlette, mcp, chromadb, python-multipart) and fixing them
+      # requires separate upgrade work, tracked outside this CI change.
+      - name: pip-audit
+        run: pip-audit -r backend/requirements.txt
+        continue-on-error: true
