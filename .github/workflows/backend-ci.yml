@@ -6,6 +6,10 @@ on:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
 
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint & Format

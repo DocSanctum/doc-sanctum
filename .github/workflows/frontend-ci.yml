@@ -6,6 +6,10 @@ on:
       - 'frontend/**'
       - '.github/workflows/frontend-ci.yml'
 
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     name: ESLint
