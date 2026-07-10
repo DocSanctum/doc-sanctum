@@ -16,10 +16,11 @@
     </div>
     <TableOfContents
       v-if="!loading && !fetchError"
+      :pane-id="paneId"
       :entries="toc.entries.value"
       :active-id="toc.activeId.value"
       class="toc-column hidden lg:block"
-      :class="{ 'toc-column--collapsed': tocCollapsed }"
+      :class="{ 'toc-column--collapsed': isTocCollapsed(paneId) }"
       @select="scrollToHeading"
     />
   </div>
@@ -37,18 +38,19 @@ import { useTheme } from '../../composables/useTheme'
 import { useToc } from '../../composables/useToc'
 import { useViewerUrl } from '../../composables/useViewerUrl'
 import { useSearchReveal } from '../../composables/useSearchReveal'
+import type { PaneId } from '../../types'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
 
 const props = withDefaults(
-  defineProps<{ sourceId: string; filePath: string; active?: boolean }>(),
+  defineProps<{ paneId: PaneId; sourceId: string; filePath: string; active?: boolean }>(),
   { active: true }
 )
 const emit = defineEmits<{ navigate: [path: string] }>()
 
 const { t } = useI18n()
 const { render } = useMarkdown()
-const { fontSize, tocCollapsed, lineNumbers } = useViewerSettings()
+const { fontSize, isTocCollapsed, lineNumbers } = useViewerSettings()
 const { theme } = useTheme()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
 const { copy, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
