@@ -73,9 +73,7 @@ def _patch_index_and_watch(monkeypatch):
 
 async def _source_count(factory) -> int:
     async with factory() as session:
-        return (
-            await session.execute(text("SELECT COUNT(*) FROM source"))
-        ).scalar_one()
+        return (await session.execute(text("SELECT COUNT(*) FROM source"))).scalar_one()
 
 
 @pytest.mark.asyncio
@@ -97,7 +95,9 @@ async def test_seed_registers_sample_source_on_empty_db(
 
 
 @pytest.mark.asyncio
-async def test_seed_is_noop_on_second_call(monkeypatch, session_factory, sample_docs_dir):
+async def test_seed_is_noop_on_second_call(
+    monkeypatch, session_factory, sample_docs_dir
+):
     _patch_index_and_watch(monkeypatch)
 
     await sources_module.seed_sample_source()
@@ -140,7 +140,9 @@ async def test_seed_skips_when_sample_docs_dir_missing(
 
 
 @pytest.mark.asyncio
-async def test_seed_skips_in_scaleout_mode(monkeypatch, session_factory, sample_docs_dir):
+async def test_seed_skips_in_scaleout_mode(
+    monkeypatch, session_factory, sample_docs_dir
+):
     indexed, _, _ = _patch_index_and_watch(monkeypatch)
     monkeypatch.setattr(sources_module.settings, "deployment_mode", "scaleout")
 
