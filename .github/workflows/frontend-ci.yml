@@ -87,3 +87,23 @@ jobs:
           push: false
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
+
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      # Non-blocking for now: the esbuild/vite/vitest dev-dependency chain
+      # already has known vulnerabilities and fixing them requires a
+      # breaking vite 8.x upgrade, tracked outside this CI change.
+      - name: npm audit
+        run: npm audit --audit-level=high
+        working-directory: frontend
+        continue-on-error: true
