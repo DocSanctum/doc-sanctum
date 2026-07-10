@@ -45,6 +45,7 @@
     <div ref="scrollRef" class="viewer-pane-scroll flex-1 overflow-y-auto min-h-0">
       <MarkdownViewer
         v-if="pane.sourceId && pane.filePath"
+        :pane-id="paneId"
         :source-id="pane.sourceId"
         :file-path="pane.filePath"
         :active="isActive"

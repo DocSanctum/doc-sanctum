@@ -32,12 +32,16 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TocEntry } from '../../composables/useToc'
 import { useViewerSettings } from '../../composables/useViewerSettings'
+import type { PaneId } from '../../types'
 
-const props = defineProps<{ entries: TocEntry[]; activeId: string | null }>()
+const props = defineProps<{ paneId: PaneId; entries: TocEntry[]; activeId: string | null }>()
 defineEmits<{ select: [id: string] }>()
 
 const { t } = useI18n()
-const { tocCollapsed, toggleToc } = useViewerSettings()
+const { isTocCollapsed, toggleToc: toggleTocSetting } = useViewerSettings()
+
+const tocCollapsed = computed(() => isTocCollapsed(props.paneId))
+const toggleToc = () => toggleTocSetting(props.paneId)
 
 const minLevel = computed(() =>
   props.entries.length ? Math.min(...props.entries.map((e) => e.level)) : 1
