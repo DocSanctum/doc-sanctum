@@ -7,6 +7,7 @@ from ..models.source import Source
 from .github import fetch_github_tree
 from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
+from .token_resolver import resolve_access_token
 
 
 def _build_node(abs_path: str, rel_path: str, name: str) -> dict[str, Any]:
@@ -45,9 +46,13 @@ def _scan_dir(abs_dir: str, rel_dir: str) -> list[dict[str, Any]]:
 
 async def build_remote_tree(source: Source) -> dict[str, Any]:
     if source.type == "github":
-        return await fetch_github_tree(source.path, source.id)
+        return await fetch_github_tree(
+            source.path, source.id, resolve_access_token(source)
+        )
     if source.type == "gitlab":
-        return await fetch_gitlab_tree(source.path, source.id)
+        return await fetch_gitlab_tree(
+            source.path, source.id, resolve_access_token(source)
+        )
     return await fetch_manifest_tree(source.path, source.id, source.name)
 
 

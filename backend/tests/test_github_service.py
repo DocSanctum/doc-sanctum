@@ -62,19 +62,18 @@ def test_content_api_url_uses_enterprise_api_v3_prefix():
     )
 
 
-def test_github_headers_includes_token_from_env(monkeypatch):
-    """Verifies the PAT is carried into the Authorization header once it
-    reaches the container as an environment variable.
+def test_github_headers_includes_given_token():
+    """Verifies the PAT is carried into the Authorization header. Callers
+    resolve the token themselves (per-source or global env — see
+    services/token_resolver.py) and pass it in explicitly.
 
     `token` scheme (not `Bearer`) is used since some older self-hosted GHE
     instances only accept the former.
     """
-    monkeypatch.setenv("GITHUB_TOKEN", "ghp_test123")
-    headers = _github_headers()
+    headers = _github_headers("ghp_test123")
     assert headers["Authorization"] == "token ghp_test123"
 
 
-def test_github_headers_omits_auth_when_no_token(monkeypatch):
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    headers = _github_headers()
+def test_github_headers_omits_auth_when_no_token():
+    headers = _github_headers(None)
     assert "Authorization" not in headers

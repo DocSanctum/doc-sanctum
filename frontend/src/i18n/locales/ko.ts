@@ -47,6 +47,8 @@ export const ko: MessageSchema = {
       typeGitlab: 'GitLab 저장소',
       path: '경로 / URL',
       pollInterval: '폴링 간격 (초)',
+      accessToken: '접근 토큰',
+      accessTokenPlaceholder: 'ghp_... 또는 glpat-...',
       indexingNotice:
         '문서 목록을 확인하는 중입니다. 등록 후에는 목록에 바로 표시되며, 검색 색인은 백그라운드에서 계속 진행됩니다.',
       registerFailed: '등록 실패',
@@ -54,6 +56,12 @@ export const ko: MessageSchema = {
     editSourceModal: {
       title: '소스 정보 수정',
       name: '이름',
+      accessToken: '접근 토큰',
+      accessTokenConfigured: '설정됨',
+      accessTokenNotConfigured: '설정 안 됨',
+      accessTokenPlaceholder: '교체하려면 새 토큰을 입력하세요',
+      removeToken: '삭제',
+      removeTokenFailed: '토큰 삭제 실패',
       saveFailed: '저장 실패',
     },
     confirmDeleteModal: {

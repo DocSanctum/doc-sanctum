@@ -27,6 +27,10 @@
           <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">{{ t('sidebar.addSourceModal.pollInterval') }}</label>
           <input v-model.number="form.polling_interval_seconds" type="number" class="input" :placeholder="defaultPoll.toString()" min="30" />
         </div>
+        <div v-if="form.type === 'github' || form.type === 'gitlab'" class="mb-3">
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">{{ t('sidebar.addSourceModal.accessToken') }} {{ t('common.optional') }}</label>
+          <input v-model="form.access_token" type="password" autocomplete="off" class="input" :placeholder="t('sidebar.addSourceModal.accessTokenPlaceholder')" />
+        </div>
         <p v-if="error" class="text-red-400 text-xs mb-3">{{ error }}</p>
         <div class="flex gap-2 justify-end">
           <button type="button" class="btn-secondary" :disabled="loading" @click="$emit('close')">{{ t('common.cancel') }}</button>
@@ -60,12 +64,13 @@ const isScaleout = computed(() => deploymentQuery.data.value?.mode === 'scaleout
 const loading = ref(false)
 const error = ref('')
 
-const form = ref<{ name: string; type: SourceType; path: string; polling_interval_seconds: number | null; icon: SourceIcon | null }>({
+const form = ref<{ name: string; type: SourceType; path: string; polling_interval_seconds: number | null; icon: SourceIcon | null; access_token: string }>({
   name: '',
   type: 'local',
   path: '',
   polling_interval_seconds: null,
   icon: null,
+  access_token: '',
 })
 
 watch(isScaleout, (scaleout) => {
@@ -91,6 +96,7 @@ async function submit() {
       path: form.value.path,
       polling_interval_seconds: form.value.polling_interval_seconds ?? undefined,
       icon: form.value.icon ?? undefined,
+      access_token: form.value.access_token || undefined,
     })
     emit('close')
   } catch (e: any) {

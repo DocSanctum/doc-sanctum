@@ -13,6 +13,7 @@ from ..vectorstore.indexer import sync_source_index
 from .github import fetch_github_tree
 from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
+from .token_resolver import resolve_access_token
 from .watcher import _queues
 
 logger = logging.getLogger(__name__)
@@ -26,9 +27,13 @@ async def _poll_source(source: Source) -> None:
         # API (e.g. GitLab's tree endpoint for a large repo) at once.
         async with get_tree_lock(source.id):
             if source.type == "github":
-                tree = await fetch_github_tree(source.path, source.id)
+                tree = await fetch_github_tree(
+                    source.path, source.id, resolve_access_token(source)
+                )
             elif source.type == "gitlab":
-                tree = await fetch_gitlab_tree(source.path, source.id)
+                tree = await fetch_gitlab_tree(
+                    source.path, source.id, resolve_access_token(source)
+                )
             else:
                 tree = await fetch_manifest_tree(source.path, source.id, source.name)
             set_cached(source.id, tree)

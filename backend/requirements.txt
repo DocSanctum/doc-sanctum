@@ -9,3 +9,4 @@ pydantic-settings==2.5.2
 mcp>=1.23.0
 chromadb==1.5.9
 geoip2fast==1.2.2
+cryptography==49.0.0

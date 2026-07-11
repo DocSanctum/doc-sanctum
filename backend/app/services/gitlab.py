@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 from urllib.parse import quote
@@ -10,9 +9,8 @@ import httpx
 from .tree_utils import build_blob_tree, request_with_auth_fallback
 
 
-def _gitlab_headers() -> dict[str, str]:
+def _gitlab_headers(token: str | None) -> dict[str, str]:
     headers: dict[str, str] = {}
-    token = os.getenv("GITLAB_TOKEN")
     if token:
         # PRIVATE-TOKEN is GitLab's long-standing scheme, supported
         # identically on gitlab.com and every self-hosted CE/EE version.
@@ -49,10 +47,12 @@ def _content_raw_url(host: str, project_path: str, path: str) -> str:
     )
 
 
-async def fetch_gitlab_tree(url: str, source_id: str) -> dict[str, Any]:
+async def fetch_gitlab_tree(
+    url: str, source_id: str, token: str | None = None
+) -> dict[str, Any]:
     host, project_path = _parse_gitlab_url(url)
     base = _project_api_base(host, project_path)
-    token_configured = bool(os.getenv("GITLAB_TOKEN"))
+    token_configured = bool(token)
     md_blobs: list[dict[str, Any]] = []
     page = 1
     # Determined from page 1's response, then reused as-is for every later
@@ -73,7 +73,7 @@ async def fetch_gitlab_tree(url: str, source_id: str) -> dict[str, Any]:
                     tree_url,
                     params=params,
                     no_auth_headers={},
-                    auth_headers=_gitlab_headers(),
+                    auth_headers=_gitlab_headers(token),
                     token_configured=token_configured,
                 )
                 use_auth = "PRIVATE-TOKEN" in resp.request.headers
@@ -81,7 +81,7 @@ async def fetch_gitlab_tree(url: str, source_id: str) -> dict[str, Any]:
                 resp = await client.get(
                     tree_url,
                     params=params,
-                    headers=_gitlab_headers() if use_auth else {},
+                    headers=_gitlab_headers(token) if use_auth else {},
                 )
             resp.raise_for_status()
             items = resp.json()

@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
 import { api } from '../services/api'
-import type { RegisterSourcePayload, Source, SourceIcon } from '../types'
+import type { RegisterSourcePayload, PatchSourcePayload, SourceIcon } from '../types'
 
 // 선택 가능한 소스 아이콘 팔레트 — 소스 추가/수정 화면의 아이콘 그리드에서 고를 수 있다.
 export const SOURCE_ICON_OPTIONS: SourceIcon[] =
@@ -29,7 +29,7 @@ export function useSources() {
   })
 
   const patch = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Pick<Source, 'name' | 'polling_interval_seconds' | 'icon'>> }) =>
+    mutationFn: ({ id, data }: { id: string; data: PatchSourcePayload }) =>
       api.patchSource(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sources'] }),
   })

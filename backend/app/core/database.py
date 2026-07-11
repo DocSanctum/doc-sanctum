@@ -59,6 +59,13 @@ async def create_tables() -> None:
         existing_columns = {row[1] for row in result.fetchall()}
         if "icon" not in existing_columns:
             await conn.execute(text("ALTER TABLE source ADD COLUMN icon TEXT"))
+        # Per-source encrypted access token (specs/007-source-access-token).
+        # NULL for sources with no source-level token, in which case
+        # token_resolver falls back to the global GITHUB_TOKEN/GITLAB_TOKEN.
+        if "access_token_encrypted" not in existing_columns:
+            await conn.execute(
+                text("ALTER TABLE source ADD COLUMN access_token_encrypted TEXT")
+            )
 
 
 async def get_setting(key: str, default: str | None = None) -> str | None:

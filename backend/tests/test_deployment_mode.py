@@ -25,6 +25,10 @@ async def test_lifespan_propagates_init_engine_failure(monkeypatch):
         return None
 
     monkeypatch.setattr(main_module, "create_tables", fake_create_tables)
+    # Master-key generation (specs/007-source-access-token) writes to
+    # /data — irrelevant to this test's focus (init_engine failure
+    # propagation) and not writable in a sandboxed test environment.
+    monkeypatch.setattr(main_module, "ensure_master_key", lambda: None)
     monkeypatch.setattr(main_module, "init_engine", boom)
     monkeypatch.setattr(main_module, "start_polling_all", fake_start_polling_all)
 
