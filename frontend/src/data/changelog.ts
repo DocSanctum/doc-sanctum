@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.9.0',
+    date: '2026-07-11',
+    changes: [
+      'CI: automated issue triage — new issues get an analysis comment pointing to likely-relevant code',
+      'CI: dependency audit now attempts automated fixes for vulnerabilities and opens a PR when safe',
+      'CI: opt-in PR review — comment "@claude review" on a PR to get a findings comment',
+    ],
+  },
+  {
     version: '0.8.0',
     date: '2026-07-09',
     changes: [
