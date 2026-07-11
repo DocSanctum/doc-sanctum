@@ -6,8 +6,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
+  pull-requests: write
+  id-token: write
 
 jobs:
   backend:
@@ -27,6 +29,7 @@ jobs:
           echo "found=$?" >> "$GITHUB_OUTPUT"
           cat audit-output.txt
       - name: File or update tracking issue
+        id: file_issue
         if: steps.audit.outputs.found != '0'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,9 +48,59 @@ jobs:
           existing="$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file "$BODY_FILE"
+            echo "issue_number=$existing" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+            issue_url="$(gh issue create --title "$TITLE" --body-file "$BODY_FILE")"
+            echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check for an existing fix PR
+        id: check_pr
+        if: steps.audit.outputs.found != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_pr="$(gh pr list --state open --search "chore: auto-fix backend dependency vulnerabilities in:title" --json number --jq '.[0].number')"
+          echo "exists=${existing_pr:+true}" >> "$GITHUB_OUTPUT"
+      - name: Attempt automated fix
+        if: steps.audit.outputs.found != '0' && steps.check_pr.outputs.exists != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Weekly pip-audit found vulnerabilities in backend/requirements.txt,
+            tracked in issue #${{ steps.file_issue.outputs.issue_number }}. Read
+            audit-output.txt (repo root) for the full findings.
+
+            Try to fix this with minimal, targeted version bumps in
+            backend/requirements.txt only — no unrelated changes. Then verify:
+            - `pip install -r backend/requirements.txt -r backend/requirements-dev.txt`
+            - `pytest backend/tests/ -v`
+            - `ruff check backend/` and `ruff format --check backend/`
+            - `pip-audit -r backend/requirements.txt` (confirm the flagged
+              vulnerabilities are actually gone)
+
+            If everything above passes cleanly:
+            1. `git checkout -b auto-fix/backend-deps-$(date +%Y%m%d)`
+            2. Commit with a message referencing issue #${{ steps.file_issue.outputs.issue_number }}
+            3. `git push -u origin HEAD`
+            4. `gh pr create --draft --title "chore: auto-fix backend dependency vulnerabilities" --body "..."`,
+               with the body explaining what was bumped and why, and noting it
+               closes #${{ steps.file_issue.outputs.issue_number }}
+
+            If you CANNOT cleanly fix it (needs a breaking/major-version
+            upgrade, tests fail and you can't resolve it without broader
+            changes, or it's not a simple version bump): do NOT commit, push,
+            or open a PR. Instead run
+            `gh issue comment ${{ steps.file_issue.outputs.issue_number }} --body "..."`
+            explaining specifically what blocks an automatic fix.
+
+            Do not touch anything outside backend/. Do not modify
+            backend/requirements-dev.txt.
+          claude_args: |
+            --disallowedTools "Task"
+            --allowedTools "Bash,Edit,Write"
+            --max-turns 60
 
   frontend:
     name: Frontend Audit
@@ -70,6 +123,7 @@ jobs:
           cat audit-output.txt
         working-directory: frontend
       - name: File or update tracking issue
+        id: file_issue
         if: steps.audit.outputs.found != '0'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -88,6 +142,58 @@ jobs:
           existing="$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')"
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body-file "$BODY_FILE"
+            echo "issue_number=$existing" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --title "$TITLE" --body-file "$BODY_FILE"
+            issue_url="$(gh issue create --title "$TITLE" --body-file "$BODY_FILE")"
+            echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Check for an existing fix PR
+        id: check_pr
+        if: steps.audit.outputs.found != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          existing_pr="$(gh pr list --state open --search "chore: auto-fix frontend dependency vulnerabilities in:title" --json number --jq '.[0].number')"
+          echo "exists=${existing_pr:+true}" >> "$GITHUB_OUTPUT"
+      - name: Attempt automated fix
+        if: steps.audit.outputs.found != '0' && steps.check_pr.outputs.exists != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            Weekly npm audit found vulnerabilities in frontend/, tracked in
+            issue #${{ steps.file_issue.outputs.issue_number }}. Read
+            frontend/audit-output.txt for the full findings.
+
+            Try to fix this with minimal, targeted version bumps in
+            frontend/package.json only — no unrelated changes. Then verify
+            (all from the frontend/ directory):
+            - `npm install` (updates package-lock.json for the new versions)
+            - `npm run lint`
+            - `npm run typecheck`
+            - `npm run test`
+            - `npm run build`
+            - `npm audit --audit-level=high` (confirm the flagged
+              vulnerabilities are actually gone)
+
+            If everything above passes cleanly:
+            1. `git checkout -b auto-fix/frontend-deps-$(date +%Y%m%d)`
+            2. Commit with a message referencing issue #${{ steps.file_issue.outputs.issue_number }}
+            3. `git push -u origin HEAD`
+            4. `gh pr create --draft --title "chore: auto-fix frontend dependency vulnerabilities" --body "..."`,
+               with the body explaining what was bumped and why, and noting it
+               closes #${{ steps.file_issue.outputs.issue_number }}
+
+            If you CANNOT cleanly fix it (needs a breaking/major-version
+            upgrade, tests or build fail and you can't resolve it without
+            broader changes, or it's not a simple version bump): do NOT
+            commit, push, or open a PR. Instead run
+            `gh issue comment ${{ steps.file_issue.outputs.issue_number }} --body "..."`
+            explaining specifically what blocks an automatic fix.
+
+            Do not touch anything outside frontend/.
+          claude_args: |
+            --disallowedTools "Task"
+            --allowedTools "Bash,Edit,Write"
+            --max-turns 60
