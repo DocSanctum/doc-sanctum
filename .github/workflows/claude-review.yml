@@ -1,0 +1,58 @@
+name: Claude PR Review
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-review-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review on request
+    if: |
+      github.event.issue.pull_request != null &&
+      contains(github.event.comment.body, '@claude review')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/pull/${{ github.event.issue.number }}/head
+          fetch-depth: 0
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            A `@claude review` comment just requested a review of pull request
+            #${{ github.event.issue.number }}. Review it for correctness bugs —
+            logic errors, edge cases, security issues, regressions — not style
+            or formatting (CI already covers lint/format).
+
+            Diff scope: this branch against `main` (`git diff main...HEAD`).
+
+            Post your findings as a single comment with:
+            `gh pr comment ${{ github.event.issue.number }} --body "..."`
+
+            Structure the comment as: a one-line summary first (e.g. "No
+            blocking issues found" or "N issue(s) found"), then each finding
+            with a file:line reference, what's wrong, and why it matters. Skip
+            nitpicks — focus on things that would actually break behavior. If
+            you find nothing, say so briefly; don't pad the comment with
+            generic observations.
+
+            Do not modify any files, do not open a pull request, and do not
+            approve/request changes/close this PR. This is a comment-only
+            review.
+          claude_args: |
+            --disallowedTools "Edit,Write,NotebookEdit,Task"
+            --allowedTools "Bash(gh pr comment:*),Bash(git diff:*),Bash(git log:*)"
+            --max-turns 50
