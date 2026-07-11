@@ -47,9 +47,7 @@ jobs:
             delegating it to a subagent, and post the comment before ending
             your turn — do not stop early assuming background work is still
             running.
-          show_full_output: "true"
           claude_args: |
             --disallowedTools "Edit,Write,NotebookEdit,Task"
             --allowedTools "Bash(gh issue comment:*)"
             --max-turns 40
-            --debug
