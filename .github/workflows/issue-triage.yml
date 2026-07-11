@@ -1,0 +1,41 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    name: Analyze & Comment
+    if: github.event.issue.user.login != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            A new issue was just opened on this repository: #${{ github.event.issue.number }}.
+
+            Read the issue title and body, then look through the codebase to find the
+            files/functions most likely relevant to what's being reported or requested.
+
+            Post a single comment on the issue with:
+            `gh issue comment ${{ github.event.issue.number }} --body "..."`
+
+            The comment should include:
+            - A one-line restatement of what's being reported/requested, to confirm you
+              understood it correctly
+            - Pointers to specific files/functions likely relevant (file:line references)
+            - Any information that's missing to reproduce or scope the work, if applicable
+
+            Do not modify any files, do not open a pull request, and do not close,
+            relabel, or reassign the issue. This is analysis only.
+          claude_args: |
+            --disallowedTools "Edit,Write,NotebookEdit"
+            --max-turns 15
