@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, PatchSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse } from '../types'
 
 const BASE = '/api/v1'
 
@@ -24,7 +24,7 @@ export const api = {
   deleteSource: (id: string) =>
     request<void>(`/sources/${id}`, { method: 'DELETE' }),
 
-  patchSource: (id: string, patch: Partial<Pick<Source, 'name' | 'polling_interval_seconds' | 'icon'>>) =>
+  patchSource: (id: string, patch: PatchSourcePayload) =>
     request<Source>(`/sources/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   getTree: (sourceId: string) =>

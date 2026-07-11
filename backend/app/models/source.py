@@ -40,6 +40,10 @@ class Source:
     status: SourceStatus = "active"
     error_message: str | None = None
     icon: SourceIcon | None = None
+    # Encrypted (never plaintext) per-source access token — see
+    # backend/app/core/crypto.py and services/token_resolver.py. Excluded
+    # from to_dict(); only its presence is exposed via access_token_configured.
+    access_token_encrypted: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -52,6 +56,7 @@ class Source:
             "status": self.status,
             "error_message": self.error_message,
             "icon": self.icon,
+            "access_token_configured": self.access_token_encrypted is not None,
         }
 
     @classmethod
@@ -66,4 +71,5 @@ class Source:
             status=row["status"],
             error_message=row["error_message"],
             icon=row.get("icon"),
+            access_token_encrypted=row.get("access_token_encrypted"),
         )

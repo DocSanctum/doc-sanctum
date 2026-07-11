@@ -61,15 +61,13 @@ def test_content_raw_url_encodes_file_path():
     )
 
 
-def test_gitlab_headers_includes_private_token_from_env(monkeypatch):
-    monkeypatch.setenv("GITLAB_TOKEN", "glpat-test123")
-    headers = _gitlab_headers()
+def test_gitlab_headers_includes_given_private_token():
+    headers = _gitlab_headers("glpat-test123")
     assert headers["PRIVATE-TOKEN"] == "glpat-test123"
 
 
-def test_gitlab_headers_omits_auth_when_no_token(monkeypatch):
-    monkeypatch.delenv("GITLAB_TOKEN", raising=False)
-    headers = _gitlab_headers()
+def test_gitlab_headers_omits_auth_when_no_token():
+    headers = _gitlab_headers(None)
     assert "PRIVATE-TOKEN" not in headers
 
 
@@ -79,7 +77,6 @@ async def test_fetch_gitlab_tree_reuses_page_one_auth_decision(monkeypatch):
     pages must go straight to an authenticated request instead of
     re-attempting anonymous-first on every page — otherwise a large repo's
     100+ pages would each cost two requests instead of one."""
-    monkeypatch.setenv("GITLAB_TOKEN", "glpat-test123")
     calls: list[tuple[int, bool]] = []
 
     pages = {
@@ -106,7 +103,9 @@ async def test_fetch_gitlab_tree_reuses_page_one_auth_decision(monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
 
-    result = await fetch_gitlab_tree("https://gitlab.com/group/project", "src-1")
+    result = await fetch_gitlab_tree(
+        "https://gitlab.com/group/project", "src-1", token="glpat-test123"
+    )
 
     # page 1: anonymous attempt (rejected) + authenticated retry; page 2:
     # goes straight to authenticated, no anonymous probe.

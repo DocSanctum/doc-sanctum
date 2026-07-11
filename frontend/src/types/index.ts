@@ -14,6 +14,9 @@ export interface Source {
   status: SourceStatus
   error_message: string | null
   icon: SourceIcon | null
+  // Whether a per-source access token is stored — the token itself is
+  // never returned by the API (specs/007-source-access-token).
+  access_token_configured: boolean
 }
 
 export interface FileEntry {
@@ -64,6 +67,18 @@ export interface RegisterSourcePayload {
   path: string
   polling_interval_seconds?: number | null
   icon?: SourceIcon | null
+  // Optional per-source PAT — only meaningful for github/gitlab (ignored
+  // otherwise). Never echoed back by the API.
+  access_token?: string
+}
+
+export interface PatchSourcePayload {
+  name?: string
+  polling_interval_seconds?: number | null
+  icon?: SourceIcon | null
+  // Omit entirely to keep the existing token. "" deletes it (falls back to
+  // the server's global token). Non-empty replaces it.
+  access_token?: string
 }
 
 export type DeploymentMode = 'standalone' | 'scaleout'

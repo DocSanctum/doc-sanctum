@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 from typing import Any
 
@@ -11,9 +10,8 @@ from .tree_utils import build_blob_tree, request_with_auth_fallback
 _NO_AUTH_HEADERS = {"Accept": "application/vnd.github+json"}
 
 
-def _github_headers() -> dict[str, str]:
+def _github_headers(token: str | None) -> dict[str, str]:
     headers = dict(_NO_AUTH_HEADERS)
-    token = os.getenv("GITHUB_TOKEN")
     if token:
         # `token` (not `Bearer`) is the scheme supported since the original
         # v3 API and still accepted on github.com today; some older
@@ -47,7 +45,9 @@ def _content_api_url(host: str, owner: str, repo: str, path: str) -> str:
     return f"{_api_base_url(host)}/repos/{owner}/{repo}/contents/{path}"
 
 
-async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
+async def fetch_github_tree(
+    url: str, source_id: str, token: str | None = None
+) -> dict[str, Any]:
     host, owner, repo = _parse_github_url(url)
     api_url = _api_tree_url(host, owner, repo)
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
@@ -55,8 +55,8 @@ async def fetch_github_tree(url: str, source_id: str) -> dict[str, Any]:
             client,
             api_url,
             no_auth_headers=_NO_AUTH_HEADERS,
-            auth_headers=_github_headers(),
-            token_configured=bool(os.getenv("GITHUB_TOKEN")),
+            auth_headers=_github_headers(token),
+            token_configured=bool(token),
         )
         resp.raise_for_status()
     data = resp.json()

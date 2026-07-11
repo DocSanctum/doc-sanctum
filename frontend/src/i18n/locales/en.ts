@@ -45,6 +45,8 @@ export const en = {
       typeGitlab: 'GitLab repository',
       path: 'Path / URL',
       pollInterval: 'Polling interval (sec)',
+      accessToken: 'Access token',
+      accessTokenPlaceholder: 'ghp_... or glpat-...',
       indexingNotice:
         'Checking the document list. It will appear in the list right after registering, while search indexing continues in the background.',
       registerFailed: 'Registration failed',
@@ -52,6 +54,12 @@ export const en = {
     editSourceModal: {
       title: 'Edit source info',
       name: 'Name',
+      accessToken: 'Access token',
+      accessTokenConfigured: 'Configured',
+      accessTokenNotConfigured: 'Not configured',
+      accessTokenPlaceholder: 'Enter a new token to replace it',
+      removeToken: 'Remove',
+      removeTokenFailed: 'Failed to remove token',
       saveFailed: 'Save failed',
     },
     confirmDeleteModal: {

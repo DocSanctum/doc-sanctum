@@ -57,6 +57,7 @@ services:
       - HOME=${HOME}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-}
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-standalone}  # standalone | scaleout
       - VECTOR_STORE_HOST=${VECTOR_STORE_HOST:-vectorstore}  # only read when scaleout
       - VECTOR_STORE_PORT=8000                                # vectorstore's in-network port

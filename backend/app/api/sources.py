@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
+from ..core.crypto import encrypt_token
 from ..core.database import async_session_factory, get_session, get_setting, set_setting
 from ..models.source import Source, SourceIcon, SourceType
 from ..services.poller import poll_now
@@ -50,12 +51,19 @@ class RegisterSourceRequest(BaseModel):
     path: str
     polling_interval_seconds: int | None = None
     icon: SourceIcon | None = None
+    # Optional per-source PAT (specs/007-source-access-token). Only
+    # meaningful for github/gitlab; ignored for other source types.
+    access_token: str | None = None
 
 
 class PatchSourceRequest(BaseModel):
     name: str | None = None
     polling_interval_seconds: int | None = None
     icon: SourceIcon | None = None
+    # Omitted entirely -> keep existing token. Non-empty string -> replace
+    # (re-encrypt). Empty string "" -> delete (falls back to global .env
+    # token). Only meaningful for github/gitlab sources.
+    access_token: str | None = None
 
 
 def _reject_local_source_in_scaleout(source_type: str) -> None:
@@ -233,6 +241,11 @@ async def register_source(
     name = req.name or req.path.rstrip("/").split("/")[-1]
     poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
     is_local = req.type == "local"
+    access_token_encrypted = (
+        encrypt_token(req.access_token)
+        if req.access_token and req.type in ("github", "gitlab")
+        else None
+    )
     source = Source(
         name=name,
         type=req.type,
@@ -240,6 +253,7 @@ async def register_source(
         polling_interval_seconds=poll,
         status="active" if is_local else "syncing",
         icon=req.icon,
+        access_token_encrypted=access_token_encrypted,
     )
 
     index_warnings: list[dict] | None = None
@@ -255,10 +269,15 @@ async def register_source(
     try:
         await session.execute(
             text(
-                "INSERT INTO source (id,name,type,path,polling_interval_seconds,created_at,status,error_message,icon)"
-                " VALUES (:id,:name,:type,:path,:poll,:created_at,:status,:err,:icon)"
+                "INSERT INTO source (id,name,type,path,polling_interval_seconds,created_at,status,error_message,icon,access_token_encrypted)"
+                " VALUES (:id,:name,:type,:path,:poll,:created_at,:status,:err,:icon,:access_token_encrypted)"
             ),
-            {**source.to_dict(), "poll": poll, "err": None},
+            {
+                **source.to_dict(),
+                "poll": poll,
+                "err": None,
+                "access_token_encrypted": source.access_token_encrypted,
+            },
         )
         await session.commit()
     except Exception as exc:
@@ -290,7 +309,10 @@ async def list_sources(session: AsyncSession = Depends(get_session)) -> list[dic
         .mappings()
         .all()
     )
-    return [dict(r) for r in rows]
+    # Routed through Source.to_dict() (not a raw dict(row)) so
+    # access_token_encrypted never reaches this response — only the derived
+    # access_token_configured boolean does (FR-004, FR-009).
+    return [Source.from_row(dict(r)).to_dict() for r in rows]
 
 
 @router.delete("/sources/{source_id}", status_code=204)
@@ -310,7 +332,7 @@ async def patch_source(
     req: PatchSourceRequest,
     session: AsyncSession = Depends(get_session),
 ) -> dict:
-    await _get_or_404(session, source_id)
+    source = await _get_or_404(session, source_id)
     updates: dict = {}
     if req.name is not None:
         updates["name"] = req.name
@@ -318,6 +340,10 @@ async def patch_source(
         updates["polling_interval_seconds"] = req.polling_interval_seconds
     if "icon" in req.model_fields_set:
         updates["icon"] = req.icon
+    if "access_token" in req.model_fields_set and source.type in ("github", "gitlab"):
+        updates["access_token_encrypted"] = (
+            encrypt_token(req.access_token) if req.access_token else None
+        )
     if updates:
         set_clause = ", ".join(f"{k} = :{k}" for k in updates)
         await session.execute(

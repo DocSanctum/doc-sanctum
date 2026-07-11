@@ -11,6 +11,20 @@
           <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">{{ t('sidebar.addSourceModal.icon') }} {{ t('common.optional') }}</label>
           <IconPicker v-model="form.icon" :options="SOURCE_ICON_OPTIONS" />
         </div>
+        <div v-if="props.source.type === 'github' || props.source.type === 'gitlab'" class="mb-3">
+          <label class="text-xs text-gray-600 dark:text-gray-300 block mb-1">
+            {{ t('sidebar.editSourceModal.accessToken') }}
+            <span :class="props.source.access_token_configured ? 'text-green-500' : 'text-gray-400'">
+              ({{ props.source.access_token_configured ? t('sidebar.editSourceModal.accessTokenConfigured') : t('sidebar.editSourceModal.accessTokenNotConfigured') }})
+            </span>
+          </label>
+          <div class="flex gap-2">
+            <input v-model="form.access_token" type="password" autocomplete="off" class="input flex-1" :placeholder="t('sidebar.editSourceModal.accessTokenPlaceholder')" />
+            <button v-if="props.source.access_token_configured" type="button" class="btn-secondary text-xs" :disabled="removingToken" @click="removeToken">
+              {{ t('sidebar.editSourceModal.removeToken') }}
+            </button>
+          </div>
+        </div>
         <p v-if="error" class="text-red-400 text-xs mb-3">{{ error }}</p>
         <div class="flex gap-2 justify-end">
           <button type="button" class="btn-secondary" :disabled="loading" @click="$emit('close')">{{ t('common.cancel') }}</button>
@@ -36,11 +50,13 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 const { patch } = useSources()
 const loading = ref(false)
+const removingToken = ref(false)
 const error = ref('')
 
-const form = ref<{ name: string; icon: SourceIcon | null }>({
+const form = ref<{ name: string; icon: SourceIcon | null; access_token: string }>({
   name: props.source.name,
   icon: props.source.icon,
+  access_token: '',
 })
 
 async function submit() {
@@ -49,13 +65,33 @@ async function submit() {
   try {
     await patch.mutateAsync({
       id: props.source.id,
-      data: { name: form.value.name, icon: form.value.icon },
+      data: {
+        name: form.value.name,
+        icon: form.value.icon,
+        // Omitted entirely when blank so the existing token (if any) is left
+        // untouched — only an explicit non-empty value replaces it.
+        ...(form.value.access_token ? { access_token: form.value.access_token } : {}),
+      },
     })
     emit('close')
   } catch (e: any) {
     error.value = e.message ?? t('sidebar.editSourceModal.saveFailed')
   } finally {
     loading.value = false
+  }
+}
+
+async function removeToken() {
+  error.value = ''
+  removingToken.value = true
+  try {
+    // "" tells the backend to delete the stored token (falls back to the
+    // server's global env token afterwards).
+    await patch.mutateAsync({ id: props.source.id, data: { access_token: '' } })
+  } catch (e: any) {
+    error.value = e.message ?? t('sidebar.editSourceModal.removeTokenFailed')
+  } finally {
+    removingToken.value = false
   }
 }
 </script>
