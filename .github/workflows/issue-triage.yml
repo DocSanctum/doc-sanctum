@@ -24,8 +24,13 @@ jobs:
           prompt: |
             A new issue was just opened on this repository: #${{ github.event.issue.number }}.
 
-            Read the issue title and body, then look through the codebase to find the
-            files/functions most likely relevant to what's being reported or requested.
+            Title: ${{ github.event.issue.title }}
+
+            Body:
+            ${{ github.event.issue.body }}
+
+            Look through the codebase to find the files/functions most likely
+            relevant to what's being reported or requested above.
 
             Post a single comment on the issue with:
             `gh issue comment ${{ github.event.issue.number }} --body "..."`
