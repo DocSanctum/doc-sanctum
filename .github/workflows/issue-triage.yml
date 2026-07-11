@@ -40,4 +40,4 @@ jobs:
             relabel, or reassign the issue. This is analysis only.
           claude_args: |
             --disallowedTools "Edit,Write,NotebookEdit"
-            --max-turns 15
+            --max-turns 40
