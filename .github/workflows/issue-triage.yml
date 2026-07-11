@@ -42,10 +42,14 @@ jobs:
             - Any information that's missing to reproduce or scope the work, if applicable
 
             Do not modify any files, do not open a pull request, and do not close,
-            relabel, or reassign the issue. This is analysis only.
+            relabel, or reassign the issue. This is analysis only. Do the
+            investigation yourself directly (Read/Grep/Glob) rather than
+            delegating it to a subagent, and post the comment before ending
+            your turn — do not stop early assuming background work is still
+            running.
           show_full_output: "true"
           claude_args: |
-            --disallowedTools "Edit,Write,NotebookEdit"
+            --disallowedTools "Edit,Write,NotebookEdit,Task"
             --allowedTools "Bash(gh issue comment:*)"
             --max-turns 40
             --debug
