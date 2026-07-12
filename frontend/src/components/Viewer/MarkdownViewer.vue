@@ -318,13 +318,79 @@ function handleClick(e: MouseEvent) {
 }
 .prose .code-block-body {
   display: flex;
+  /* Default (stretch) cross-sizing lets .code-line-numbers — a nested
+     flex-column container — get inflated well past its own content height
+     (observed: ~126px of actual content stretched to ~174px), while pre.hljs
+     (overflow-x: auto) is not affected the same way, so the two boxes ended
+     up different heights and the numbers started higher than the code. Both
+     have identical content height once line count/font-size/line-height
+     match (verified), so sizing each to its own content is correct here,
+     not just a workaround. */
+  align-items: flex-start;
+}
+/* pre.hljs and .code-line-numbers each set their own font-size/line-height
+   explicitly in rem (below, per prose-sm/base/lg), rather than inheriting
+   Tailwind Typography's built-in `pre` sizing. Typography computes that
+   internally per prose-size variant and the ratios aren't identical across
+   sm/base/lg, so a single em-relative rule on the gutter could only ever
+   match one variant exactly and silently drift by a fraction of a pixel on
+   the others — small per-line, but compounding into a visible gap by the
+   bottom of a long block. Hardcoding matching values for both sides removes
+   that dependency entirely. `.prose pre.hljs code` below inherits from here. */
+.prose pre.hljs,
+.prose .code-line-numbers {
+  font-size: 0.875rem;
+  line-height: 1.3125rem;
+}
+.prose-sm pre.hljs,
+.prose-sm .code-line-numbers {
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.prose-lg pre.hljs,
+.prose-lg .code-line-numbers {
+  font-size: 1rem;
+  line-height: 1.5rem;
 }
 .prose pre.hljs {
+  /* Zero out: Tailwind Typography puts a ~24px top/bottom margin on `pre`
+     for prose spacing, but `.code-block` (the outer wrapper) already
+     provides that via its own margin. Left in place, that margin pushes
+     pre.hljs down inside the flex row relative to .code-line-numbers
+     (which has no such margin), offsetting the numbers from the code by a
+     constant amount regardless of line count. */
+  margin: 0;
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
   overflow-x: auto;
   flex: 1;
   min-width: 0;
+  /* Thin themed horizontal scrollbar for long lines, matching
+     .viewer-pane-scroll in style.css instead of the browser default. */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+.prose pre.hljs::-webkit-scrollbar {
+  height: 8px;
+}
+.prose pre.hljs::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prose pre.hljs::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+.prose pre.hljs::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+:root.dark .prose pre.hljs {
+  scrollbar-color: #374151 transparent;
+}
+:root.dark .prose pre.hljs::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+:root.dark .prose pre.hljs::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 :root.dark .prose pre.hljs { border: 1px solid #30363d; }
 :root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; background: #f3f4f6; }
@@ -332,14 +398,17 @@ function handleClick(e: MouseEvent) {
 .prose pre.hljs code {
   background: transparent;
   padding: 0;
-  font-size: 0.875em;
+  font-size: inherit;
+  line-height: inherit;
   font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
 }
 
 /* Line-numbers gutter: a flex sibling of <pre>, not inside it, so it stays
    put while long lines scroll the <pre> horizontally. Always in the DOM and
    toggled purely with CSS (via .show-line-numbers on the .prose root) so
-   flipping the viewer setting doesn't require re-rendering the markdown. */
+   flipping the viewer setting doesn't require re-rendering the markdown.
+   font-size/line-height come from the shared rules above, kept in lockstep
+   with `.prose pre.hljs code`. */
 .prose .code-line-numbers {
   display: none;
   flex-direction: column;
@@ -348,7 +417,6 @@ function handleClick(e: MouseEvent) {
   padding: 1.25rem 0.75rem 1.25rem 1.25rem;
   user-select: none;
   color: #6b7280;
-  font-size: 0.875em;
   font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
   border-radius: 8px 0 0 8px;
 }

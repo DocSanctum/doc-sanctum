@@ -51,9 +51,13 @@ md.renderer.rules.fence = (tokens, idx) => {
     return `<div class="code-block mermaid-block"${dataLineAttr}>${copyBtn}<code hidden>${escaped}</code><div class="mermaid">${escaped}</div></div>`
   }
 
+  // Use rawSource (trailing "\n" already stripped), not token.content — hljs
+  // preserves that trailing newline as an extra blank line in <pre>, one more
+  // row than the line-numbers gutter (built from the same stripped rawSource
+  // below) has spans for, throwing the two out of sync.
   const highlighted = langName && hljs.getLanguage(langName)
-    ? hljs.highlight(token.content, { language: langName, ignoreIllegals: true }).value
-    : hljs.highlightAuto(token.content).value
+    ? hljs.highlight(rawSource, { language: langName, ignoreIllegals: true }).value
+    : hljs.highlightAuto(rawSource).value
   // One <span> per source line, rendered alongside <pre> in a flex row so it
   // scrolls independently (numbers stay put while long lines scroll). Kept
   // in the DOM unconditionally and toggled with CSS (via a class further up
