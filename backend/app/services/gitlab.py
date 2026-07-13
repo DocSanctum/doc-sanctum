@@ -6,7 +6,7 @@ from urllib.parse import quote
 
 import httpx
 
-from .tree_utils import build_blob_tree, request_with_auth_fallback
+from .tree_utils import build_blob_tree, get_with_retry, request_with_auth_fallback
 
 
 def _gitlab_headers(token: str | None) -> dict[str, str]:
@@ -78,7 +78,8 @@ async def fetch_gitlab_tree(
                 )
                 use_auth = "PRIVATE-TOKEN" in resp.request.headers
             else:
-                resp = await client.get(
+                resp = await get_with_retry(
+                    client,
                     tree_url,
                     params=params,
                     headers=_gitlab_headers(token) if use_auth else {},
