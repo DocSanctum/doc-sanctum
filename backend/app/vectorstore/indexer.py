@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -14,6 +15,13 @@ from . import client, hash_cache
 from .chunker import chunk_markdown
 
 logger = logging.getLogger(__name__)
+
+# Upper bound on documents fetched from a remote source concurrently during a
+# sync. A sync's wall time is dominated by content downloads, not embedding, so
+# overlapping the network I/O is the whole win; the bound keeps us clear of
+# GitHub/GitLab secondary rate limits that trigger on too many simultaneous
+# requests. Embedding and all index/cache writes still happen one at a time.
+_FETCH_CONCURRENCY = 10
 
 
 class EngineUnavailableError(RuntimeError):
@@ -33,10 +41,14 @@ async def _list_documents(source: Source) -> list[dict[str, Any]]:
 
 
 async def _index_document(
-    source: Source, path: str, sha: str | None = None
+    source: Source, path: str, sha: str | None = None, content: str | None = None
 ) -> dict[str, Any] | None:
     """Chunk and embed a single document. Returns a warning dict on per-document
     failure (FR-009), or None on success.
+
+    ``content`` may be supplied by a caller that has already downloaded the
+    document (sync_source_index prefetches content concurrently), avoiding a
+    redundant read; when omitted the content is fetched here.
 
     The cache row is marked 'in_progress' before the vector-store write starts
     and 'clean' (via hash_cache.upsert) only after it commits, so a process
@@ -48,7 +60,8 @@ async def _index_document(
     per-document warning below, so any 'in_progress' marker it left behind
     is cleared rather than left looking like a crash on the next startup."""
     try:
-        content, _warning = await read_with_cache(source, path)
+        if content is None:
+            content, _warning = await read_with_cache(source, path)
         chunks = chunk_markdown(content)
         if not chunks:
             await hash_cache.delete(source.id, path)
@@ -105,39 +118,68 @@ async def handle_watch_event(
     await reindex_document(source, rel_path)  # file_created / file_modified
 
 
+async def _prefetch(
+    source: Source, path: str, sha: str | None, sem: asyncio.Semaphore
+) -> tuple[str, str | None, str | None, dict[str, Any] | None]:
+    """Download one document's content under a concurrency bound. Returns
+    (path, sha, content, warning); on a fetch failure content is None and
+    warning describes it (same shape as a per-document index failure)."""
+    async with sem:
+        try:
+            content, _warning = await read_with_cache(source, path)
+            return path, sha, content, None
+        except Exception as exc:
+            return (
+                path,
+                sha,
+                None,
+                {"path": path, "reason": "index_error", "message": str(exc)},
+            )
+
+
 async def sync_source_index(source: Source) -> list[dict[str, Any]]:
     """Diff the current document list/content against the last known state and
-    reindex only added/changed documents, removing deleted ones (FR-010, remote
-    sources — called after each poller tree refresh).
+    reindex only added/changed documents, removing deleted ones (remote sources
+    — called after each poller tree refresh).
 
     For github sources, each doc carries the git blob sha from the tree API
     response. When it matches the last-indexed sha, the document is skipped
     entirely — no content download happens. Sources without a blob sha (local,
-    manifest/http) fall back to fetching content and comparing its hash."""
+    manifest/http) fall back to fetching content and comparing its hash.
+
+    Content downloads are the dominant cost of a sync, so every candidate
+    document (blob-sha-changed, or sha-less and needing a hash comparison) is
+    fetched concurrently up to _FETCH_CONCURRENCY. Embedding and the vector /
+    keyword / hash-cache writes then run sequentially over the downloaded
+    content — the embedding engine is CPU-bound (concurrency buys nothing) and a
+    single writer keeps the SQLite-backed caches simple to reason about."""
     docs = await _list_documents(source)
     current_paths = {d["path"] for d in docs}
     known_hashes, known_shas = await hash_cache.get_known(source.id)
 
+    # A blob sha matching the last-indexed one means the document is unchanged;
+    # skip it without downloading. Everything else needs its content fetched.
+    to_fetch = [
+        (doc["path"], doc.get("sha"))
+        for doc in docs
+        if doc.get("sha") is None or known_shas.get(doc["path"]) != doc.get("sha")
+    ]
+
+    sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
+    fetched = await asyncio.gather(
+        *(_prefetch(source, path, sha, sem) for path, sha in to_fetch)
+    )
+
     warnings: list[dict[str, Any]] = []
-    for doc in docs:
-        path = doc["path"]
-        sha = doc.get("sha")
-
-        if sha is not None:
-            if known_shas.get(path) == sha:
-                continue  # unchanged per blob sha -- no need to download at all
-        else:
-            try:
-                content, _warning = await read_with_cache(source, path)
-            except Exception as exc:
-                warnings.append(
-                    {"path": path, "reason": "index_error", "message": str(exc)}
-                )
-                continue
-            if known_hashes.get(path) == _hash_content(content):
-                continue
-
-        warning = await _index_document(source, path, sha)
+    for path, sha, content, warning in fetched:
+        if warning is not None:
+            warnings.append(warning)
+            continue
+        # A sha-less source can only detect an unchanged document by comparing
+        # the freshly fetched content's hash against the last-indexed one.
+        if sha is None and known_hashes.get(path) == _hash_content(content):
+            continue
+        warning = await _index_document(source, path, sha, content=content)
         if warning:
             warnings.append(warning)
 
