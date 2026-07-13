@@ -6,14 +6,14 @@
     <section class="mb-8">
       <div class="flex items-center justify-between">
         <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('settings.language.label') }}</h2>
-        <div class="flex gap-2">
+        <div class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
           <button
             v-for="opt in languageOptions"
             :key="opt.value"
-            class="px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
             :class="locale === opt.value
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
             @click="setLocale(opt.value)"
           >
             {{ opt.label }}
@@ -26,14 +26,14 @@
     <section class="mb-8">
       <div class="flex items-center justify-between">
         <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('settings.theme.label') }}</h2>
-        <div class="flex gap-2">
+        <div class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
           <button
             v-for="opt in appThemes"
             :key="opt.value"
-            class="flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
             :class="theme === opt.value
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
             @click="applyTheme(opt.value)"
           >
             <span>{{ opt.icon }}</span>
@@ -47,14 +47,14 @@
     <section class="mb-8">
       <div class="flex items-center justify-between">
         <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('settings.fontSize.label') }}</h2>
-        <div class="flex gap-2">
+        <div class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
           <button
             v-for="size in fontSizes"
             :key="size.value"
-            class="px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
             :class="fontSize === size.value
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
             @click="setFontSize(size.value)"
           >
             {{ size.label }}
@@ -67,14 +67,14 @@
     <section class="mb-8">
       <div class="flex items-center justify-between">
         <h2 class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">{{ t('settings.lineNumbers.label') }}</h2>
-        <div class="flex gap-2">
+        <div class="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-gray-100 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
           <button
             v-for="opt in lineNumberOptions"
             :key="opt.value.toString()"
-            class="px-3 py-2 rounded-lg border text-sm font-medium transition-colors"
+            class="px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
             :class="lineNumbers === opt.value
-              ? 'bg-blue-600 border-blue-500 text-white'
-              : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-400'"
+              ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
             @click="setLineNumbers(opt.value)"
           >
             {{ opt.label }}
