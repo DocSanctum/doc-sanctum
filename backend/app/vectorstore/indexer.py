@@ -10,19 +10,10 @@ from ..mcp.cache import clear_source
 from ..mcp.tools.list_documents import _flatten_tree, _get_tree_with_cache
 from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
-from . import client
+from . import client, hash_cache
 from .chunker import chunk_markdown
 
 logger = logging.getLogger(__name__)
-
-# source_id -> {path: sha256(content)}. Lets sync_source_index (used by the
-# remote poller) skip re-embedding documents whose content hasn't changed.
-_doc_hashes: dict[str, dict[str, str]] = {}
-
-# source_id -> {path: git blob sha}. GitHub's tree API returns each file's blob
-# sha for free alongside the path, so sync_source_index can tell a document is
-# unchanged without downloading its content at all (github sources only).
-_doc_shas: dict[str, dict[str, str]] = {}
 
 
 class EngineUnavailableError(RuntimeError):
@@ -45,19 +36,23 @@ async def _index_document(
     source: Source, path: str, sha: str | None = None
 ) -> dict[str, Any] | None:
     """Chunk and embed a single document. Returns a warning dict on per-document
-    failure (FR-009), or None on success."""
+    failure (FR-009), or None on success.
+
+    The cache row is marked 'in_progress' before the vector-store write starts
+    and 'clean' (via hash_cache.upsert) only after it commits, so a process
+    killed mid-write leaves a durable marker that the next startup can use to
+    detect the document as needing a rebuild, instead of silently looking
+    unchanged next time."""
     try:
         content, _warning = await read_with_cache(source, path)
         chunks = chunk_markdown(content)
         if not chunks:
-            _doc_hashes.setdefault(source.id, {}).pop(path, None)
-            _doc_shas.setdefault(source.id, {}).pop(path, None)
+            await hash_cache.delete(source.id, path)
             return None
+        await hash_cache.mark_in_progress(source.id, path)
         await client.upsert_chunks(source.id, source.name, path, chunks)
         await keyword_client.upsert_document(source.id, path, content)
-        _doc_hashes.setdefault(source.id, {})[path] = _hash_content(content)
-        if sha is not None:
-            _doc_shas.setdefault(source.id, {})[path] = sha
+        await hash_cache.upsert(source.id, path, _hash_content(content), sha)
         return None
     except Exception as exc:
         logger.warning(
@@ -70,8 +65,7 @@ async def remove_document(source: Source, path: str) -> None:
     """Remove all chunks belonging to a single document (edge case: file deleted)."""
     await client.delete_document(source.id, path)
     await keyword_client.delete_document(source.id, path)
-    _doc_hashes.get(source.id, {}).pop(path, None)
-    _doc_shas.get(source.id, {}).pop(path, None)
+    await hash_cache.delete(source.id, path)
 
 
 async def reindex_document(source: Source, path: str) -> dict[str, Any] | None:
@@ -117,8 +111,7 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
     manifest/http) fall back to fetching content and comparing its hash."""
     docs = await _list_documents(source)
     current_paths = {d["path"] for d in docs}
-    known_hashes = _doc_hashes.get(source.id, {})
-    known_shas = _doc_shas.get(source.id, {})
+    known_hashes, known_shas = await hash_cache.get_known(source.id)
 
     warnings: list[dict[str, Any]] = []
     for doc in docs:
@@ -155,8 +148,7 @@ async def delete_source_index(source_id: str) -> None:
     await client.delete_collection(source_id)
     await keyword_client.delete_source(source_id)
     clear_source(source_id)
-    _doc_hashes.pop(source_id, None)
-    _doc_shas.pop(source_id, None)
+    await hash_cache.delete_source(source_id)
 
 
 async def create_index(source: Source) -> list[dict[str, Any]]:

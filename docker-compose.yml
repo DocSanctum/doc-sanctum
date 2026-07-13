@@ -1,8 +1,10 @@
 # --- Scaleout deployment (specs/004-scaleout-deployment) -------------------
-# The default setup below is `standalone`: one backend, one in-memory vector
-# index, local + remote sources both allowed. To run multiple backend
-# replicas sharing one persistent vector index instead:
-#   1. Start `vectorstore` (this compose file already does, it's cheap idle).
+# The default setup below is `standalone`: one backend replica, local +
+# remote sources both allowed. Both `standalone` and `scaleout` now share
+# the same persistent `vectorstore` service — a restart no longer re-embeds
+# every document from scratch. To run multiple backend replicas sharing
+# that index instead:
+#   1. `vectorstore` is already running (this compose file always starts it).
 #   2. Launch backend with DEPLOYMENT_MODE=scaleout, e.g.:
 #        DEPLOYMENT_MODE=scaleout docker compose up -d --scale backend=2
 #   3. Local filesystem sources are rejected in this mode (FR-004) — backend
@@ -59,7 +61,7 @@ services:
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
       - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-}
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-standalone}  # standalone | scaleout
-      - VECTOR_STORE_HOST=${VECTOR_STORE_HOST:-vectorstore}  # only read when scaleout
+      - VECTOR_STORE_HOST=${VECTOR_STORE_HOST:-vectorstore}  # both modes now use the persistent vectorstore service
       - VECTOR_STORE_PORT=8000                                # vectorstore's in-network port
       - HTTP_PROXY=${HTTP_PROXY:-}
       - HTTPS_PROXY=${HTTPS_PROXY:-}
@@ -74,6 +76,9 @@ services:
       # run instead of trying to write into the read-only host HOME mount.
       - embedding_model_cache:${HOME}/.cache/chroma
     restart: unless-stopped
+    depends_on:
+      vectorstore:
+        condition: service_healthy
     healthcheck:
       # /api/v1/deployment is a trivial, dependency-free route (just echoes
       # the configured mode) — enough to confirm the ASGI app is up and

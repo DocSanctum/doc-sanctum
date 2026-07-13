@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from typing import Any
 
 import chromadb
@@ -15,52 +16,90 @@ logger = logging.getLogger(__name__)
 
 _client: Any = None
 _embedding_function: Any = None
+_embedding_dimension: int | None = None
 _engine_available = False
 _init_lock = threading.Lock()
+
+# Bounded retry budget for connecting to the shared vector store at startup:
+# a few short attempts, not indefinite and not zero. Aligned with the
+# `vectorstore` compose service's own healthcheck timing (docker-compose.yml:
+# start_period 10s, interval 30s) rather than an arbitrary number.
+_CONNECT_RETRY_ATTEMPTS = 5
+_CONNECT_RETRY_DELAY_SECONDS = 3
 
 
 def _collection_name(source_id: str) -> str:
     return f"src_{source_id}"
 
 
+def embedding_signature() -> str | None:
+    """Identifying signature of the currently configured embedding function
+    (name + vector dimension), used to detect that the embedding model
+    changed since the vector store was last written to. None until
+    init_engine() has run successfully at least once."""
+    if _embedding_dimension is None:
+        return None
+    return f"{type(_embedding_function).__name__}:{_embedding_dimension}"
+
+
 def init_engine() -> bool:
     """Initialize the local embedding engine and vector DB client once, probing
     the embedding function with a trivial call. Distinguishes "engine
-    unavailable" (FR-014, 003) from per-document embedding failures (FR-009).
-    Thread-safe and safe to call multiple times.
+    unavailable" from per-document embedding failures, which are handled
+    separately by callers. Thread-safe and safe to call multiple times.
+    Never raises — a persistent connection failure is reported via the
+    return value / is_engine_available(), not an exception, so a
+    vector-store outage can never crash the whole backend.
 
-    In `scaleout` deployment mode (004), the vector store is a shared, remote
-    Chroma server rather than an in-process one, so a connection failure here
-    is re-raised instead of swallowed — main.py's lifespan calls this
-    unguarded, so the exception fails app startup (FR-010) rather than
-    silently degrading, since a `scaleout` replica with no shared index would
-    otherwise serve incomplete/inconsistent semantic search results."""
-    global _client, _embedding_function, _engine_available
+    Both standalone and multi-replica deployments connect to the same
+    persistent, shared Chroma server (the `vectorstore` compose service) via
+    HttpClient — standalone previously used an in-process EphemeralClient
+    that was wiped on every restart, forcing a full re-embed of every
+    document each time. Connecting is retried a bounded number of times with
+    a short delay in between, so a `vectorstore` container that is merely
+    slow to become healthy doesn't need a full backend restart to recover
+    from."""
+    global _client, _embedding_function, _embedding_dimension, _engine_available
     with _init_lock:
         if _embedding_function is not None:
             return _engine_available
         try:
             _embedding_function = DefaultEmbeddingFunction()
-            _embedding_function(["healthcheck"])
-            if settings.deployment_mode == "scaleout":
-                if not settings.vector_store_host:
-                    raise RuntimeError(
-                        "VECTOR_STORE_HOST must be set when DEPLOYMENT_MODE=scaleout"
-                    )
+            vectors = _embedding_function(["healthcheck"])
+            _embedding_dimension = len(vectors[0])
+        except Exception:
+            logger.exception("Failed to initialize the local embedding function")
+            _embedding_function = None
+            _embedding_dimension = None
+            _engine_available = False
+            return _engine_available
+
+        for attempt in range(1, _CONNECT_RETRY_ATTEMPTS + 1):
+            try:
                 _client = chromadb.HttpClient(
                     host=settings.vector_store_host, port=settings.vector_store_port
                 )
                 _client.heartbeat()
-            else:
-                _client = chromadb.EphemeralClient()
-            _engine_available = True
-        except Exception:
-            logger.exception("Failed to initialize local embedding engine")
-            _embedding_function = None
-            _client = None
-            _engine_available = False
-            if settings.deployment_mode == "scaleout":
-                raise
+                _engine_available = True
+                break
+            except Exception:
+                _client = None
+                if attempt == _CONNECT_RETRY_ATTEMPTS:
+                    logger.exception(
+                        "Failed to connect to the vector store after %d attempts; "
+                        "semantic search will report unavailable until the next "
+                        "successful init_engine() call",
+                        attempt,
+                    )
+                    _engine_available = False
+                else:
+                    logger.warning(
+                        "Vector store not reachable yet (attempt %d/%d), retrying in %ds",
+                        attempt,
+                        _CONNECT_RETRY_ATTEMPTS,
+                        _CONNECT_RETRY_DELAY_SECONDS,
+                    )
+                    time.sleep(_CONNECT_RETRY_DELAY_SECONDS)
     return _engine_available
 
 

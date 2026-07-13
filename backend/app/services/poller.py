@@ -61,10 +61,11 @@ async def _poll_source(source: Source) -> None:
 
 async def _run_poller(source: Source) -> None:
     # Polls immediately on the first iteration (rather than sleeping first)
-    # so a backend restart rebuilds the vector index right away instead of
-    # leaving semantic search empty for up to a full poll interval — the
-    # in-process vector store (chromadb EphemeralClient) has no data yet at
-    # that point, even though the source's DB row still says "active".
+    # so a backend restart picks up any changes right away instead of
+    # waiting up to a full poll interval. The vector index and its
+    # change-tracking cache now persist across restarts, so this first
+    # sync_source_index() call is a fast no-op diff when nothing changed,
+    # not a full rebuild.
     interval = source.polling_interval_seconds or 300
     while True:
         await _poll_source(source)

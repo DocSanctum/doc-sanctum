@@ -54,6 +54,41 @@ async def create_tables() -> None:
             )
         """)
         )
+        # Durable replacement for the old in-process _doc_hashes/_doc_shas
+        # dicts — lets sync_source_index skip re-embedding unchanged
+        # documents across a backend restart. sync_state marks a row
+        # 'in_progress' for the duration of its vector-store write; a row
+        # still 'in_progress' at startup means the previous process died
+        # mid-write, and its source is routed through an automatic full
+        # rebuild instead of trusting the row.
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS doc_index_cache (
+                source_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                content_hash TEXT,
+                blob_sha TEXT,
+                sync_state TEXT NOT NULL DEFAULT 'clean',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (source_id, path)
+            )
+        """)
+        )
+        # Cross-replica coordination for automatic rebuilds in multi-replica
+        # (scaleout) deployments — an advisory lock keyed by source_id in
+        # the same SQLite database every replica already shares via the
+        # sqlite_data volume, so only one replica rebuilds a given source
+        # at a time.
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS rebuild_lock (
+                source_id TEXT PRIMARY KEY,
+                holder TEXT NOT NULL,
+                acquired_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+        """)
+        )
 
         result = await conn.execute(text("PRAGMA table_info(source)"))
         existing_columns = {row[1] for row in result.fetchall()}
