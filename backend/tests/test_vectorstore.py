@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
 import backend.app.vectorstore.indexer as indexer_module
@@ -335,6 +337,44 @@ async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
     assert fake_client.upserted == [("src-1", "b.md", 1)]
     _, shas = await hash_cache_module.get_known("src-1")
     assert shas["b.md"] == "sha-b2"
+
+
+@pytest.mark.asyncio
+async def test_sync_source_index_fetches_documents_concurrently(
+    hash_cache_db, fake_client, monkeypatch
+):
+    """Content downloads are the dominant cost of a sync, so candidate documents
+    must be fetched concurrently (bounded by _FETCH_CONCURRENCY) rather than one
+    strictly after another."""
+    docs = [{"path": f"doc{i}.md", "sha": f"sha-{i}"} for i in range(25)]
+    in_flight = 0
+    max_in_flight = 0
+
+    async def fake_read_with_cache(source, path):
+        nonlocal in_flight, max_in_flight
+        in_flight += 1
+        max_in_flight = max(max_in_flight, in_flight)
+        try:
+            # Yield control so overlapping fetches actually pile up in-flight
+            # instead of each completing before the next one starts.
+            await asyncio.sleep(0.01)
+            return f"# {path}\n\nbody", None
+        finally:
+            in_flight -= 1
+
+    async def fake_list_documents(source):
+        return list(docs)
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+
+    await indexer_module.sync_source_index(_source())
+
+    # Fetches overlapped (a serial loop would peak at 1) but never exceeded the
+    # configured concurrency bound.
+    assert max_in_flight > 1
+    assert max_in_flight <= indexer_module._FETCH_CONCURRENCY
+    assert len(fake_client.upserted) == len(docs)
 
 
 @pytest.mark.asyncio
