@@ -332,6 +332,7 @@ function indexStatusDotClass(status: SourceStatus): string {
     active: 'bg-green-500',
     syncing: 'bg-yellow-400 animate-pulse',
     error: 'bg-red-500',
+    partial: 'bg-amber-500',
   }[status] ?? 'bg-gray-500'
 }
 
@@ -340,6 +341,7 @@ function indexStatusTextClass(status: SourceStatus): string {
     active: 'text-green-600 dark:text-green-400',
     syncing: 'text-yellow-600 dark:text-yellow-400',
     error: 'text-red-600 dark:text-red-400',
+    partial: 'text-amber-600 dark:text-amber-400',
   }[status] ?? 'text-gray-400'
 }
 

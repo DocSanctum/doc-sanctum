@@ -135,6 +135,7 @@ export const en = {
         active: 'Indexing complete',
         syncing: 'Indexing in progress',
         error: 'Indexing failed',
+        partial: 'Partially indexed',
       },
     },
     mcp: {

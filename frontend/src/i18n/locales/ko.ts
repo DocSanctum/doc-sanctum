@@ -137,6 +137,7 @@ export const ko: MessageSchema = {
         active: '색인 완료',
         syncing: '색인 중',
         error: '색인 실패',
+        partial: '부분 색인',
       },
     },
     mcp: {

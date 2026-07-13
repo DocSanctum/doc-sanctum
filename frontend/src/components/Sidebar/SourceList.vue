@@ -63,6 +63,9 @@ function statusDot(status: SourceStatus): string {
     active: 'bg-green-500',
     syncing: 'bg-yellow-400 animate-pulse',
     error: 'bg-red-500',
+    // Usable but incomplete (some documents failed to index) — amber, distinct
+    // from a hard red error. Hovering shows the error_message summary.
+    partial: 'bg-amber-500',
   }[status] ?? 'bg-gray-500'
 }
 </script>

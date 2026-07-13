@@ -20,6 +20,7 @@ from ..vectorstore.indexer import (
     create_index,
     delete_source_index,
     handle_watch_event,
+    summarize_index_warnings,
     sync_source_index,
 )
 
@@ -110,12 +111,13 @@ async def _finish_remote_registration(source: Source) -> None:
     status handling already used by refresh_source/poll_now."""
     try:
         warnings = await create_index(source)
-        status, error_msg = "active", None
+        status, error_msg = summarize_index_warnings(warnings)
         if warnings:
             logger.warning(
-                "Initial index for source %s completed with %d warning(s)",
+                "Initial index for source %s completed with %d warning(s) -> %s",
                 source.id,
                 len(warnings),
+                status,
             )
     except Exception as exc:
         logger.exception("Failed to build initial index for source %s", source.id)

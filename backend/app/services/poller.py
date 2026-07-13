@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 from sqlalchemy import text
 
 from ..core.database import async_session_factory
 from ..mcp.cache import get_tree_lock, set_cached
 from ..models.source import Source
-from ..vectorstore.indexer import sync_source_index
+from ..vectorstore.indexer import summarize_index_warnings, sync_source_index
 from .github import fetch_github_tree
 from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
@@ -19,7 +18,22 @@ from .watcher import _queues
 logger = logging.getLogger(__name__)
 
 
+async def _write_status(source_id: str, status: str, error_msg: str | None) -> None:
+    async with async_session_factory() as session:
+        await session.execute(
+            text("UPDATE source SET status = :s, error_message = :e WHERE id = :id"),
+            {"s": status, "e": error_msg, "id": source_id},
+        )
+        await session.commit()
+
+
 async def _poll_source(source: Source) -> None:
+    def notify() -> None:
+        if source.id in _queues:
+            _queues[source.id].put_nowait(
+                {"event": "tree_refreshed", "source_id": source.id}
+            )
+
     try:
         # Shares the lock with on-demand /tree requests (see
         # mcp/cache.get_tree_lock) so a periodic poll and a manual tree
@@ -37,26 +51,23 @@ async def _poll_source(source: Source) -> None:
             else:
                 tree = await fetch_manifest_tree(source.path, source.id, source.name)
             set_cached(source.id, tree)
-        status, error_msg = "active", None
     except Exception as exc:
-        status, error_msg = "error", str(exc)
+        await _write_status(source.id, "error", str(exc))
+        notify()
+        return
 
-    async with async_session_factory() as session:
-        await session.execute(
-            text("UPDATE source SET status = :s, error_message = :e WHERE id = :id"),
-            {"s": status, "e": error_msg, "id": source.id},
-        )
-        await session.commit()
+    # The tree listed successfully; the final status reflects the index sync so
+    # that per-document fetch failures downgrade the source to "partial" instead
+    # of it silently staying "active" while missing documents.
+    try:
+        warnings = await sync_source_index(source)
+        status, error_msg = summarize_index_warnings(warnings)
+    except Exception:
+        logger.exception("Failed to sync vector index for source %s", source.id)
+        status, error_msg = "error", "Failed to sync the document index"
 
-    if status == "active":
-        try:
-            await sync_source_index(source)
-        except Exception:
-            logger.exception("Failed to sync vector index for source %s", source.id)
-
-    payload: dict[str, Any] = {"event": "tree_refreshed", "source_id": source.id}
-    if source.id in _queues:
-        await _queues[source.id].put(payload)
+    await _write_status(source.id, status, error_msg)
+    notify()
 
 
 async def _run_poller(source: Source) -> None:
