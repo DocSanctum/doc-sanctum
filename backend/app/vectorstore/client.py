@@ -27,6 +27,13 @@ _init_lock = threading.Lock()
 _CONNECT_RETRY_ATTEMPTS = 5
 _CONNECT_RETRY_DELAY_SECONDS = 3
 
+# Once the startup retries above are exhausted, reconnect_loop() (spawned by
+# main.py's lifespan) keeps trying at this more relaxed interval — matching
+# `vectorstore`'s own healthcheck interval — so the app recovers on its own
+# once the vector store comes back, instead of needing a full backend
+# restart to notice.
+_RECONNECT_INTERVAL_SECONDS = 30
+
 
 def _collection_name(source_id: str) -> str:
     return f"src_{source_id}"
@@ -105,6 +112,40 @@ def init_engine() -> bool:
 
 def is_engine_available() -> bool:
     return _engine_available
+
+
+def _try_reconnect_once() -> bool:
+    """A single, fast connection attempt (no sleep/retry loop of its own) —
+    used by reconnect_loop() once init_engine()'s startup retries have been
+    exhausted. Returns the resulting availability."""
+    global _client, _engine_available
+    with _init_lock:
+        if _engine_available or _embedding_function is None:
+            # Already healthy, or the embedding function itself never
+            # initialized (a different failure than a connection issue) —
+            # nothing this function can fix.
+            return _engine_available
+        try:
+            _client = chromadb.HttpClient(
+                host=settings.vector_store_host, port=settings.vector_store_port
+            )
+            _client.heartbeat()
+            _engine_available = True
+            logger.info("Reconnected to the vector store")
+        except Exception:
+            _client = None
+    return _engine_available
+
+
+async def reconnect_loop() -> None:
+    """Background task: while the vector store connection is down, keep
+    retrying at a relaxed interval so semantic search recovers on its own
+    once the vector store comes back, without requiring a backend restart.
+    Exits on its own once reconnected (or if the embedding function itself
+    never initialized, in which case retrying the connection can't help)."""
+    while not is_engine_available() and _embedding_function is not None:
+        await asyncio.sleep(_RECONNECT_INTERVAL_SECONDS)
+        await asyncio.to_thread(_try_reconnect_once)
 
 
 def _require_collection(source_id: str) -> Any:

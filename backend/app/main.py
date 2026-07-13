@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -12,7 +13,7 @@ from .core.crypto import ensure_master_key
 from .core.database import create_tables
 from .mcp.server import mcp
 from .services.poller import start_polling_all
-from .vectorstore.client import init_engine
+from .vectorstore.client import init_engine, is_engine_available, reconnect_loop
 from .vectorstore.rebuild_check import check_and_recover
 
 _mcp_sse_app: ASGIApp = mcp.sse_app()
@@ -37,6 +38,11 @@ async def lifespan(app: FastAPI):
     await create_tables()
     ensure_master_key()
     init_engine()
+    if not is_engine_available():
+        # Keeps retrying at a relaxed interval in the background, so the app
+        # recovers on its own once the vector store becomes reachable
+        # instead of needing a full backend restart.
+        asyncio.create_task(reconnect_loop())
     # Must run before resume_local_sources()/start_polling_all() so any
     # cache invalidation below (embedding model change, incomplete prior
     # write) is picked up by each source's very first post-restart sync.

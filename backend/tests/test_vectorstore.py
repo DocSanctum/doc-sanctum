@@ -151,6 +151,83 @@ def test_init_engine_embedding_function_failure_returns_false_without_raising(
     assert client_module.is_engine_available() is False
 
 
+# --- Background reconnect: recovers once the vector store comes back,
+# without needing a full backend restart ---
+
+
+def test_try_reconnect_once_succeeds_once_vector_store_is_reachable(monkeypatch):
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+
+    class AlwaysFailingChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            return _FakeHttpClient(host, port, heartbeat_ok=False)
+
+    monkeypatch.setattr(client_module, "chromadb", AlwaysFailingChroma)
+    assert client_module.init_engine() is False  # exhausts startup retries
+
+    class NowHealthyChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            return _FakeHttpClient(host, port, heartbeat_ok=True)
+
+    monkeypatch.setattr(client_module, "chromadb", NowHealthyChroma)
+    assert client_module._try_reconnect_once() is True
+    assert client_module.is_engine_available() is True
+
+
+def test_try_reconnect_once_is_a_noop_when_embedding_function_never_initialized(
+    monkeypatch,
+):
+    def boom():
+        raise RuntimeError("embedding model missing")
+
+    monkeypatch.setattr(client_module, "DefaultEmbeddingFunction", boom)
+    assert client_module.init_engine() is False
+
+    # Nothing to reconnect to — the embedding function itself never came up.
+    assert client_module._try_reconnect_once() is False
+
+
+@pytest.mark.asyncio
+async def test_reconnect_loop_retries_until_available(monkeypatch):
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+    attempts: list[int] = []
+
+    class FlakyThenHealthyChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            attempts.append(1)
+            return _FakeHttpClient(host, port, heartbeat_ok=False)
+
+    monkeypatch.setattr(client_module, "chromadb", FlakyThenHealthyChroma)
+    assert client_module.init_engine() is False  # exhausts startup retries first
+
+    sleep_calls: list[float] = []
+
+    async def fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        if len(sleep_calls) == 2:
+            # Vector store "comes back" right before the loop's next attempt.
+            class NowHealthyChroma:
+                @staticmethod
+                def HttpClient(host, port):
+                    return _FakeHttpClient(host, port, heartbeat_ok=True)
+
+            monkeypatch.setattr(client_module, "chromadb", NowHealthyChroma)
+
+    monkeypatch.setattr(client_module.asyncio, "sleep", fake_sleep)
+
+    await client_module.reconnect_loop()
+
+    assert client_module.is_engine_available() is True
+    assert len(sleep_calls) == 2  # stopped retrying once reconnected
+
+
 # --- Indexer (FR-009 partial failure, FR-010 targeted reindex, FR-012 cleanup) ---
 
 
