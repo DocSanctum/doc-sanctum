@@ -31,7 +31,7 @@ The first run builds the images, which takes a few minutes (it also downloads a 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 
-A "Sample Docs" source is registered automatically the first time you start DocSanctum, so there's something to read and search right away — delete it from Settings once you've added your own. From there, use the "Add source" button in the sidebar to register a local folder, a GitHub repo (`owner/repo`), or a GitLab project (`group/project`). Local folders index immediately; remote repos sync in the background and you'll see their status change from "syncing" to "active".
+A "Sample Docs" source is registered automatically the first time you start DocSanctum, so there's something to read and search right away — delete it from Settings once you've added your own. From there, use the "Add source" button in the sidebar to register a local folder, a GitHub repo (`owner/repo`), or a GitLab project (`group/project`). Local folders index immediately; remote repos sync in the background and you'll see their status change from "syncing" to "active" (or "partial", if some documents failed to fetch — e.g. a rate limit — while the rest indexed fine).
 
 To stop everything:
 
@@ -45,7 +45,8 @@ Re-running `./start.sh` picks up code changes automatically — it rebuilds only
 
 Copy `.env.example` to `.env` and adjust as needed. The defaults work for a single-machine setup; the file documents each option inline, including:
 
-- `GITHUB_TOKEN` / `GITLAB_TOKEN` — needed for private repos, and to raise GitHub's API rate limit from 60 to 5000 requests/hour.
+- `GITHUB_TOKEN` / `GITLAB_TOKEN` — needed for private repos, and to raise GitHub's API rate limit from 60 to 5000 requests/hour. These are single, host-agnostic global tokens; a source on a different host (e.g. a GitHub Enterprise instance, or a second self-hosted GitLab) needs its own per-source token instead, set in the source registration UI/API.
+- `TOKEN_ENCRYPTION_KEY` — optional master key for encrypting those per-source tokens at rest. If unset, the backend generates and persists one on first boot, so single-instance setups need zero key management; set it explicitly only if the key must survive a volume wipe or be shared across multiple backend instances.
 - `BACKEND_PORT`, `FRONTEND_PORT` — change these if the defaults are already taken on your machine.
 - `BACKEND_CPU_LIMIT` / `BACKEND_MEMORY_LIMIT` — cap the backend's CPU/memory in the production stack, so a large indexing job can't starve the rest of the machine.
 - `HTTP_PROXY` / `HTTPS_PROXY` — for building and running behind a corporate proxy, see below.
