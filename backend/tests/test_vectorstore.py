@@ -382,7 +382,7 @@ async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
     read_calls: list[str] = []
 
     async def fake_list_documents(source):
-        return list(docs)
+        return list(docs), None
 
     async def fake_read_with_cache(source, path):
         read_calls.append(path)
@@ -440,7 +440,7 @@ async def test_sync_source_index_fetches_documents_concurrently(
             in_flight -= 1
 
     async def fake_list_documents(source):
-        return list(docs)
+        return list(docs), None
 
     monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
     monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
@@ -452,6 +452,51 @@ async def test_sync_source_index_fetches_documents_concurrently(
     assert max_in_flight > 1
     assert max_in_flight <= indexer_module._FETCH_CONCURRENCY
     assert len(fake_client.upserted) == len(docs)
+
+
+def test_summarize_index_warnings_maps_status():
+    """No warnings -> active; per-document warnings -> partial; a tree-level
+    warning (no 'path') -> error, so partial indexing is never silently 'active'."""
+    assert indexer_module.summarize_index_warnings([]) == ("active", None)
+
+    status, msg = indexer_module.summarize_index_warnings(
+        [{"path": "a.md", "reason": "index_error", "message": "boom"}]
+    )
+    assert status == "partial"
+    assert "1 document" in msg
+
+    status, msg = indexer_module.summarize_index_warnings(
+        [{"reason": "rate_limit", "message": "GitHub API rate limit exceeded."}]
+    )
+    assert status == "error"
+    assert "rate limit exceeded" in msg
+
+
+@pytest.mark.asyncio
+async def test_sync_source_index_surfaces_tree_warning_without_pruning(
+    hash_cache_db, fake_client, monkeypatch
+):
+    """A degraded (rate-limited) tree listing returns an empty document list.
+    sync must surface that warning AND must NOT prune the previously-indexed
+    documents as 'deleted' — otherwise a transient rate limit wipes the index."""
+    await hash_cache_module.upsert("src-1", "a.md", "hash-a", "sha-a")
+    tree_warning = {
+        "source_id": "src-1",
+        "reason": "rate_limit",
+        "message": "GitHub API rate limit exceeded.",
+    }
+
+    async def fake_list_documents(source):
+        return [], tree_warning
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+
+    warnings = await indexer_module.sync_source_index(_source())
+
+    assert tree_warning in warnings
+    assert fake_client.deleted_docs == []  # nothing pruned despite empty listing
+    hashes, _ = await hash_cache_module.get_known("src-1")
+    assert "a.md" in hashes
 
 
 @pytest.mark.asyncio
@@ -485,7 +530,7 @@ async def test_create_index_raises_when_engine_unavailable(fake_client, monkeypa
     fake_client.engine_available = False
 
     async def fake_list_documents(source):
-        return []
+        return [], None
 
     monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
 

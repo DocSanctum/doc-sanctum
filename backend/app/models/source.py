@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 from typing import Literal
 
 SourceType = Literal["local", "github", "gitlab", "http", "localhost"]
-SourceStatus = Literal["active", "error", "syncing"]
+# "partial": the source registered and its tree listed, but some documents
+# could not be indexed (e.g. a transient rate limit on their content fetch).
+# The source is usable but incomplete; the next poll re-attempts the missing
+# documents. Distinct from "error" (nothing usable) so the UI can flag it
+# without hiding the source entirely.
+SourceStatus = Literal["active", "error", "syncing", "partial"]
 SourceIcon = Literal[
     "📁",
     "📦",

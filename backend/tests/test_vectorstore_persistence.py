@@ -139,7 +139,7 @@ async def test_unchanged_source_reembeds_nothing_on_second_sync(
     content_by_path = {"a.md": "# A\n\nhello world"}
 
     async def fake_list_documents(_source):
-        return _docs(content_by_path)
+        return _docs(content_by_path), None
 
     async def fake_read_with_cache(_source, path):
         return content_by_path[path], None
@@ -165,7 +165,7 @@ async def test_partial_change_reembeds_only_changed_doc_and_prunes_deleted(
     content_by_path = {"a.md": "content a", "b.md": "content b"}
 
     async def fake_list_documents(_source):
-        return _docs(content_by_path)
+        return _docs(content_by_path), None
 
     async def fake_read_with_cache(_source, path):
         return content_by_path[path], None

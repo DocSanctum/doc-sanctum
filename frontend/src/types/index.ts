@@ -1,5 +1,5 @@
 export type SourceType = 'local' | 'github' | 'gitlab' | 'http' | 'localhost'
-export type SourceStatus = 'active' | 'error' | 'syncing'
+export type SourceStatus = 'active' | 'error' | 'syncing' | 'partial'
 export type SourceIcon =
   | '📁' | '📦' | '🐙' | '🌐' | '💻' | '📚' | '🚀' | '🔧'
   | '📝' | '🗂️' | '⭐' | '🔥' | '🎯' | '📊' | '🧩' | '🔒'

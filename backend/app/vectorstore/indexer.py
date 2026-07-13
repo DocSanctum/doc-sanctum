@@ -32,12 +32,18 @@ def _hash_content(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-async def _list_documents(source: Source) -> list[dict[str, Any]]:
-    tree, _warning = await _get_tree_with_cache(source)
+async def _list_documents(
+    source: Source,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Return (documents, tree_warning). The warning is non-None when the tree
+    listing itself degraded — e.g. a rate-limited tree fetch that produced an
+    empty (or only stale-cached) document list. Callers must surface it rather
+    than treating an empty list as "the source has no documents"."""
+    tree, warning = await _get_tree_with_cache(source)
     docs: list[dict[str, Any]] = []
     if tree and tree.get("root"):
         _flatten_tree(tree["root"], docs, source)
-    return docs
+    return docs, warning
 
 
 async def _index_document(
@@ -153,7 +159,7 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
     keyword / hash-cache writes then run sequentially over the downloaded
     content — the embedding engine is CPU-bound (concurrency buys nothing) and a
     single writer keeps the SQLite-backed caches simple to reason about."""
-    docs = await _list_documents(source)
+    docs, tree_warning = await _list_documents(source)
     current_paths = {d["path"] for d in docs}
     known_hashes, known_shas = await hash_cache.get_known(source.id)
 
@@ -170,7 +176,12 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
         *(_prefetch(source, path, sha, sem) for path, sha in to_fetch)
     )
 
+    # A degraded tree listing (tree_warning) is surfaced to the caller so the
+    # source can be flagged instead of silently looking fully indexed.
     warnings: list[dict[str, Any]] = []
+    if tree_warning is not None:
+        warnings.append(tree_warning)
+
     for path, sha, content, warning in fetched:
         if warning is not None:
             warnings.append(warning)
@@ -186,8 +197,13 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
         if warning:
             warnings.append(warning)
 
-    for stale_path in (set(known_hashes) | set(known_shas)) - current_paths:
-        await remove_document(source, stale_path)
+    # Prune only against a tree we actually listed. When the listing degraded,
+    # current_paths is empty (or stale) and can't distinguish a deleted document
+    # from one we simply couldn't fetch — pruning then would wipe the whole
+    # index on a transient rate limit, so skip it.
+    if tree_warning is None:
+        for stale_path in (set(known_hashes) | set(known_shas)) - current_paths:
+            await remove_document(source, stale_path)
 
     return warnings
 
@@ -212,3 +228,29 @@ async def create_index(source: Source) -> list[dict[str, Any]]:
     if not client.init_engine():
         raise EngineUnavailableError("Local embedding engine is unavailable")
     return await sync_source_index(source)
+
+
+def summarize_index_warnings(
+    warnings: list[dict[str, Any]],
+) -> tuple[str, str | None]:
+    """Map the warnings returned by sync_source_index/create_index to a source
+    (status, error_message) so partial indexing failures are visible instead of
+    the source silently showing 'active'.
+
+    A tree-level warning (no 'path' key) means the document listing itself
+    failed, so nothing reliable was indexed — surface it as a hard 'error',
+    matching how the poller treats a raised tree fetch. Per-document warnings
+    leave a usable-but-incomplete index, reported as 'partial'; the next poll
+    re-attempts the missing documents."""
+    if not warnings:
+        return "active", None
+    tree_warnings = [w for w in warnings if "path" not in w]
+    if tree_warnings:
+        msg = tree_warnings[0].get("message") or "unknown error"
+        return "error", f"Failed to list documents: {msg}"
+    n = len(warnings)
+    return (
+        "partial",
+        f"{n} document(s) could not be indexed (e.g. rate limit); "
+        "will retry on the next sync",
+    )
