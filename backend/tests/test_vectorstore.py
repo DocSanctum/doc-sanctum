@@ -249,7 +249,7 @@ async def test_index_document_success_records_hash(
 
 @pytest.mark.asyncio
 async def test_index_document_failure_returns_warning_without_upsert(
-    fake_client, monkeypatch
+    hash_cache_db, fake_client, monkeypatch
 ):
     async def fake_read_with_cache(source, path):
         raise ValueError("File not found: a.md")
@@ -261,6 +261,34 @@ async def test_index_document_failure_returns_warning_without_upsert(
     assert warning is not None
     assert warning["path"] == "a.md"
     assert fake_client.upserted == []
+
+
+@pytest.mark.asyncio
+async def test_index_document_write_failure_clears_in_progress_marker(
+    hash_cache_db, fake_client, monkeypatch
+):
+    """A caught failure while the vector store write is in flight (e.g. the
+    embedding engine being temporarily unavailable) is a per-document
+    warning, not a crash — the 'in_progress' marker it leaves behind must
+    be cleared, or the next startup would wrongly treat this source as
+    having crashed mid-write and trigger an unnecessary full rebuild."""
+
+    async def fake_read_with_cache(source, path):
+        return "# Heading\n\nSome content here.", None
+
+    async def failing_upsert_chunks(source_id, source_name, path, chunks):
+        raise RuntimeError("Embedding engine is not available")
+
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+    fake_client.upsert_chunks = failing_upsert_chunks
+
+    warning = await indexer_module._index_document(_source(), "a.md")
+
+    assert warning is not None
+    assert warning["reason"] == "index_error"
+    assert await hash_cache_module.sources_with_in_progress() == []
+    hashes, _ = await hash_cache_module.get_known("src-1")
+    assert "a.md" not in hashes
 
 
 @pytest.mark.asyncio

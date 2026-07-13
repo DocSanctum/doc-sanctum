@@ -42,7 +42,11 @@ async def _index_document(
     and 'clean' (via hash_cache.upsert) only after it commits, so a process
     killed mid-write leaves a durable marker that the next startup can use to
     detect the document as needing a rebuild, instead of silently looking
-    unchanged next time."""
+    unchanged next time. An ordinary caught failure here (e.g. the embedding
+    engine being temporarily unavailable) is a different situation — the
+    process is still alive and this failure is already reported as a
+    per-document warning below, so any 'in_progress' marker it left behind
+    is cleared rather than left looking like a crash on the next startup."""
     try:
         content, _warning = await read_with_cache(source, path)
         chunks = chunk_markdown(content)
@@ -58,6 +62,7 @@ async def _index_document(
         logger.warning(
             "Failed to index document %s in source %s: %s", path, source.id, exc
         )
+        await hash_cache.delete(source.id, path)
         return {"path": path, "reason": "index_error", "message": str(exc)}
 
 
