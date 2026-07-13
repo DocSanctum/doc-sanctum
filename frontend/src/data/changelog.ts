@@ -6,6 +6,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.10.0',
+    date: '2026-07-14',
+    changes: [
+      'Standalone deployments now persist the vector index and its change-tracking cache across backend restarts, instead of re-embedding every document on every restart',
+      'Backend automatically reconnects to the vector store in the background if it was unreachable at startup, instead of requiring a restart once it comes back up',
+      'Sources can now carry their own encrypted GitHub/GitLab access token instead of relying only on the server-wide token',
+      'Perf: source sync fetches documents concurrently, cutting sync time roughly 6x on large sources',
+      'Settings: option toggles (language, theme, font size, line numbers) restyled as a single segmented control',
+      'Fix: sources with partial indexing failures (e.g. a rate-limited fetch) now show a distinct "partial" status instead of silently appearing fully indexed',
+      'Fix: transient upstream 5xx errors while fetching large repository trees no longer abort the whole sync',
+      'Fix: code block line numbers now stay aligned with the rendered code',
+      'Fix: wide tables now use the app’s themed scrollbar instead of the browser default',
+    ],
+  },
+  {
     version: '0.9.0',
     date: '2026-07-11',
     changes: [
