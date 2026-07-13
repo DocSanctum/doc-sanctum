@@ -537,6 +537,32 @@ function handleClick(e: MouseEvent) {
   overflow-x: auto;
   border-collapse: collapse;
   font-size: 0.9em;
+  /* Thin themed horizontal scrollbar for wide tables, matching
+     .prose pre.hljs instead of the browser default. */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+.prose table::-webkit-scrollbar {
+  height: 8px;
+}
+.prose table::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prose table::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+.prose table::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+:root.dark .prose table {
+  scrollbar-color: #374151 transparent;
+}
+:root.dark .prose table::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+:root.dark .prose table::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 :root.dark .prose thead th { background: #1f2937; border-bottom: 2px solid #374151; }
 :root:not(.dark) .prose thead th { background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
