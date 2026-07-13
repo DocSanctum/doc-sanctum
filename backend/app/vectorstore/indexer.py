@@ -175,6 +175,9 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
         if warning is not None:
             warnings.append(warning)
             continue
+        # content is only None on a fetch failure, which is reported via
+        # `warning` and handled above, so it is always present here.
+        assert content is not None
         # A sha-less source can only detect an unchanged document by comparing
         # the freshly fetched content's hash against the last-indexed one.
         if sha is None and known_hashes.get(path) == _hash_content(content):
