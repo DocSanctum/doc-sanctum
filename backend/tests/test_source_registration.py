@@ -103,11 +103,11 @@ async def test_resume_local_source_restarts_watcher_and_rebuilds_index(
         lambda sid, cb: registered.append(sid),
     )
 
-    async def fake_create_index(source):
+    async def fake_sync_source_index(source):
         indexed.append(source.id)
         return []
 
-    monkeypatch.setattr(sources_module, "create_index", fake_create_index)
+    monkeypatch.setattr(sources_module, "sync_source_index", fake_sync_source_index)
 
     source = Source(id="s1", name="wiki", type="local", path="~/wiki")
     await _insert_source(session_factory, source)
@@ -127,10 +127,10 @@ async def test_resume_local_source_marks_error_on_index_failure(
     monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
     monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
 
-    async def failing_create_index(source):
+    async def failing_sync_source_index(source):
         raise RuntimeError("boom")
 
-    monkeypatch.setattr(sources_module, "create_index", failing_create_index)
+    monkeypatch.setattr(sources_module, "sync_source_index", failing_sync_source_index)
 
     source = Source(id="s2", name="vault", type="local", path="~/vault")
     await _insert_source(session_factory, source)

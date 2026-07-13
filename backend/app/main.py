@@ -13,6 +13,7 @@ from .core.database import create_tables
 from .mcp.server import mcp
 from .services.poller import start_polling_all
 from .vectorstore.client import init_engine
+from .vectorstore.rebuild_check import check_and_recover
 
 _mcp_sse_app: ASGIApp = mcp.sse_app()
 _mcp_http_app: ASGIApp = mcp.streamable_http_app()
@@ -36,6 +37,10 @@ async def lifespan(app: FastAPI):
     await create_tables()
     ensure_master_key()
     init_engine()
+    # Must run before resume_local_sources()/start_polling_all() so any
+    # cache invalidation below (embedding model change, incomplete prior
+    # write) is picked up by each source's very first post-restart sync.
+    await check_and_recover()
     await resume_local_sources()
     await seed_sample_source()
     await start_polling_all()

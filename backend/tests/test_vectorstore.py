@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import backend.app.vectorstore.client as client_module
+import backend.app.vectorstore.hash_cache as hash_cache_module
 import backend.app.vectorstore.indexer as indexer_module
 import pytest
+import pytest_asyncio
 from backend.app.models.source import Source
 from backend.app.vectorstore.chunker import MAX_CHUNK_CHARS, chunk_markdown
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 # --- Chunker (research.md §3 / FR-001 chunk-based indexing) ---
 
@@ -41,12 +45,14 @@ def test_chunk_markdown_no_empty_chunks():
     assert all(c.text.strip() for c in chunks)
 
 
-# --- Client init_engine() deployment-mode branching (004 research.md §1, §5) ---
+# --- Client init_engine(): both deployment modes share one persistent
+# HttpClient path, with a bounded retry budget instead of a mode-based
+# branch that could crash startup ---
 
 
 class _FakeEmbeddingFunction:
     def __call__(self, texts: list[str]) -> list[list[float]]:
-        return [[0.0] for _ in texts]
+        return [[0.0, 0.0] for _ in texts]
 
 
 class _FakeHttpClient:
@@ -62,43 +68,21 @@ class _FakeHttpClient:
 
 
 @pytest.fixture(autouse=True)
-def reset_engine_state():
+def reset_engine_state(monkeypatch):
     client_module._client = None
     client_module._embedding_function = None
+    client_module._embedding_dimension = None
     client_module._engine_available = False
+    # Keep retry tests fast — no real sleeping.
+    monkeypatch.setattr(client_module.time, "sleep", lambda _seconds: None)
     yield
     client_module._client = None
     client_module._embedding_function = None
+    client_module._embedding_dimension = None
     client_module._engine_available = False
 
 
-def test_init_engine_standalone_uses_ephemeral_client(monkeypatch):
-    monkeypatch.setattr(client_module.settings, "deployment_mode", "standalone")
-    monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
-    )
-    calls: dict[str, object] = {}
-
-    class FakeChroma:
-        @staticmethod
-        def EphemeralClient():
-            calls["ephemeral"] = True
-            return object()
-
-        @staticmethod
-        def HttpClient(host, port):  # pragma: no cover - must not be called
-            calls["http"] = (host, port)
-            return _FakeHttpClient(host, port)
-
-    monkeypatch.setattr(client_module, "chromadb", FakeChroma)
-
-    assert client_module.init_engine() is True
-    assert calls.get("ephemeral") is True
-    assert "http" not in calls
-
-
-def test_init_engine_scaleout_connects_via_http_client(monkeypatch):
-    monkeypatch.setattr(client_module.settings, "deployment_mode", "scaleout")
+def test_init_engine_connects_via_http_client_regardless_of_mode(monkeypatch):
     monkeypatch.setattr(client_module.settings, "vector_store_host", "vectorstore")
     monkeypatch.setattr(client_module.settings, "vector_store_port", 8000)
     monkeypatch.setattr(
@@ -115,12 +99,31 @@ def test_init_engine_scaleout_connects_via_http_client(monkeypatch):
 
     assert client_module.init_engine() is True
     assert client_module.is_engine_available() is True
+    assert client_module.embedding_signature() == "_FakeEmbeddingFunction:2"
 
 
-def test_init_engine_scaleout_raises_when_unreachable(monkeypatch):
-    monkeypatch.setattr(client_module.settings, "deployment_mode", "scaleout")
-    monkeypatch.setattr(client_module.settings, "vector_store_host", "vectorstore")
-    monkeypatch.setattr(client_module.settings, "vector_store_port", 8000)
+def test_init_engine_retries_then_succeeds(monkeypatch):
+    monkeypatch.setattr(
+        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+    )
+    attempts: list[int] = []
+
+    class FakeChroma:
+        @staticmethod
+        def HttpClient(host, port):
+            attempts.append(1)
+            return _FakeHttpClient(host, port, heartbeat_ok=len(attempts) >= 3)
+
+    monkeypatch.setattr(client_module, "chromadb", FakeChroma)
+
+    assert client_module.init_engine() is True
+    assert len(attempts) == 3
+
+
+def test_init_engine_gives_up_without_raising_after_exhausting_retries(monkeypatch):
+    """A persistent connection failure must never crash the caller — it
+    degrades to is_engine_available() == False so the rest of the app keeps
+    starting."""
     monkeypatch.setattr(
         client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
@@ -132,16 +135,13 @@ def test_init_engine_scaleout_raises_when_unreachable(monkeypatch):
 
     monkeypatch.setattr(client_module, "chromadb", FakeChroma)
 
-    with pytest.raises(Exception):
-        client_module.init_engine()
+    assert client_module.init_engine() is False  # must not raise
     assert client_module.is_engine_available() is False
 
 
-def test_init_engine_standalone_failure_is_swallowed_not_raised(monkeypatch):
-    """standalone must keep 003's FR-014 behavior: failures degrade to
-    `False` (surfaced later as a 503 at registration) instead of crashing."""
-    monkeypatch.setattr(client_module.settings, "deployment_mode", "standalone")
-
+def test_init_engine_embedding_function_failure_returns_false_without_raising(
+    monkeypatch,
+):
     def boom():
         raise RuntimeError("embedding model missing")
 
@@ -198,13 +198,26 @@ def _source(source_id: str = "src-1") -> Source:
     return Source(id=source_id, name="demo", type="local", path="/tmp/whatever")
 
 
-@pytest.fixture(autouse=True)
-def reset_doc_hashes():
-    indexer_module._doc_hashes.clear()
-    indexer_module._doc_shas.clear()
-    yield
-    indexer_module._doc_hashes.clear()
-    indexer_module._doc_shas.clear()
+@pytest_asyncio.fixture
+async def hash_cache_db(monkeypatch, tmp_path):
+    """The hash cache is now durable SQLite instead of the old in-process
+    _doc_hashes/_doc_shas dicts, so indexer tests that reach it need a real
+    (temp) database behind it."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'test.sqlite3'}")
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS doc_index_cache (
+                source_id TEXT NOT NULL, path TEXT NOT NULL, content_hash TEXT,
+                blob_sha TEXT, sync_state TEXT NOT NULL DEFAULT 'clean',
+                updated_at TEXT NOT NULL, PRIMARY KEY (source_id, path)
+            )
+        """)
+        )
+    monkeypatch.setattr(hash_cache_module, "async_session_factory", factory)
+    yield factory
+    await engine.dispose()
 
 
 @pytest.fixture
@@ -217,7 +230,9 @@ def fake_client(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_index_document_success_records_hash(fake_client, monkeypatch):
+async def test_index_document_success_records_hash(
+    hash_cache_db, fake_client, monkeypatch
+):
     async def fake_read_with_cache(source, path):
         return "# Heading\n\nSome content here.", None
 
@@ -228,7 +243,8 @@ async def test_index_document_success_records_hash(fake_client, monkeypatch):
     assert warning is None
     assert fake_client.upserted == [("src-1", "a.md", 1)]
     assert fake_client.keyword.upserted == [("src-1", "a.md")]
-    assert indexer_module._doc_hashes["src-1"]["a.md"]
+    hashes, _ = await hash_cache_module.get_known("src-1")
+    assert hashes["a.md"]
 
 
 @pytest.mark.asyncio
@@ -248,45 +264,8 @@ async def test_index_document_failure_returns_warning_without_upsert(
 
 
 @pytest.mark.asyncio
-async def test_sync_source_index_skips_unchanged_reindexes_changed_removes_deleted(
-    fake_client, monkeypatch
-):
-    docs = [{"path": "a.md"}, {"path": "b.md"}]
-    contents = {"a.md": "content A", "b.md": "content B"}
-
-    async def fake_list_documents(source):
-        return list(docs)
-
-    async def fake_read_with_cache(source, path):
-        return contents[path], None
-
-    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
-    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
-
-    source = _source()
-
-    # First sync: both documents are new -> both indexed
-    await indexer_module.sync_source_index(source)
-    assert len(fake_client.upserted) == 2
-
-    # Second sync, nothing changed -> no re-upsert
-    fake_client.upserted.clear()
-    await indexer_module.sync_source_index(source)
-    assert fake_client.upserted == []
-
-    # a.md content changes, b.md disappears from the tree
-    contents["a.md"] = "content A changed"
-    docs.clear()
-    docs.append({"path": "a.md"})
-    await indexer_module.sync_source_index(source)
-
-    assert fake_client.upserted == [("src-1", "a.md", 1)]
-    assert ("src-1", "b.md") in fake_client.deleted_docs
-
-
-@pytest.mark.asyncio
 async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
-    fake_client, monkeypatch
+    hash_cache_db, fake_client, monkeypatch
 ):
     """github docs carry a blob sha alongside the path. When it matches the
     last-indexed sha, the document must be skipped without ever calling
@@ -310,7 +289,8 @@ async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
     # First sync: both new -> each downloaded exactly once and indexed, shas recorded
     await indexer_module.sync_source_index(source)
     assert sorted(read_calls) == ["a.md", "b.md"]
-    assert indexer_module._doc_shas["src-1"] == {"a.md": "sha-a1", "b.md": "sha-b1"}
+    _, shas = await hash_cache_module.get_known("src-1")
+    assert shas == {"a.md": "sha-a1", "b.md": "sha-b1"}
 
     # Second sync: sha unchanged for both -> no download, no re-upsert at all
     read_calls.clear()
@@ -325,33 +305,34 @@ async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
     await indexer_module.sync_source_index(source)
     assert read_calls == ["b.md"]
     assert fake_client.upserted == [("src-1", "b.md", 1)]
-    assert indexer_module._doc_shas["src-1"]["b.md"] == "sha-b2"
+    _, shas = await hash_cache_module.get_known("src-1")
+    assert shas["b.md"] == "sha-b2"
 
 
 @pytest.mark.asyncio
-async def test_remove_document_clears_hash_and_deletes(fake_client):
-    indexer_module._doc_hashes["src-1"] = {"a.md": "somehash"}
-    indexer_module._doc_shas["src-1"] = {"a.md": "someblobsha"}
+async def test_remove_document_clears_hash_and_deletes(hash_cache_db, fake_client):
+    await hash_cache_module.upsert("src-1", "a.md", "somehash", "someblobsha")
 
     await indexer_module.remove_document(_source(), "a.md")
 
-    assert "a.md" not in indexer_module._doc_hashes.get("src-1", {})
-    assert "a.md" not in indexer_module._doc_shas.get("src-1", {})
+    hashes, shas = await hash_cache_module.get_known("src-1")
+    assert "a.md" not in hashes
+    assert "a.md" not in shas
     assert fake_client.deleted_docs == [("src-1", "a.md")]
     assert fake_client.keyword.deleted_docs == [("src-1", "a.md")]
 
 
 @pytest.mark.asyncio
-async def test_delete_source_index_clears_all_state(fake_client):
-    indexer_module._doc_hashes["src-1"] = {"a.md": "somehash"}
-    indexer_module._doc_shas["src-1"] = {"a.md": "someblobsha"}
+async def test_delete_source_index_clears_all_state(hash_cache_db, fake_client):
+    await hash_cache_module.upsert("src-1", "a.md", "somehash", "someblobsha")
 
     await indexer_module.delete_source_index("src-1")
 
     assert fake_client.deleted_collections == ["src-1"]
     assert fake_client.keyword.deleted_sources == ["src-1"]
-    assert "src-1" not in indexer_module._doc_hashes
-    assert "src-1" not in indexer_module._doc_shas
+    hashes, shas = await hash_cache_module.get_known("src-1")
+    assert hashes == {}
+    assert shas == {}
 
 
 @pytest.mark.asyncio

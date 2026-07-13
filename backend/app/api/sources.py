@@ -20,6 +20,7 @@ from ..vectorstore.indexer import (
     create_index,
     delete_source_index,
     handle_watch_event,
+    sync_source_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -129,13 +130,18 @@ async def _finish_remote_registration(source: Source) -> None:
 
 
 async def _resume_local_source(source: Source) -> None:
-    """Restore a single local source's file watcher and rebuild its vector
-    index in the background at startup. Both live only in process memory
-    (the watcher registry in watcher.py, the vector store as chromadb's
-    EphemeralClient) and are silently wiped on every backend restart, even
-    though the source's DB row still says "active" — without this,
-    semantic search over local sources would return nothing until the
-    source was deleted and re-registered."""
+    """Restore a single local source's file watcher at startup (the watcher
+    registry in watcher.py lives only in process memory and is wiped on
+    every backend restart) and bring its vector index up to date.
+
+    The vector index and its change-tracking cache now persist across
+    restarts, so this runs the same incremental sync_source_index() the
+    poller uses instead of forcing a
+    full re-embed of every document — an unchanged source's restart is a
+    fast no-op diff rather than a full rebuild. A source with no prior
+    persisted state (first-ever run) is naturally handled the same way:
+    sync_source_index() treats every document as new when the cache is
+    empty, which is equivalent to a full build."""
     watch_root = os.path.expanduser(source.path)
     start_watching(source.id, watch_root)
     register_index_listener(
@@ -150,16 +156,16 @@ async def _resume_local_source(source: Source) -> None:
         await session.commit()
 
     try:
-        warnings = await create_index(source)
+        warnings = await sync_source_index(source)
         status, error_msg = "active", None
         if warnings:
             logger.warning(
-                "Startup reindex for source %s completed with %d warning(s)",
+                "Startup sync for source %s completed with %d warning(s)",
                 source.id,
                 len(warnings),
             )
     except Exception as exc:
-        logger.exception("Failed to rebuild index for source %s at startup", source.id)
+        logger.exception("Failed to sync index for source %s at startup", source.id)
         status, error_msg = "error", str(exc)
 
     async with async_session_factory() as session:
