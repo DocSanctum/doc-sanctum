@@ -1,4 +1,4 @@
-# --- Scaleout deployment (specs/004-scaleout-deployment) -------------------
+# --- Scaleout deployment ----------------------------------------------------
 # The default setup below is `standalone`: one backend replica, local +
 # remote sources both allowed. Both `standalone` and `scaleout` now share
 # the same persistent `vectorstore` service — a restart no longer re-embeds
@@ -7,8 +7,8 @@
 #   1. `vectorstore` is already running (this compose file always starts it).
 #   2. Launch backend with DEPLOYMENT_MODE=scaleout, e.g.:
 #        DEPLOYMENT_MODE=scaleout docker compose up -d --scale backend=2
-#   3. Local filesystem sources are rejected in this mode (FR-004) — backend
-#      replicas don't have access to the operator's machine, only to remote
+#   3. Local filesystem sources are rejected in this mode — backend replicas
+#      don't have access to the operator's machine, only to remote
 #      GitHub/HTTP sources. Registering one returns 422.
 #   4. `vectorstore_data` persists the shared index across restarts/redeploys
 #      of any replica — do not delete it unless you intend to lose the index.
@@ -21,10 +21,9 @@
 #      the same across replicas when accessed directly.
 #   6. Put a load balancer in front with least-connections (or similar
 #      load-aware) routing if you can — plain round-robin will keep sending
-#      requests to a replica that's mid-embedding a large re-index (see
-#      specs/004-scaleout-deployment/quickstart.md "운영 참고"). Point MCP
-#      clients (and anything else that needs one stable address) at the LB,
-#      not at an individual replica's port from the range above.
+#      requests to a replica that's mid-embedding a large re-index. Point
+#      MCP clients (and anything else that needs one stable address) at the
+#      LB, not at an individual replica's port from the range above.
 # -----------------------------------------------------------------------------
 services:
   vectorstore:
