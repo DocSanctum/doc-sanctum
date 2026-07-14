@@ -268,12 +268,44 @@ async def test_chunking_version_mismatch_invalidates_cache_and_writes_distinct_e
 async def test_chunking_version_first_run_stores_value_without_rebuild_event(
     db, monkeypatch, tmp_path
 ):
+    """A genuinely fresh install (no stored version, nothing in the hash
+    cache either) just starts tracking the version — no rebuild event,
+    since there's nothing to rebuild."""
     events_dir = tmp_path / "events"
     monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
 
     await rebuild_check_module._check_chunking_version()
 
     assert not events_dir.exists() or not list(events_dir.iterdir())
+
+    from backend.app.core.database import get_setting
+
+    stored = await get_setting("chunking_algorithm_version")
+    assert stored == str(chunker_module.CHUNKING_VERSION)
+
+
+async def test_chunking_version_first_observation_with_existing_data_still_rebuilds(
+    db, monkeypatch, tmp_path
+):
+    """An installation upgrading into this check for the first time can
+    already have documents indexed under the old, untracked chunking rule
+    — a missing stored version must NOT be treated as "nothing to
+    invalidate" in that case. This is the exact scenario that occurs the
+    first time an existing deployment restarts after gaining this check."""
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_chunking_version()
+
+    hashes, _ = await hash_cache_module.get_known("s1")
+    assert hashes == {}  # cache invalidated -> next sync fully re-chunks
+
+    files = list(events_dir.iterdir())
+    assert len(files) == 1
+    first_line = files[0].read_text().splitlines()[0]
+    assert first_line.startswith("REBUILT source=all sources reason=chunking-mismatch")
 
     from backend.app.core.database import get_setting
 
