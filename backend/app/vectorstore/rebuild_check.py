@@ -94,14 +94,18 @@ async def _check_chunking_version() -> None:
     rebuilt on its next sync, and record one rebuild event describing the
     mismatch. Structurally mirrors _check_embedding_signature() above but
     stays fully independent (own setting key, own lock, own reason) so the
-    two conditions are never conflated in the rebuild event log."""
+    two conditions are never conflated in the rebuild event log.
+
+    Unlike the embedding-signature check, a missing stored value here does
+    NOT mean "nothing has ever been indexed" — this version tracking was
+    introduced after the system had already been chunking documents for a
+    while, so an existing installation upgrading into this check for the
+    first time can easily already have a populated, stale hash cache. The
+    stored value is therefore only trusted to mean "nothing to invalidate"
+    once wipe_all() itself confirms there was nothing to invalidate."""
     current = str(chunker.CHUNKING_VERSION)
 
     stored = await get_setting(_CHUNKING_VERSION_KEY)
-    if stored is None:
-        # First time this key is written — nothing to invalidate.
-        await set_setting(_CHUNKING_VERSION_KEY, current)
-        return
     if stored == current:
         return  # unchanged, no action needed
 
@@ -118,6 +122,11 @@ async def _check_chunking_version() -> None:
         invalidated = await hash_cache.wipe_all()
         await set_setting(_CHUNKING_VERSION_KEY, current)
         duration = time.monotonic() - started
+        if stored is None and invalidated == 0:
+            # A genuinely fresh install: this key has never been set, and
+            # there was nothing in the hash cache to invalidate either, so
+            # this isn't a real rebuild — just start tracking the version.
+            return
         rebuild_events.record(
             source_id="*",
             source_name="all sources",
@@ -125,8 +134,9 @@ async def _check_chunking_version() -> None:
             doc_count=invalidated,
             duration_seconds=duration,
             detail=(
-                f"Stored chunking algorithm version '{stored}' no longer "
-                f"matches the configured '{current}'. Invalidated "
+                f"Stored chunking algorithm version "
+                f"'{stored if stored is not None else '(none — pre-existing install)'}' "
+                f"no longer matches the configured '{current}'. Invalidated "
                 f"{invalidated} cached document hash(es) across all "
                 "sources; each will be re-chunked and re-embedded on its "
                 "next sync."
