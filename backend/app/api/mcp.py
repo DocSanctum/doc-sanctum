@@ -14,6 +14,10 @@ TOOLS = [
     },
     {"name": "read_document", "description": "Read the content of a specific document"},
     {"name": "search_documents", "description": "Search documents by keyword"},
+    {
+        "name": "semantic_search_documents",
+        "description": "Search documents by semantic meaning using a natural-language query",
+    },
 ]
 
 
@@ -37,8 +41,8 @@ class McpPatch(BaseModel):
 async def get_mcp_status():
     return McpStatus(
         enabled=await is_enabled(),
-        sse_url="/mcp/sse",
-        http_url="/mcp-http",
+        sse_url="/mcp-sse/sse",
+        http_url="/mcp",
         tools=TOOLS,
     )
 
@@ -47,5 +51,5 @@ async def get_mcp_status():
 async def patch_mcp_status(body: McpPatch):
     await set_setting(SETTING_KEY, "true" if body.enabled else "false")
     return McpStatus(
-        enabled=body.enabled, sse_url="/mcp/sse", http_url="/mcp-http", tools=TOOLS
+        enabled=body.enabled, sse_url="/mcp-sse/sse", http_url="/mcp", tools=TOOLS
     )

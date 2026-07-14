@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     await start_polling_all()
     # Starlette never forwards the "lifespan" scope to mounted sub-apps, so
     # streamable_http_app()'s own lifespan (which starts this) never runs on
-    # its own; without it every /mcp-http request fails with
+    # its own; without it every /mcp request fails with
     # "Task group is not initialized. Make sure to use run()."
     async with mcp.session_manager.run():
         yield
@@ -75,7 +75,7 @@ app.include_router(deployment.router, prefix="/api/v1")
 app.include_router(locale.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 
-app.mount("/mcp", _make_guard(_mcp_sse_app))  # SSE transport (legacy)
+app.mount("/mcp-sse", _make_guard(_mcp_sse_app))  # SSE transport (legacy)
 app.mount(
-    "/mcp-http", _make_guard(_mcp_http_app)
-)  # Streamable HTTP transport (MCP 1.x)
+    "/mcp", _make_guard(_mcp_http_app)
+)  # Streamable HTTP transport (MCP 1.x, recommended)
