@@ -390,8 +390,8 @@ function backendOrigin() {
 const endpoints = computed(() => {
   const o = backendOrigin()
   return [
-    { label: 'Streamable HTTP', url: `${o}${mcpStatus.value?.http_url ?? '/mcp-http'}`, badge: 'new' },
-    { label: 'SSE', url: `${o}${mcpStatus.value?.sse_url ?? '/mcp/sse'}`, badge: 'legacy' },
+    { label: 'Streamable HTTP', url: `${o}${mcpStatus.value?.http_url ?? '/mcp'}`, badge: 'new' },
+    { label: 'SSE', url: `${o}${mcpStatus.value?.sse_url ?? '/mcp-sse/sse'}`, badge: 'legacy' },
   ]
 })
 

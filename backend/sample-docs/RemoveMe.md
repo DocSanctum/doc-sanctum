@@ -52,7 +52,7 @@ curl -X POST http://localhost:8000/api/v1/sources \
 DocSanctum also exposes an MCP server[^mcp], so an AI assistant can answer
 questions from your docs instead of guessing.
 
-[^mcp]: Model Context Protocol — see the `/mcp` and `/mcp-http` endpoints in the backend.
+[^mcp]: Model Context Protocol — see the `/mcp` and `/mcp-sse` endpoints in the backend.
 
 ## Abbreviations
 

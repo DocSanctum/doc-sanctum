@@ -86,8 +86,8 @@ Leaving both directories empty is a no-op — nothing else changes. No `.env` va
 
 DocSanctum runs its MCP server inside the same backend process, mounted at:
 
-- `http://<host>:8000/mcp-http` — streamable HTTP transport (MCP 1.x, recommended)
-- `http://<host>:8000/mcp` — SSE transport (legacy, kept for older clients)
+- `http://<host>:8000/mcp` — streamable HTTP transport (MCP 1.x, recommended)
+- `http://<host>:8000/mcp-sse/sse` — SSE transport (legacy, kept for older clients)
 
 Point your MCP client at whichever one it supports, and it can list your registered documents, read one, or search across all of them — keyword or semantic — without you having to paste file contents into a prompt by hand.
 
