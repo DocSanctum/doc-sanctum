@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import backend.app.core.database as database_module
+import backend.app.vectorstore.chunker as chunker_module
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
 import backend.app.vectorstore.indexer as indexer_module
@@ -232,6 +233,52 @@ async def test_signature_mismatch_invalidates_cache_and_writes_event(
     assert len(files) == 1
     first_line = files[0].read_text().splitlines()[0]
     assert first_line.startswith("REBUILT source=all sources reason=model-mismatch")
+
+
+async def test_chunking_version_mismatch_invalidates_cache_and_writes_distinct_event(
+    db, monkeypatch, tmp_path
+):
+    """A chunking-algorithm-version mismatch must invalidate the hash cache
+    the same way an embedding-model mismatch does, but be recorded under a
+    *distinct* reason so an operator can tell the two apart without
+    cross-referencing other logs."""
+    from backend.app.core.database import set_setting
+
+    await set_setting(
+        "chunking_algorithm_version", "1"
+    )  # stale: real value is CHUNKING_VERSION
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_chunking_version()
+
+    hashes, _ = await hash_cache_module.get_known("s1")
+    assert hashes == {}  # cache invalidated -> next sync fully re-chunks
+
+    files = list(events_dir.iterdir())
+    assert len(files) == 1
+    first_line = files[0].read_text().splitlines()[0]
+    assert first_line.startswith("REBUILT source=all sources reason=chunking-mismatch")
+    # distinct from the embedding-model-mismatch reason asserted above
+    assert "reason=model-mismatch" not in first_line
+
+
+async def test_chunking_version_first_run_stores_value_without_rebuild_event(
+    db, monkeypatch, tmp_path
+):
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_chunking_version()
+
+    assert not events_dir.exists() or not list(events_dir.iterdir())
+
+    from backend.app.core.database import get_setting
+
+    stored = await get_setting("chunking_algorithm_version")
+    assert stored == str(chunker_module.CHUNKING_VERSION)
 
 
 async def test_incomplete_write_invalidates_only_that_source(db, monkeypatch, tmp_path):

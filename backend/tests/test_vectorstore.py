@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
 import backend.app.vectorstore.indexer as indexer_module
+import backend.app.vectorstore.tokenizer as tokenizer_module
 import pytest
 import pytest_asyncio
 from backend.app.models.source import Source
-from backend.app.vectorstore.chunker import MAX_CHUNK_CHARS, chunk_markdown
+from backend.app.vectorstore.chunker import MAX_CHUNK_TOKENS, chunk_markdown
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-# --- Chunker (research.md §3 / FR-001 chunk-based indexing) ---
+# --- Chunker ---
 
 
 def test_chunk_markdown_empty():
@@ -33,18 +35,105 @@ def test_chunk_markdown_splits_by_heading():
     assert "Section B" in joined
 
 
-def test_chunk_markdown_respects_max_chars_for_oversized_paragraph():
+def test_chunk_markdown_respects_max_tokens_for_oversized_paragraph():
     long_para = "word " * 500  # single paragraph, no blank lines, well over the limit
     text = f"# Title\n\n{long_para}\n"
     chunks = chunk_markdown(text)
     assert len(chunks) > 1
-    assert all(len(c.text) <= MAX_CHUNK_CHARS for c in chunks)
+    assert all(
+        tokenizer_module.count_tokens(c.text) <= MAX_CHUNK_TOKENS for c in chunks
+    )
 
 
 def test_chunk_markdown_no_empty_chunks():
     text = "# A\n\n\n\n## B\n\ncontent\n\n\n\n"
     chunks = chunk_markdown(text)
     assert all(c.text.strip() for c in chunks)
+
+
+def test_chunk_markdown_preserves_tail_content_of_dense_korean_section():
+    """This is a chunker-level proxy for "search finds the tail content":
+    test_semantic_search_api.py's tests are fully mocked at the
+    vector-client layer (query() returns canned hits, no real
+    chunking/embedding happens), so they can't exercise the actual defect.
+    What search can return is bounded by what got embedded, which is
+    bounded by what chunk_markdown() produced — so proving the tail content
+    survives verbatim into a chunk's `.text` here is the correct,
+    deterministic place to prove the defect (content silently dropped
+    before embedding) is fixed, without standing up a real chromadb
+    instance in a unit test."""
+    dense_korean = (
+        "분산 시스템에서 일관성과 가용성 사이의 트레이드오프는 설계 초기 단계부터 "
+        "신중하게 검토되어야 하는 핵심 요소이며, 특히 네트워크 파티션이 발생했을 때 "
+        "시스템이 어떻게 동작해야 하는지에 대한 명확한 정책이 필요하다. "
+    ) * 6
+    tail_marker = "이것은문서끝부분에만있는고유한마커텍스트입니다"
+    text = f"# 개요\n\n{dense_korean}{tail_marker}\n"
+    chunks = chunk_markdown(text)
+    assert any(tail_marker in c.text for c in chunks)
+
+
+def test_chunk_markdown_dense_korean_section_stays_within_token_limit():
+    """Dense Korean text packs far more tokens per character than English
+    (measured here at roughly 1.4 tokens/char vs. roughly 0.16 for
+    English) — a section whose 800-character chunk would have fit under
+    the old char-based sizing must still be split under the new
+    token-based sizing so no chunk silently exceeds the embedding model's
+    real token capacity."""
+    dense_korean = (
+        "분산 시스템에서 일관성과 가용성 사이의 트레이드오프는 설계 초기 단계부터 "
+        "신중하게 검토되어야 하는 핵심 요소이며, 특히 네트워크 파티션이 발생했을 때 "
+        "시스템이 어떻게 동작해야 하는지에 대한 명확한 정책이 필요하다. "
+    ) * 6
+    text = f"# 개요\n\n{dense_korean}\n"
+    chunks = chunk_markdown(text)
+    assert len(chunks) > 1
+    assert all(
+        tokenizer_module.count_tokens(c.text) <= MAX_CHUNK_TOKENS for c in chunks
+    )
+
+
+def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
+    """Baseline counts were measured once against the pre-change
+    character-based chunker (MAX_CHUNK_CHARS=800 / CHUNK_OVERLAP_CHARS=100)
+    for three representative English fixtures; the token-based chunker
+    must not produce more chunks than that baseline for any of them."""
+    sample_doc = (
+        Path(__file__).resolve().parents[1] / "sample-docs" / "RemoveMe.md"
+    ).read_text()
+
+    long_paragraph_doc = (
+        "# Title\n\n"
+        + (
+            "The quick brown fox jumps over the lazy dog near the river bank "
+            "every single morning. "
+        )
+        * 60
+        + "\n"
+    )
+
+    multi_section_doc = "".join(
+        f"## Section {i}\n\n"
+        + (
+            "This is a normal paragraph of English documentation text "
+            "explaining something useful. "
+        )
+        * 8
+        + "\n\n"
+        for i in range(10)
+    )
+
+    baselines = {
+        "sample_doc (RemoveMe.md)": (sample_doc, 8),
+        "long_paragraph_doc": (long_paragraph_doc, 9),
+        "multi_section_doc": (multi_section_doc, 10),
+    }
+    for name, (doc, old_count) in baselines.items():
+        new_count = len(chunk_markdown(doc))
+        assert new_count <= old_count, (
+            f"{name}: token-based chunker produced {new_count} chunks, "
+            f"more than the {old_count}-chunk char-based baseline"
+        )
 
 
 # --- Client init_engine(): both deployment modes share one persistent

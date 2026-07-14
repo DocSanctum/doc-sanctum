@@ -6,16 +6,22 @@ import time
 from sqlalchemy import text
 
 from ..core.database import async_session_factory, get_setting, set_setting
-from . import client, hash_cache, rebuild_events, rebuild_lock
+from . import chunker, client, hash_cache, rebuild_events, rebuild_lock
 
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_SIGNATURE_KEY = "embedding_model_signature"
+_CHUNKING_VERSION_KEY = "chunking_algorithm_version"
 
-# Sentinel lock row for the global model-mismatch case, distinct from the
-# per-source locks used for incomplete-write recovery below — both share
-# the same rebuild_lock table.
+# Sentinel lock rows for the two independent global-mismatch cases below,
+# distinct from each other and from the per-source locks used for
+# incomplete-write recovery further down — all share the same
+# rebuild_lock table. Kept separate (rather than folded into one signature)
+# so an operator can tell, from the rebuild event's reason alone, whether an
+# embedding-model change or a chunking-algorithm change caused a given
+# rebuild.
 _GLOBAL_LOCK_ID = "__embedding_signature__"
+_CHUNKING_LOCK_ID = "__chunking_version__"
 
 
 async def _source_name(source_id: str) -> str:
@@ -81,6 +87,62 @@ async def _check_embedding_signature() -> None:
         await rebuild_lock.release(_GLOBAL_LOCK_ID)
 
 
+async def _check_chunking_version() -> None:
+    """If the chunking algorithm changed since the last run (chunker.
+    CHUNKING_VERSION bumped), every persisted vector was chunked under the
+    old rule — invalidate the entire hash cache so every source is fully
+    rebuilt on its next sync, and record one rebuild event describing the
+    mismatch. Structurally mirrors _check_embedding_signature() above but
+    stays fully independent (own setting key, own lock, own reason) so the
+    two conditions are never conflated in the rebuild event log."""
+    current = str(chunker.CHUNKING_VERSION)
+
+    stored = await get_setting(_CHUNKING_VERSION_KEY)
+    if stored is None:
+        # First time this key is written — nothing to invalidate.
+        await set_setting(_CHUNKING_VERSION_KEY, current)
+        return
+    if stored == current:
+        return  # unchanged, no action needed
+
+    if not await rebuild_lock.try_acquire(_CHUNKING_LOCK_ID):
+        logger.info(
+            "Chunking algorithm version changed (%s -> %s) but another "
+            "replica is already handling the rebuild; skipping",
+            stored,
+            current,
+        )
+        return
+    try:
+        started = time.monotonic()
+        invalidated = await hash_cache.wipe_all()
+        await set_setting(_CHUNKING_VERSION_KEY, current)
+        duration = time.monotonic() - started
+        rebuild_events.record(
+            source_id="*",
+            source_name="all sources",
+            reason="chunking-mismatch",
+            doc_count=invalidated,
+            duration_seconds=duration,
+            detail=(
+                f"Stored chunking algorithm version '{stored}' no longer "
+                f"matches the configured '{current}'. Invalidated "
+                f"{invalidated} cached document hash(es) across all "
+                "sources; each will be re-chunked and re-embedded on its "
+                "next sync."
+            ),
+        )
+        logger.warning(
+            "Chunking algorithm version changed (%s -> %s); invalidated %d "
+            "cached document hash(es), full rebuild will follow",
+            stored,
+            current,
+            invalidated,
+        )
+    finally:
+        await rebuild_lock.release(_CHUNKING_LOCK_ID)
+
+
 async def _check_incomplete_writes() -> None:
     """A document cache row left 'in_progress' means the previous process
     died mid-write for that source. Invalidate just that source's cache
@@ -130,4 +192,5 @@ async def check_and_recover() -> None:
     start_polling_all(), so any invalidation below is picked up by the very
     first sync each source performs."""
     await _check_embedding_signature()
+    await _check_chunking_version()
     await _check_incomplete_writes()
