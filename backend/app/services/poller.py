@@ -6,9 +6,9 @@ import logging
 from sqlalchemy import text
 
 from ..core.database import async_session_factory
-from ..mcp.cache import get_tree_lock, set_cached
 from ..models.source import Source
 from ..vectorstore.indexer import summarize_index_warnings, sync_source_index
+from .document_cache import get_tree_lock, set_cached
 from .github import fetch_github_tree
 from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
@@ -36,7 +36,7 @@ async def _poll_source(source: Source) -> None:
 
     try:
         # Shares the lock with on-demand /tree requests (see
-        # mcp/cache.get_tree_lock) so a periodic poll and a manual tree
+        # document_cache.get_tree_lock) so a periodic poll and a manual tree
         # fetch can't both independently re-walk a slow paginated remote
         # API (e.g. GitLab's tree endpoint for a large repo) at once.
         async with get_tree_lock(source.id):

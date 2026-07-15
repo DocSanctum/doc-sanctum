@@ -7,10 +7,13 @@ import os
 from typing import Any
 
 from ..keywordindex import client as keyword_client
-from ..mcp.cache import clear_source
-from ..mcp.tools.list_documents import _flatten_tree, _get_tree_with_cache
-from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
+from ..services.document_access import (
+    flatten_tree,
+    get_tree_with_cache,
+    read_with_cache,
+)
+from ..services.document_cache import clear_source
 from . import client, hash_cache
 from .chunker import chunk_markdown
 
@@ -39,10 +42,10 @@ async def _list_documents(
     listing itself degraded — e.g. a rate-limited tree fetch that produced an
     empty (or only stale-cached) document list. Callers must surface it rather
     than treating an empty list as "the source has no documents"."""
-    tree, warning = await _get_tree_with_cache(source)
+    tree, warning = await get_tree_with_cache(source)
     docs: list[dict[str, Any]] = []
     if tree and tree.get("root"):
-        _flatten_tree(tree["root"], docs, source)
+        flatten_tree(tree["root"], docs, source)
     return docs, warning
 
 
