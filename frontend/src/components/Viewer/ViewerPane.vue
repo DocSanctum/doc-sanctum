@@ -6,6 +6,20 @@
     @focusin="activate"
   >
     <div class="viewer-pane-toolbar absolute top-2 right-2 z-10 flex items-center gap-1.5">
+      <button
+        type="button"
+        class="pane-toolbar-btn"
+        :disabled="!canGoBack(paneId)"
+        :title="t('viewer.pane.backTitle')"
+        @click.stop="goBack(paneId)"
+      >←</button>
+      <button
+        type="button"
+        class="pane-toolbar-btn"
+        :disabled="!canGoForward(paneId)"
+        :title="t('viewer.pane.forwardTitle')"
+        @click.stop="goForward(paneId)"
+      >→</button>
       <span ref="colorPickerWrapperRef" class="relative inline-block">
         <button
           type="button"
@@ -69,8 +83,21 @@ import ReadingProgressBar from './ReadingProgressBar.vue'
 const props = defineProps<{ paneId: PaneId }>()
 
 const { t } = useI18n()
-const { panes, activePaneId, colorOf, setPaneColor, setActivePane, setPaneDocument, canAddPane, addPane, closePane } =
-  usePanes()
+const {
+  panes,
+  activePaneId,
+  colorOf,
+  setPaneColor,
+  setActivePane,
+  setPaneDocument,
+  canAddPane,
+  addPane,
+  closePane,
+  canGoBack,
+  canGoForward,
+  goBack,
+  goForward,
+} = usePanes()
 
 const pane = computed(() => panes.value.find((p) => p.id === props.paneId)!)
 const isActive = computed(() => activePaneId.value === props.paneId)
@@ -121,6 +148,14 @@ function onNavigate(path: string) {
 .pane-toolbar-btn:focus-visible {
   color: #3b82f6;
   border-color: #3b82f6;
+}
+.pane-toolbar-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.pane-toolbar-btn:disabled:hover {
+  color: #9ca3af;
+  border-color: rgba(148, 163, 184, 0.4);
 }
 .pane-color-picker {
   background: white;

@@ -89,11 +89,33 @@ function initialPanes(): ViewerPaneState[] {
   return panes
 }
 
+interface HistoryEntry {
+  sourceId: string
+  filePath: string
+}
+
+// Per-pane visit history (browser back/forward style) — tracks documents opened
+// in a pane via clicks/search/links, independent of the file tree's own order.
+function initialHistory(initPanes: ViewerPaneState[]): { history: Record<PaneId, HistoryEntry[]>; index: Record<PaneId, number> } {
+  const history: Record<PaneId, HistoryEntry[]> = { 1: [], 2: [] }
+  const index: Record<PaneId, number> = { 1: -1, 2: -1 }
+  for (const p of initPanes) {
+    if (p.sourceId && p.filePath) {
+      history[p.id] = [{ sourceId: p.sourceId, filePath: p.filePath }]
+      index[p.id] = 0
+    }
+  }
+  return { history, index }
+}
+
 // 모듈 스코프 싱글턴 상태 — useViewerSettings.ts/useTreeReveal.ts와 동일한 패턴.
 // App.vue와 ViewerPane.vue, FileTree.vue가 서로 다른 컴포넌트 트리이므로
 // 패널 목록을 전역 공유 상태로 둔다(FR-003 최대 2개, FR-007 최소 1개 유지).
 const panes = ref<ViewerPaneState[]>(initialPanes())
 const activePaneId = ref<PaneId>(panes.value.length === 2 ? viewerUrl.getActivePane() : 1)
+const { history: initHistory, index: initHistoryIndex } = initialHistory(panes.value)
+const paneHistory = ref<Record<PaneId, HistoryEntry[]>>(initHistory)
+const paneHistoryIndex = ref<Record<PaneId, number>>(initHistoryIndex)
 // 패널 색상 원을 클릭해 사용자가 직접 바꿀 수 있다 — id별 기본값(파랑/노랑)에서
 // 시작하되, 분할을 닫아 패널 1개로 돌아가면 다음에 다시 열 때 헷갈리지 않도록
 // 기본값으로 리셋한다(closePane 참고).
@@ -129,7 +151,9 @@ export function usePanes() {
     syncUrl()
   }
 
-  function setPaneDocument(paneId: PaneId, sourceId: string | null, filePath: string | null) {
+  // pushHistory=false is used by goBack/goForward so replaying a history
+  // entry doesn't itself get recorded as a new visit.
+  function setPaneDocument(paneId: PaneId, sourceId: string | null, filePath: string | null, pushHistory = true) {
     const pane = panes.value.find((p) => p.id === paneId)
     if (!pane) return
     pane.sourceId = sourceId
@@ -141,7 +165,54 @@ export function usePanes() {
     if (paneId === activePaneId.value) {
       viewerUrl.setHeadingId(null)
     }
+    if (pushHistory) {
+      if (sourceId && filePath) {
+        recordVisit(paneId, sourceId, filePath)
+      } else {
+        // Explicitly clearing a pane's document also clears its history —
+        // there's nothing left to go back/forward to.
+        paneHistory.value = { ...paneHistory.value, [paneId]: [] }
+        paneHistoryIndex.value = { ...paneHistoryIndex.value, [paneId]: -1 }
+      }
+    }
     syncUrl()
+  }
+
+  // Appends a visit to the pane's history stack, discarding any forward
+  // entries past the current position (standard browser back/forward semantics).
+  function recordVisit(paneId: PaneId, sourceId: string, filePath: string) {
+    const stack = paneHistory.value[paneId]
+    const idx = paneHistoryIndex.value[paneId]
+    const current = stack[idx]
+    if (current && current.sourceId === sourceId && current.filePath === filePath) return
+    const truncated = [...stack.slice(0, idx + 1), { sourceId, filePath }]
+    paneHistory.value = { ...paneHistory.value, [paneId]: truncated }
+    paneHistoryIndex.value = { ...paneHistoryIndex.value, [paneId]: truncated.length - 1 }
+  }
+
+  function canGoBack(paneId: PaneId): boolean {
+    return paneHistoryIndex.value[paneId] > 0
+  }
+
+  function canGoForward(paneId: PaneId): boolean {
+    const idx = paneHistoryIndex.value[paneId]
+    return idx >= 0 && idx < paneHistory.value[paneId].length - 1
+  }
+
+  function goBack(paneId: PaneId) {
+    if (!canGoBack(paneId)) return
+    const newIdx = paneHistoryIndex.value[paneId] - 1
+    paneHistoryIndex.value = { ...paneHistoryIndex.value, [paneId]: newIdx }
+    const entry = paneHistory.value[paneId][newIdx]
+    setPaneDocument(paneId, entry.sourceId, entry.filePath, false)
+  }
+
+  function goForward(paneId: PaneId) {
+    if (!canGoForward(paneId)) return
+    const newIdx = paneHistoryIndex.value[paneId] + 1
+    paneHistoryIndex.value = { ...paneHistoryIndex.value, [paneId]: newIdx }
+    const entry = paneHistory.value[paneId][newIdx]
+    setPaneDocument(paneId, entry.sourceId, entry.filePath, false)
   }
 
   function openInActivePane(sourceId: string, filePath: string) {
@@ -156,6 +227,8 @@ export function usePanes() {
     if (!canAddPane()) return
     panes.value.push({ id: 2, sourceId: null, filePath: null })
     activePaneId.value = 2
+    paneHistory.value = { ...paneHistory.value, 2: [] }
+    paneHistoryIndex.value = { ...paneHistoryIndex.value, 2: -1 }
     syncUrl()
   }
 
@@ -163,24 +236,42 @@ export function usePanes() {
     if (panes.value.length <= 1) return
     const remaining = panes.value.find((p) => p.id !== paneId)
     if (!remaining) return
+    // The surviving pane keeps its history, now under slot 1; the closed
+    // pane's history (slot 2) is dropped.
+    const remainingHistory = paneHistory.value[remaining.id]
+    const remainingIndex = paneHistoryIndex.value[remaining.id]
     panes.value = [{ id: 1, sourceId: remaining.sourceId, filePath: remaining.filePath }]
     activePaneId.value = 1
     paneColors.value = { ...DEFAULT_PANE_COLOR }
+    paneHistory.value = { 1: remainingHistory, 2: [] }
+    paneHistoryIndex.value = { 1: remainingIndex, 2: -1 }
     syncUrl()
   }
 
   function clearSource(sourceId: string) {
     // 소스가 삭제되면, 그 소스의 문서를 표시 중이던 패널을 빈 상태로 되돌린다
     // (기존 단일 뷰어의 fetchError/EmptyState 패턴을 패널별로 재사용).
-    let changed = false
+    const clearedPaneIds: PaneId[] = []
     panes.value = panes.value.map((p) => {
       if (p.sourceId === sourceId) {
-        changed = true
+        clearedPaneIds.push(p.id)
         return { ...p, sourceId: null, filePath: null }
       }
       return p
     })
-    if (changed) syncUrl()
+    if (clearedPaneIds.length > 0) {
+      // The deleted source's history entries no longer resolve to anything,
+      // so drop that pane's whole stack rather than leave dangling entries.
+      const newHistory = { ...paneHistory.value }
+      const newIndex = { ...paneHistoryIndex.value }
+      for (const id of clearedPaneIds) {
+        newHistory[id] = []
+        newIndex[id] = -1
+      }
+      paneHistory.value = newHistory
+      paneHistoryIndex.value = newIndex
+      syncUrl()
+    }
   }
 
   return {
@@ -196,5 +287,9 @@ export function usePanes() {
     addPane,
     closePane,
     clearSource,
+    canGoBack,
+    canGoForward,
+    goBack,
+    goForward,
   }
 }

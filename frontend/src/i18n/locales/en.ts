@@ -90,6 +90,8 @@ export const en = {
       splitView: 'Split view',
       splitViewTitle: 'Enable split view',
       closeTitle: 'Close pane',
+      backTitle: 'Go to previous document',
+      forwardTitle: 'Go to next document',
     },
     markdown: {
       copyCode: 'Copy code',
