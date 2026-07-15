@@ -6,6 +6,17 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '0.11.0',
+    date: '2026-07-16',
+    changes: [
+      'Settings: app theme now offers Dark Gray and Black variants alongside Light and Dark',
+      'Viewer: back/forward navigation arrows added to each pane, tracking that pane\'s own visit history',
+      'Fix: Korean-heavy (and other dense-script) documents no longer get silently truncated before embedding, which was degrading semantic search results',
+      'Fix: semantic search index no longer silently empties out after a container restart or image update in standalone deployments',
+      'Fix: MCP streamable-http and SSE endpoints now work at their documented /mcp and /mcp-sse paths without a redirect',
+    ],
+  },
+  {
     version: '0.10.0',
     date: '2026-07-14',
     changes: [
