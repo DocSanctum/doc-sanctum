@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import backend.app.mcp.cache as cache_module
+import backend.app.services.document_cache as cache_module
 import pytest
-from backend.app.mcp.cache import (
+from backend.app.services.document_cache import (
     clear_source,
     get_cached,
     get_cached_content,

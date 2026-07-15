@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
-import backend.app.mcp.cache as cache_module
-import backend.app.mcp.tools.list_documents as list_documents_module
+import backend.app.services.document_access as document_access_module
+import backend.app.services.document_cache as cache_module
 import pytest
 from backend.app.models.source import Source
 
@@ -46,13 +46,13 @@ async def test_concurrent_tree_fetches_coalesce_into_one_upstream_call(monkeypat
         return {"source_id": source.id, "root": {"is_dir": True, "children": []}}
 
     monkeypatch.setattr(
-        list_documents_module, "build_remote_tree", slow_build_remote_tree
+        document_access_module, "build_remote_tree", slow_build_remote_tree
     )
 
     source = _make_source("src-race")
     results = await asyncio.gather(
-        list_documents_module._get_tree_with_cache(source),
-        list_documents_module._get_tree_with_cache(source),
+        document_access_module.get_tree_with_cache(source),
+        document_access_module.get_tree_with_cache(source),
     )
 
     assert call_count == 1
@@ -69,11 +69,11 @@ async def test_sequential_calls_after_cache_populated_do_not_refetch(monkeypatch
         return {"source_id": source.id, "root": {"is_dir": True, "children": []}}
 
     monkeypatch.setattr(
-        list_documents_module, "build_remote_tree", counting_build_remote_tree
+        document_access_module, "build_remote_tree", counting_build_remote_tree
     )
 
     source = _make_source("src-seq")
-    await list_documents_module._get_tree_with_cache(source)
-    await list_documents_module._get_tree_with_cache(source)
+    await document_access_module.get_tree_with_cache(source)
+    await document_access_module.get_tree_with_cache(source)
 
     assert call_count == 1
