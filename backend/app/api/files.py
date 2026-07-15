@@ -7,10 +7,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_session
-from ..mcp.cache import get_cached
-from ..mcp.tools.list_documents import _get_tree_with_cache
-from ..mcp.tools.read_document import read_with_cache
 from ..models.source import Source
+from ..services.document_access import get_tree_with_cache, read_with_cache
+from ..services.document_cache import get_cached
 
 router = APIRouter(tags=["files"])
 
@@ -46,7 +45,7 @@ async def get_tree(
         raise HTTPException(
             status_code=503, detail=source.error_message or "Source error"
         )
-    tree, _warning = await _get_tree_with_cache(source)
+    tree, _warning = await get_tree_with_cache(source)
     return tree
 
 
