@@ -31,7 +31,14 @@ services:
     ports:
       - "${VECTOR_STORE_HOST_PORT:-8001}:8000"  # host-facing port, for local inspection only
     volumes:
-      - vectorstore_data:/chroma/chroma
+      # chromadb/chroma persists to /data by default (see its startup log:
+      # "Saving data to: /data") — the container's own /chroma/chroma path is
+      # never written to, so mounting the named volume there silently drops
+      # every embedding on the next container recreate (image update, host
+      # reboot, `docker compose up --build`) while doc_index_cache (a
+      # separate, correctly-mounted SQLite volume) still reports every
+      # document as already indexed, so nothing re-embeds automatically.
+      - vectorstore_data:/data
     restart: unless-stopped
     healthcheck:
       # The image only ships bash (no curl/wget/python), so this checks the
