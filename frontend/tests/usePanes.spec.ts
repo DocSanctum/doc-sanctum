@@ -126,4 +126,84 @@ describe('usePanes', () => {
     addPane()
     expect(panes.value).toHaveLength(2)
   })
+
+  it('tracks per-pane visit history and supports going back and forward', () => {
+    const { panes, openInActivePane, canGoBack, canGoForward, goBack, goForward } = usePanes()
+
+    expect(canGoBack(1)).toBe(false)
+    expect(canGoForward(1)).toBe(false)
+
+    openInActivePane('src-1', 'a.md')
+    openInActivePane('src-1', 'b.md')
+    openInActivePane('src-1', 'c.md')
+
+    expect(canGoBack(1)).toBe(true)
+    expect(canGoForward(1)).toBe(false)
+
+    goBack(1)
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'b.md' })
+    expect(canGoBack(1)).toBe(true)
+    expect(canGoForward(1)).toBe(true)
+
+    goBack(1)
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'a.md' })
+    expect(canGoBack(1)).toBe(false)
+
+    goBack(1) // no-op, already at the start
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'a.md' })
+
+    goForward(1)
+    goForward(1)
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'c.md' })
+    expect(canGoForward(1)).toBe(false)
+
+    goForward(1) // no-op, already at the end
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'c.md' })
+  })
+
+  it('navigating after going back truncates the forward history', () => {
+    const { panes, openInActivePane, canGoForward, goBack } = usePanes()
+
+    openInActivePane('src-1', 'a.md')
+    openInActivePane('src-1', 'b.md')
+    goBack(1)
+    expect(canGoForward(1)).toBe(true)
+
+    openInActivePane('src-1', 'c.md')
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'c.md' })
+    expect(canGoForward(1)).toBe(false)
+  })
+
+  it('keeps each pane history independent', () => {
+    const { panes, addPane, setActivePane, openInActivePane, canGoBack, goBack } = usePanes()
+
+    openInActivePane('src-1', 'a.md')
+    openInActivePane('src-1', 'b.md')
+    addPane()
+    setActivePane(2)
+    openInActivePane('src-2', 'x.md')
+    openInActivePane('src-2', 'y.md')
+
+    expect(canGoBack(1)).toBe(true)
+    expect(canGoBack(2)).toBe(true)
+
+    goBack(2)
+    expect(panes.value[1]).toMatchObject({ sourceId: 'src-2', filePath: 'x.md' })
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-1', filePath: 'b.md' })
+  })
+
+  it('carries the surviving pane history over to slot 1 when closing a pane', () => {
+    const { panes, addPane, setActivePane, openInActivePane, closePane, canGoBack, goBack } = usePanes()
+
+    addPane()
+    setActivePane(2)
+    openInActivePane('src-2', 'x.md')
+    openInActivePane('src-2', 'y.md')
+
+    closePane(1)
+
+    expect(canGoBack(1)).toBe(true)
+    goBack(1)
+    expect(panes.value[0]).toMatchObject({ sourceId: 'src-2', filePath: 'x.md' })
+  })
 })

@@ -92,6 +92,8 @@ export const ko: MessageSchema = {
       splitView: '분할 보기',
       splitViewTitle: '분할 보기 켜기',
       closeTitle: '패널 닫기',
+      backTitle: '이전 문서로',
+      forwardTitle: '다음 문서로',
     },
     markdown: {
       copyCode: '코드 복사',
