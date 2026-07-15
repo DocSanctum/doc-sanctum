@@ -111,6 +111,8 @@ export const ko: MessageSchema = {
       label: '앱 테마',
       dark: '다크',
       light: '라이트',
+      darkGray: '다크 그레이',
+      black: '블랙',
     },
     fontSize: {
       label: '뷰어 폰트 크기',

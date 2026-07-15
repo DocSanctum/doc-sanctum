@@ -109,6 +109,8 @@ export const en = {
       label: 'App theme',
       dark: 'Dark',
       light: 'Light',
+      darkGray: 'Dark Gray',
+      black: 'Black',
     },
     fontSize: {
       label: 'Viewer font size',

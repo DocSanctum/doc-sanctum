@@ -346,8 +346,10 @@ function indexStatusTextClass(status: SourceStatus): string {
 }
 
 const appThemes = computed(() => [
-  { value: 'dark' as const, label: t('settings.theme.dark'), icon: '🌙' },
   { value: 'light' as const, label: t('settings.theme.light'), icon: '☀️' },
+  { value: 'dark' as const, label: t('settings.theme.dark'), icon: '🌙' },
+  { value: 'dark-gray' as const, label: t('settings.theme.darkGray'), icon: '🔘' },
+  { value: 'black' as const, label: t('settings.theme.black'), icon: '⚫' },
 ])
 
 const fontSizes = computed(() => [

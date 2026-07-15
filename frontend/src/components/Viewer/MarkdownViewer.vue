@@ -85,7 +85,7 @@ async function renderMermaidBlocks() {
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',
-    theme: theme.value === 'dark' ? 'dark' : 'default',
+    theme: theme.value === 'light' ? 'default' : 'dark',
   })
   for (const el of blocks) {
     // The hidden <code> sibling always holds the original source, so a
