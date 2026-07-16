@@ -35,6 +35,46 @@ const md = new MarkdownIt({
 // source is always included so the existing copy-button handler (which
 // does `.closest('.code-block').querySelector('code')`) works unchanged
 // for both cases.
+
+// highlight.js returns one flat HTML string where a <span class="hljs-...">
+// can open on one source line and close several lines later (multi-line
+// comments/strings), so splitting on raw "\n" would leave those spans
+// unbalanced per line. This walks the markup instead, splitting only on
+// text-node newlines, and reopens whatever tags are still on the stack at
+// the start of the next line — keeping each returned line self-contained,
+// valid HTML. The line count always matches the source's line count, since
+// hljs never adds or removes "\n" characters, only wraps them in spans.
+function splitHighlightedLines(html: string): string[] {
+  const lines: string[] = []
+  const openTags: string[] = []
+  let line = ''
+  let i = 0
+  while (i < html.length) {
+    const ch = html[i]
+    if (ch === '<') {
+      const end = html.indexOf('>', i)
+      const tag = html.slice(i, end + 1)
+      line += tag
+      if (tag.startsWith('</')) openTags.pop()
+      else openTags.push(tag)
+      i = end + 1
+    } else if (ch === '\n') {
+      lines.push(line + '</span>'.repeat(openTags.length))
+      line = openTags.join('')
+      i++
+    } else {
+      const nextTag = html.indexOf('<', i)
+      const nextNewline = html.indexOf('\n', i)
+      const candidates = [nextTag, nextNewline].filter((n) => n !== -1)
+      const stop = candidates.length ? Math.min(...candidates) : html.length
+      line += html.slice(i, stop)
+      i = stop
+    }
+  }
+  lines.push(line)
+  return lines
+}
+
 md.renderer.rules.fence = (tokens, idx) => {
   const token = tokens[idx]
   const info = token.info ? md.utils.unescapeAll(token.info).trim() : ''
@@ -52,23 +92,34 @@ md.renderer.rules.fence = (tokens, idx) => {
   }
 
   // Use rawSource (trailing "\n" already stripped), not token.content — hljs
-  // preserves that trailing newline as an extra blank line in <pre>, one more
-  // row than the line-numbers gutter (built from the same stripped rawSource
-  // below) has spans for, throwing the two out of sync.
+  // preserves that trailing newline as an extra blank line, which would add
+  // one more row than the source actually has.
   const highlighted = langName && hljs.getLanguage(langName)
     ? hljs.highlight(rawSource, { language: langName, ignoreIllegals: true }).value
     : hljs.highlightAuto(rawSource).value
-  // One <span> per source line, rendered alongside <pre> in a flex row so it
-  // scrolls independently (numbers stay put while long lines scroll). Kept
-  // in the DOM unconditionally and toggled with CSS (via a class further up
-  // the tree) so the line-numbers setting doesn't need a re-render.
-  const lineNumbers = rawSource.split('\n').map((_, i) => `<span>${i + 1}</span>`).join('')
+  // Each source line becomes its own row — number and code content as
+  // flex siblings within *that* row — instead of two independently laid out
+  // columns (a numbers gutter vs. a single <pre> blob) kept in sync only by
+  // matching CSS. Pairing them per row makes the browser lay out each row's
+  // number and content together, so they can't drift apart from rounding,
+  // font substitution, or zoom — there's nothing left to keep in sync.
+  // A hidden <code> carries the plain raw source for the copy button, since
+  // .textContent across many per-line <span>s would otherwise join lines
+  // without the newlines between them.
+  const rows = splitHighlightedLines(highlighted)
+    .map(
+      (lineHtml, i) =>
+        `<div class="code-line">` +
+        `<span class="code-line-number" aria-hidden="true">${i + 1}</span>` +
+        `<span class="code-line-content">${lineHtml}</span>` +
+        `</div>`
+    )
+    .join('')
   return (
     `<div class="code-block"${dataLineAttr}>${copyBtn}` +
-    `<div class="code-block-body">` +
-    `<span class="code-line-numbers" aria-hidden="true">${lineNumbers}</span>` +
-    `<pre class="hljs"><code>${highlighted}</code></pre>` +
-    `</div></div>`
+    `<code hidden>${md.utils.escapeHtml(rawSource)}</code>` +
+    `<div class="code-block-body hljs">${rows}</div>` +
+    `</div>`
   )
 }
 

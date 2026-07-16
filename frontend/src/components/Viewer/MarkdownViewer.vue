@@ -316,119 +316,99 @@ function handleClick(e: MouseEvent) {
   position: relative;
   margin: 1.5rem 0;
 }
+/* One scrolling container for the whole block (numbers + code together),
+   instead of two independently laid out columns kept in sync by matching
+   CSS values across them. Each source line is now a single .code-line row
+   (below) containing both its number and its code as flex siblings, so the
+   browser lays them out together — there's nothing left that can drift
+   apart from sub-pixel rounding, font substitution, or browser zoom, since
+   there's only one row box being measured, not two.
+   `.hljs` is applied here (not on a nested <pre>) so the active code-theme
+   stylesheet's `.hljs { background; color }` rule paints the container
+   directly; `.code-line`/`.code-line-number` below relay it downward via
+   `background: inherit` so the sticky number gutter (see below) matches
+   whatever theme is active without hardcoding a color here. */
 .prose .code-block-body {
-  display: flex;
-  /* Default (stretch) cross-sizing lets .code-line-numbers — a nested
-     flex-column container — get inflated well past its own content height
-     (observed: ~126px of actual content stretched to ~174px), while pre.hljs
-     (overflow-x: auto) is not affected the same way, so the two boxes ended
-     up different heights and the numbers started higher than the code. Both
-     have identical content height once line count/font-size/line-height
-     match (verified), so sizing each to its own content is correct here,
-     not just a workaround. */
-  align-items: flex-start;
-}
-/* pre.hljs and .code-line-numbers each set their own font-size/line-height
-   explicitly in rem (below, per prose-sm/base/lg), rather than inheriting
-   Tailwind Typography's built-in `pre` sizing. Typography computes that
-   internally per prose-size variant and the ratios aren't identical across
-   sm/base/lg, so a single em-relative rule on the gutter could only ever
-   match one variant exactly and silently drift by a fraction of a pixel on
-   the others — small per-line, but compounding into a visible gap by the
-   bottom of a long block. Hardcoding matching values for both sides removes
-   that dependency entirely. `.prose pre.hljs code` below inherits from here. */
-.prose pre.hljs,
-.prose .code-line-numbers {
+  overflow-x: auto;
+  border-radius: 8px;
+  padding: 1.25rem 0;
+  font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
   font-size: 0.875rem;
   line-height: 1.3125rem;
-}
-.prose-sm pre.hljs,
-.prose-sm .code-line-numbers {
-  font-size: 0.75rem;
-  line-height: 1.125rem;
-}
-.prose-lg pre.hljs,
-.prose-lg .code-line-numbers {
-  font-size: 1rem;
-  line-height: 1.5rem;
-}
-.prose pre.hljs {
-  /* Zero out: Tailwind Typography puts a ~24px top/bottom margin on `pre`
-     for prose spacing, but `.code-block` (the outer wrapper) already
-     provides that via its own margin. Left in place, that margin pushes
-     pre.hljs down inside the flex row relative to .code-line-numbers
-     (which has no such margin), offsetting the numbers from the code by a
-     constant amount regardless of line count. */
-  margin: 0;
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
-  overflow-x: auto;
-  flex: 1;
-  min-width: 0;
   /* Thin themed horizontal scrollbar for long lines, matching
      .viewer-pane-scroll in style.css instead of the browser default. */
   scrollbar-width: thin;
   scrollbar-color: #d1d5db transparent;
 }
-.prose pre.hljs::-webkit-scrollbar {
+.prose-sm .code-block-body {
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+.prose-lg .code-block-body {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+.prose .code-block-body::-webkit-scrollbar {
   height: 8px;
 }
-.prose pre.hljs::-webkit-scrollbar-track {
+.prose .code-block-body::-webkit-scrollbar-track {
   background: transparent;
 }
-.prose pre.hljs::-webkit-scrollbar-thumb {
+.prose .code-block-body::-webkit-scrollbar-thumb {
   background: #d1d5db;
   border-radius: 4px;
 }
-.prose pre.hljs::-webkit-scrollbar-thumb:hover {
+.prose .code-block-body::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
-:root.dark .prose pre.hljs {
+:root.dark .prose .code-block-body {
   scrollbar-color: #374151 transparent;
 }
-:root.dark .prose pre.hljs::-webkit-scrollbar-thumb {
+:root.dark .prose .code-block-body::-webkit-scrollbar-thumb {
   background: #374151;
 }
-:root.dark .prose pre.hljs::-webkit-scrollbar-thumb:hover {
+:root.dark .prose .code-block-body::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
-:root.dark .prose pre.hljs { border: 1px solid #30363d; }
-:root:not(.dark) .prose pre.hljs { border: 1px solid #d1d5db; background: #f3f4f6; }
+:root.dark .prose .code-block-body { border: 1px solid #30363d; }
+/* Light mode intentionally overrides whatever background the active
+   light hljs theme (github/atom-one-light/xcode) ships with, for a
+   consistent app-gray look; dark mode keeps each dark theme's own
+   background as-is. Higher specificity than the injected `.hljs` rule
+   (which is a bare class selector) wins regardless of stylesheet order. */
+:root:not(.dark) .prose .code-block-body { border: 1px solid #d1d5db; background: #f3f4f6; }
 
-.prose pre.hljs code {
-  background: transparent;
-  padding: 0;
-  font-size: inherit;
-  line-height: inherit;
-  font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+.prose .code-line {
+  display: flex;
+  background: inherit;
 }
-
-/* Line-numbers gutter: a flex sibling of <pre>, not inside it, so it stays
-   put while long lines scroll the <pre> horizontally. Always in the DOM and
-   toggled purely with CSS (via .show-line-numbers on the .prose root) so
-   flipping the viewer setting doesn't require re-rendering the markdown.
-   font-size/line-height come from the shared rules above, kept in lockstep
-   with `.prose pre.hljs code`. */
-.prose .code-line-numbers {
+.prose .code-line-content {
+  white-space: pre;
+  padding: 0 1.5rem;
+}
+/* Sticky, not a separate scroll container: stays pinned to the left edge of
+   .code-block-body's scrollport while .code-line-content scrolls under it,
+   so numbers and code can never end up in different scroll positions.
+   `background: inherit` relays .code-line's (itself relayed from
+   .code-block-body) background so scrolled-under code doesn't show through. */
+.prose .code-line-number {
   display: none;
-  flex-direction: column;
-  align-items: flex-end;
+  position: sticky;
+  left: 0;
+  z-index: 1;
   flex-shrink: 0;
-  padding: 1.25rem 0.75rem 1.25rem 1.25rem;
+  min-width: 3ch;
+  padding: 0 0.75rem 0 1.25rem;
+  text-align: right;
   user-select: none;
   color: #6b7280;
-  font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
-  border-radius: 8px 0 0 8px;
+  background: inherit;
 }
-.prose.show-line-numbers .code-line-numbers {
-  display: flex;
+.prose.show-line-numbers .code-line-number {
+  display: inline-block;
 }
-:root.dark .prose .code-line-numbers { background: #161b22; border: 1px solid #30363d; border-right: none; }
-:root:not(.dark) .prose .code-line-numbers { background: #e5e7eb; border: 1px solid #d1d5db; border-right: none; }
-.prose.show-line-numbers pre.hljs {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-  border-left: none;
+.prose.show-line-numbers .code-line-content {
+  padding-left: 0;
 }
 
 /* Mermaid diagrams: useMarkdown.ts emits <div class="mermaid">source</div>
@@ -538,7 +518,7 @@ function handleClick(e: MouseEvent) {
   border-collapse: collapse;
   font-size: 0.9em;
   /* Thin themed horizontal scrollbar for wide tables, matching
-     .prose pre.hljs instead of the browser default. */
+     .prose .code-block-body instead of the browser default. */
   scrollbar-width: thin;
   scrollbar-color: #d1d5db transparent;
 }

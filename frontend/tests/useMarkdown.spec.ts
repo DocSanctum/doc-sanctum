@@ -15,7 +15,7 @@ describe('useMarkdown', () => {
     expect(sanitized).toContain('aria-label="Copy code"')
   })
 
-  it('renders one line-number span per source line, alongside the highlighted <pre>', () => {
+  it('renders one .code-line row per source line, each pairing a number with its own code content', () => {
     const { render } = useMarkdown()
     const src = ['```js', 'const a = 1', 'const b = 2', 'console.log(a + b)', '```'].join('\n')
 
@@ -24,28 +24,52 @@ describe('useMarkdown', () => {
     const container = document.createElement('div')
     container.innerHTML = sanitized
 
-    const numbers = container.querySelectorAll('.code-line-numbers span')
-    expect(Array.from(numbers).map((el) => el.textContent)).toEqual(['1', '2', '3'])
-    expect(container.querySelector('.code-block-body pre.hljs code')).not.toBeNull()
+    const rows = container.querySelectorAll('.code-block-body .code-line')
+    expect(rows.length).toBe(3)
+    expect(Array.from(rows).map((row) => row.querySelector('.code-line-number')?.textContent)).toEqual([
+      '1',
+      '2',
+      '3',
+    ])
+    // The number and its code sit in the same row element, so there is no
+    // separate gutter/pre pair whose line counts could ever drift apart.
+    expect(Array.from(rows).map((row) => row.querySelector('.code-line-content')?.textContent)).toEqual([
+      'const a = 1',
+      'const b = 2',
+      'console.log(a + b)',
+    ])
+    // A hidden <code> carries the plain, newline-joined source for the copy
+    // button, since concatenating the per-line spans' textContent wouldn't
+    // reproduce the newlines between them.
+    expect(container.querySelector('.code-block > code[hidden]')?.textContent).toBe(
+      'const a = 1\nconst b = 2\nconsole.log(a + b)'
+    )
   })
 
-  it('keeps the highlighted <pre> line count equal to the line-numbers gutter (no trailing blank line)', () => {
-    // Regression test: highlight.js was called with the fence token's raw
-    // content, which markdown-it always terminates with a trailing "\n" —
-    // producing one extra blank row in <pre> that the line-numbers gutter
-    // (built from the same source with that trailing "\n" stripped) didn't
-    // have, so the numbers drifted out of sync with the code below the first line.
+  it('splits a highlight.js span that opens and closes across multiple source lines without breaking either line', () => {
+    // Regression guard for splitHighlightedLines: a multi-line block comment
+    // is highlighted by hljs as one <span class="hljs-comment"> wrapping both
+    // lines' text (including the "\n" between them). Splitting on that raw
+    // "\n" would leave the first line's <span> unclosed and the second
+    // line's text un-highlighted; the row-splitting must close and reopen it
+    // at the line boundary instead.
     const { render } = useMarkdown()
-    const src = ['```js', 'const a = 1', 'const b = 2', 'console.log(a + b)', '```'].join('\n')
+    const src = ['```js', '/* first', 'second */', 'const a = 1', '```'].join('\n')
 
     const html = render(src)
     const sanitized = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
     const container = document.createElement('div')
     container.innerHTML = sanitized
 
-    const numbers = container.querySelectorAll('.code-line-numbers span')
-    const codeLines = container.querySelector('.code-block-body pre.hljs code')!.textContent!.split('\n')
-    expect(codeLines.length).toBe(numbers.length)
+    const rows = container.querySelectorAll('.code-block-body .code-line')
+    expect(rows.length).toBe(3)
+    expect(rows[0].querySelector('.code-line-content .hljs-comment')).not.toBeNull()
+    expect(rows[1].querySelector('.code-line-content .hljs-comment')).not.toBeNull()
+    expect(
+      Array.from(rows)
+        .map((row) => row.querySelector('.code-line-content')?.textContent)
+        .join('\n')
+    ).toBe('/* first\nsecond */\nconst a = 1')
   })
 
   it('renders a mermaid fence as a raw source div plus a hidden <code> for copying, not a highlighted <pre>', () => {
