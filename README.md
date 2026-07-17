@@ -105,19 +105,39 @@ Point your MCP client at whichever one it supports, and it can list your registe
 claude mcp add --transport http docsanctum http://localhost:8000/mcp
 ```
 
-**Cursor** (`.cursor/mcp.json`):
+**Claude Desktop:** remote HTTP servers aren't added by hand-editing a config file — go to Settings → Connectors → Add custom connector, and paste `http://localhost:8000/mcp` (or your server's address, if it's not running on the same machine).
+
+**Cline** (`cline_mcp_settings.json`):
 
 ```json
 {
   "mcpServers": {
     "docsanctum": {
+      "type": "streamableHttp",
       "url": "http://localhost:8000/mcp"
     }
   }
 }
 ```
 
-**Claude Desktop:** remote HTTP servers aren't added by hand-editing a config file — go to Settings → Connectors → Add custom connector, and paste `http://localhost:8000/mcp` (or your server's address, if it's not running on the same machine).
+**Codex CLI** (`~/.codex/config.toml`):
+
+```toml
+[mcp_servers.docsanctum]
+url = "http://localhost:8000/mcp"
+```
+
+**Gemini CLI** (`settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "docsanctum": {
+      "httpUrl": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
 
 Replace `localhost` with your server's actual host/IP if DocSanctum isn't running on the same machine as the MCP client.
 
