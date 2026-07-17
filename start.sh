@@ -70,6 +70,12 @@ elif [ -n "$CURRENT_COMMIT" ]; then
   fi
 fi
 
+# docker-compose.yml overlays a writable embedding_model_cache volume at
+# $HOME/.cache/chroma on top of the read-only $HOME bind mount. Docker can't
+# create that mountpoint on first run if it doesn't already exist on the
+# host, because the parent bind is read-only — so ensure it exists first.
+mkdir -p "$HOME/.cache/chroma"
+
 if $NEED_BUILD; then
   echo "Changes detected, rebuilding images..."
   "${COMPOSE[@]}" up -d --build

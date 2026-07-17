@@ -80,6 +80,10 @@ services:
       # this same path (Path.home()/.cache/chroma — see backend/Dockerfile),
       # so Docker auto-populates this named volume from the image on first
       # run instead of trying to write into the read-only host HOME mount.
+      # Requires $HOME/.cache/chroma to already exist on the host — Docker
+      # can't create a mountpoint under an already read-only bind, so
+      # start.sh pre-creates it with `mkdir -p`. Running `docker compose`
+      # directly instead of start.sh needs the same `mkdir -p` done first.
       - embedding_model_cache:${HOME}/.cache/chroma
     restart: unless-stopped
     depends_on:
