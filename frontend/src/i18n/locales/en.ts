@@ -131,7 +131,7 @@ export const en = {
     polling: {
       label: 'Source polling interval',
       description:
-        'Applies only to GitHub, HTTP, and Localhost sources. Local sources are reflected in real time via filesystem watching.',
+        'Applies only to GitHub and GitLab sources. Local sources are reflected in real time via filesystem watching.',
       empty: 'No registered sources.',
       realtime: 'Real-time detection',
       seconds: 'sec',

@@ -133,7 +133,7 @@ export const ko: MessageSchema = {
     polling: {
       label: '소스 폴링 주기',
       description:
-        'GitHub, HTTP, Localhost 소스에만 적용됩니다. Local 소스는 파일시스템 감지로 실시간 반영됩니다.',
+        'GitHub, GitLab 소스에만 적용됩니다. 로컬 소스는 파일시스템 감지로 실시간 반영됩니다.',
       empty: '등록된 소스가 없습니다.',
       realtime: '실시간 감지',
       seconds: '초',
