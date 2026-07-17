@@ -99,7 +99,7 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
     for three representative English fixtures; the token-based chunker
     must not produce more chunks than that baseline for any of them."""
     sample_doc = (
-        Path(__file__).resolve().parents[1] / "sample-docs" / "RemoveMe.md"
+        Path(__file__).resolve().parents[1] / "sample-docs" / "01.Welcome.md"
     ).read_text()
 
     long_paragraph_doc = (
@@ -124,9 +124,9 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
     )
 
     baselines = {
-        # Re-measured after RemoveMe.md grew a Diagrams section: the old
+        # Re-measured after 01.Welcome.md grew a Diagrams section: the old
         # char-based chunker produces 9 chunks for the current file content.
-        "sample_doc (RemoveMe.md)": (sample_doc, 9),
+        "sample_doc (01.Welcome.md)": (sample_doc, 9),
         "long_paragraph_doc": (long_paragraph_doc, 9),
         "multi_section_doc": (multi_section_doc, 10),
     }
