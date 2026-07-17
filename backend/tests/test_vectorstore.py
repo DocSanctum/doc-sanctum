@@ -124,7 +124,9 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
     )
 
     baselines = {
-        "sample_doc (RemoveMe.md)": (sample_doc, 8),
+        # Re-measured after RemoveMe.md grew a Diagrams section: the old
+        # char-based chunker produces 9 chunks for the current file content.
+        "sample_doc (RemoveMe.md)": (sample_doc, 9),
         "long_paragraph_doc": (long_paragraph_doc, 9),
         "multi_section_doc": (multi_section_doc, 10),
     }
