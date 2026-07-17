@@ -28,6 +28,21 @@ curl -X POST http://localhost:8000/api/v1/sources \
   -d '{"type": "local", "path": "/home/me/notes"}'
 ```
 
+## Diagrams
+
+Fenced ` ```mermaid ` blocks render as diagrams, not code.
+
+```mermaid
+flowchart LR
+    A[Local folder / GitHub / GitLab] -->|Register source| B(DocSanctum)
+    B --> C[Index & embed]
+    C --> D{Search}
+    D -->|Keyword| E[Command palette]
+    D -->|Semantic| F[Search tab]
+    C --> G[MCP tools]
+    G --> H[Claude / any MCP client]
+```
+
 ## Tables
 
 | Feature | Where to find it |
