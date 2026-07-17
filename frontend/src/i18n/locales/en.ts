@@ -96,6 +96,8 @@ export const en = {
     markdown: {
       copyCode: 'Copy code',
       mermaidError: 'Mermaid diagram error',
+      viewFullscreen: 'Fullscreen',
+      exitFullscreen: 'Close fullscreen',
     },
   },
   settings: {

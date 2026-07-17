@@ -98,6 +98,8 @@ export const ko: MessageSchema = {
     markdown: {
       copyCode: '코드 복사',
       mermaidError: 'Mermaid 다이어그램 오류',
+      viewFullscreen: '전체화면',
+      exitFullscreen: '전체화면 닫기',
     },
   },
   settings: {
