@@ -1,5 +1,11 @@
 # DocSanctum
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Backend CI](https://github.com/DocSanctum/doc-sanctum/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/DocSanctum/doc-sanctum/actions/workflows/backend-ci.yml)
+[![Frontend CI](https://github.com/DocSanctum/doc-sanctum/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/DocSanctum/doc-sanctum/actions/workflows/frontend-ci.yml)
+
+> Turn markdown scattered across local folders, GitHub, and GitLab into one searchable hub — and a knowledge base your AI assistant can query directly over MCP.
+
 DocSanctum pulls markdown documentation scattered across a local folder, GitHub repositories, and GitLab projects into one place you can actually browse and search. Point it at where your docs live, and it builds a single tree you can read, search, and — if you use AI coding assistants — query directly through a built-in MCP server.
 
 It's meant to run on your own machine or your team's own server. Nothing leaves it unless you tell it to.
@@ -92,6 +98,28 @@ DocSanctum runs its MCP server inside the same backend process, mounted at:
 - `http://<host>:8000/mcp-sse/sse` — SSE transport (legacy, kept for older clients)
 
 Point your MCP client at whichever one it supports, and it can list your registered documents, read one, or search across all of them — keyword or semantic — without you having to paste file contents into a prompt by hand.
+
+**Claude Code:**
+
+```bash
+claude mcp add --transport http docsanctum http://localhost:8000/mcp
+```
+
+**Cursor** (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "docsanctum": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+**Claude Desktop:** remote HTTP servers aren't added by hand-editing a config file — go to Settings → Connectors → Add custom connector, and paste `http://localhost:8000/mcp` (or your server's address, if it's not running on the same machine).
+
+Replace `localhost` with your server's actual host/IP if DocSanctum isn't running on the same machine as the MCP client.
 
 ## Contributing
 
