@@ -3,6 +3,7 @@ export type SourceStatus = 'active' | 'error' | 'syncing' | 'partial'
 export type SourceIcon =
   | '📁' | '📦' | '🐙' | '🌐' | '💻' | '📚' | '🚀' | '🔧'
   | '📝' | '🗂️' | '⭐' | '🔥' | '🎯' | '📊' | '🧩' | '🔒'
+  | '📖' | '🗃️' | '💾' | '☁️' | '🐳' | '💡' | '🏷️' | '📌'
 
 export interface Source {
   id: string
