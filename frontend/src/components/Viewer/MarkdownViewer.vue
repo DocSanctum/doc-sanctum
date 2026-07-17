@@ -24,13 +24,28 @@
       @select="scrollToHeading"
     />
   </div>
+  <div
+    v-if="fullscreenMermaidSvg"
+    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8"
+    @click.self="closeMermaidFullscreen"
+  >
+    <div class="mermaid-fullscreen-content">
+      <button
+        type="button"
+        class="mermaid-fullscreen-close"
+        :title="t('viewer.markdown.exitFullscreen')"
+        @click="closeMermaidFullscreen"
+      >✕</button>
+      <div class="mermaid-fullscreen-svg" v-html="sanitizedFullscreenMermaidSvg" />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
-import { useClipboard } from '@vueuse/core'
+import { useClipboard, onKeyStroke } from '@vueuse/core'
 import { api } from '../../services/api'
 import { useMarkdown } from '../../composables/useMarkdown'
 import { useViewerSettings } from '../../composables/useViewerSettings'
@@ -118,6 +133,36 @@ async function renderMermaidBlocks() {
     }
   }
 }
+
+// Fullscreen preview reuses the already-rendered SVG (outerHTML, not the
+// original mermaid source) so it doesn't need a second mermaid.run() call —
+// same reasoning as the copy button reusing the hidden <code> sibling.
+const fullscreenMermaidSvg = ref<string | null>(null)
+// mermaid renders diagram/label text as HTML inside <foreignObject>, which
+// DOMPurify's svg profile strips by default (a common XSS vector for
+// arbitrary SVG) — ADD_TAGS opts it back in for this already-mermaid-
+// generated markup, or every node/edge label would render as an empty box.
+const sanitizedFullscreenMermaidSvg = computed(() =>
+  fullscreenMermaidSvg.value
+    ? DOMPurify.sanitize(fullscreenMermaidSvg.value, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['foreignObject'],
+      })
+    : ''
+)
+
+function openMermaidFullscreen(block: HTMLElement) {
+  const svg = block.querySelector('svg')
+  if (svg) fullscreenMermaidSvg.value = svg.outerHTML
+}
+
+function closeMermaidFullscreen() {
+  fullscreenMermaidSvg.value = null
+}
+
+onKeyStroke('Escape', () => {
+  if (fullscreenMermaidSvg.value) closeMermaidFullscreen()
+})
 
 watch(rendered, () => nextTick(() => renderMermaidBlocks()))
 watch(theme, () => nextTick(() => renderMermaidBlocks()))
@@ -263,6 +308,14 @@ function handleClick(e: MouseEvent) {
     e.preventDefault()
     const code = copyBtn.closest('.code-block')?.querySelector('code')?.textContent ?? ''
     copyToClipboard(copyBtn, code)
+    return
+  }
+
+  const fullscreenBtn = target.closest('.mermaid-fullscreen-btn') as HTMLElement | null
+  if (fullscreenBtn) {
+    e.preventDefault()
+    const block = fullscreenBtn.closest('.mermaid-block') as HTMLElement | null
+    if (block) openMermaidFullscreen(block)
     return
   }
 
@@ -426,16 +479,22 @@ function handleClick(e: MouseEvent) {
 }
 
 /* Mermaid diagrams: useMarkdown.ts emits <div class="mermaid">source</div>
-   here; MarkdownViewer.vue renders it into SVG client-side after mount. */
+   here; MarkdownViewer.vue renders it into SVG client-side after mount.
+   The overflow-x: auto container is .mermaid-block-scroll, an inner wrapper
+   around just the diagram — not .mermaid-block itself — so
+   .mermaid-block-actions (a non-scrolling sibling) stays pinned to the
+   corner instead of panning away with the diagram on horizontal scroll. */
 .prose .mermaid-block {
-  display: flex;
-  justify-content: center;
   padding: 1.5rem;
-  overflow-x: auto;
   border-radius: 8px;
 }
 :root.dark .prose .mermaid-block { border: 1px solid #30363d; background: #161b22; }
 :root:not(.dark) .prose .mermaid-block { border: 1px solid #d1d5db; background: #f9fafb; }
+.prose .mermaid-block-scroll {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+}
 .prose .mermaid-block .mermaid svg {
   max-width: 100%;
   height: auto;
@@ -451,6 +510,72 @@ function handleClick(e: MouseEvent) {
   display: block;
   margin-bottom: 0.5rem;
   font-weight: 600;
+}
+
+/* Mermaid blocks show the copy button plus a fullscreen button, sharing one
+   flex wrapper (see useMarkdown.ts) instead of each being independently
+   absolutely-positioned, so .code-copy-btn's own position/top/right reset
+   to let the wrapper place it. */
+.prose .mermaid-block-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  gap: 0.4rem;
+}
+.prose .mermaid-block-actions .code-copy-btn {
+  position: static;
+}
+.prose .mermaid-fullscreen-btn {
+  font-size: 0.7rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.prose .code-block:hover .mermaid-fullscreen-btn,
+.prose .mermaid-fullscreen-btn:focus-visible {
+  opacity: 1;
+}
+.prose .mermaid-fullscreen-btn:hover {
+  color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.mermaid-fullscreen-content {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  padding: 2rem;
+  border-radius: 8px;
+  overflow: auto;
+}
+:root.dark .mermaid-fullscreen-content { background: #161b22; }
+:root:not(.dark) .mermaid-fullscreen-content { background: #f9fafb; }
+.mermaid-fullscreen-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.9rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.08);
+  color: #9ca3af;
+  cursor: pointer;
+}
+.mermaid-fullscreen-close:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+.mermaid-fullscreen-svg svg {
+  display: block;
+  max-width: none;
 }
 
 .prose .code-copy-btn {

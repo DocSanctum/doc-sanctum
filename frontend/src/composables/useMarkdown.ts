@@ -88,7 +88,20 @@ md.renderer.rules.fence = (tokens, idx) => {
 
   if (langName === 'mermaid') {
     const escaped = md.utils.escapeHtml(rawSource)
-    return `<div class="code-block mermaid-block"${dataLineAttr}>${copyBtn}<code hidden>${escaped}</code><div class="mermaid">${escaped}</div></div>`
+    const viewFullscreen = i18n.global.t('viewer.markdown.viewFullscreen')
+    const fullscreenBtn = `<button type="button" class="mermaid-fullscreen-btn" aria-label="${viewFullscreen}" title="${viewFullscreen}">${viewFullscreen}</button>`
+    // Both buttons share one flex wrapper (instead of each being
+    // independently absolutely-positioned like a lone .code-copy-btn is for
+    // plain code blocks) so they space themselves out regardless of label
+    // length/locale, rather than a hardcoded `right` offset drifting out of
+    // sync between the two.
+    // The diagram itself is wrapped in .mermaid-block-scroll, a second,
+    // inner overflow-x container — mermaid-block-actions sits outside that
+    // wrapper (in the non-scrolling parent) so the buttons stay pinned to
+    // the corner instead of panning away with the diagram on horizontal
+    // scroll, the way .code-block-body already keeps line numbers/content
+    // scrolling separately from the plain code-block's own copy button.
+    return `<div class="code-block mermaid-block"${dataLineAttr}><div class="mermaid-block-actions">${copyBtn}${fullscreenBtn}</div><code hidden>${escaped}</code><div class="mermaid-block-scroll"><div class="mermaid">${escaped}</div></div></div>`
   }
 
   // Use rawSource (trailing "\n" already stripped), not token.content — hljs
