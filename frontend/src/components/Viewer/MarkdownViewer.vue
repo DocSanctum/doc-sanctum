@@ -97,6 +97,20 @@ async function renderMermaidBlocks() {
     el.textContent = source
     try {
       await mermaid.run({ nodes: [el] })
+      // mermaid defaults every diagram type to useMaxWidth: true, which sets
+      // width="100%" on the SVG so it shrinks (text included) to fit a
+      // narrow reading pane instead of staying legible. Re-pointing the SVG
+      // at its own viewBox size (what useMaxWidth: false would produce)
+      // keeps it at native size and lets the .mermaid-block's overflow-x:
+      // auto scroll it horizontally instead — without having to opt every
+      // one of mermaid's ~25 diagram-specific config namespaces out
+      // individually.
+      const svg = el.querySelector('svg')
+      const viewBox = svg?.getAttribute('viewBox')?.split(/\s+/).map(Number)
+      if (svg && viewBox?.length === 4) {
+        svg.setAttribute('width', String(viewBox[2]))
+        svg.setAttribute('height', String(viewBox[3]))
+      }
     } catch {
       el.textContent = source
       el.classList.add('mermaid-error')
