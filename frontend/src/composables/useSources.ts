@@ -4,7 +4,8 @@ import type { RegisterSourcePayload, PatchSourcePayload, SourceIcon } from '../t
 
 // 선택 가능한 소스 아이콘 팔레트 — 소스 추가/수정 화면의 아이콘 그리드에서 고를 수 있다.
 export const SOURCE_ICON_OPTIONS: SourceIcon[] =
-  ['📁', '📦', '🐙', '🌐', '💻', '📚', '🚀', '🔧', '📝', '🗂️', '⭐', '🔥', '🎯', '📊', '🧩', '🔒']
+  ['📁', '📦', '🐙', '🌐', '💻', '📚', '🚀', '🔧', '📝', '🗂️', '⭐', '🔥', '🎯', '📊', '🧩', '🔒',
+   '📖', '🗃️', '💾', '☁️', '🐳', '💡', '🏷️', '📌']
 
 export function useSources() {
   const qc = useQueryClient()
