@@ -19,6 +19,8 @@ Most teams end up with documentation spread across a handful of repos, a local n
 
 You need Docker and Docker Compose. Nothing else has to be installed on the host — the app, its embedding model, and its vector store all run inside containers.
 
+**Windows:** `start.sh`/`stop.sh` are bash scripts, so run them from a WSL2 shell — not PowerShell or cmd. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/), enable "Use the WSL 2 based engine" under Settings → General, and turn on WSL Integration for your distro under Settings → Resources → WSL Integration. This lets the `docker` CLI work inside WSL without any manual socket-permission setup.
+
 ```bash
 git clone https://github.com/DocSanctum/doc-sanctum.git
 cd doc-sanctum
