@@ -47,7 +47,7 @@ async def session_factory(monkeypatch, tmp_path):
 def sample_docs_dir(tmp_path, monkeypatch):
     docs_dir = tmp_path / "sample-docs"
     docs_dir.mkdir()
-    (docs_dir / "RemoveMe.md").write_text("# Sample\n")
+    (docs_dir / "01.Welcome.md").write_text("# Sample\n")
     monkeypatch.setattr(sources_module, "_SAMPLE_DOCS_PATH", docs_dir)
     return docs_dir
 
