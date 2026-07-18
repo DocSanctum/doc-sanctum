@@ -21,6 +21,7 @@ export const ko: MessageSchema = {
     addSource: '소스 추가',
     settings: '설정',
     openSearch: '검색 ({shortcut})',
+    closeSettingsTitle: '설정 닫기',
   },
   sidebar: {
     sourceList: {

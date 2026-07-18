@@ -19,6 +19,7 @@ export const en = {
     addSource: 'Add source',
     settings: 'Settings',
     openSearch: 'Search ({shortcut})',
+    closeSettingsTitle: 'Close settings',
   },
   sidebar: {
     sourceList: {
