@@ -6,6 +6,23 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.0.0',
+    date: '2026-07-18',
+    changes: [
+      'Favicon, apple touch icon, and a logo mark next to the DocSanctum wordmark in the sidebar',
+      'Viewer: empty-state pane now shows a faint vector emblem that adapts to the app theme',
+      'Viewer: a document can now be closed from a single (non-split) pane, not just in split view',
+      'Settings: clicking the DocSanctum wordmark closes settings/changelog, mirroring Esc',
+      'Mermaid diagrams: fullscreen button, and diagrams now render at native size instead of shrink-to-fit',
+      'More emoji icon options when adding or editing a source',
+      'Sample doc renamed to Welcome.md; added an MCP quickstart guide alongside it',
+      'CI: @claude PR review now only triggers for trusted commenters (owner/member/collaborator)',
+      'Fix: source polling interval description in settings no longer misdescribes which source types it applies to',
+      'Fix: code block line numbers and content could drift apart under certain content',
+      'Fix: embedding cache mountpoint now created before compose up, fixing a Windows/WSL2 startup failure',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-07-16',
     changes: [
