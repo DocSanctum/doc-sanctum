@@ -194,7 +194,27 @@ def _delete_collection_sync(source_id: str) -> None:
     try:
         _client.delete_collection(name=_collection_name(source_id))
     except Exception:
-        pass
+        # Log instead of swallowing — an orphaned collection is reconciled
+        # later by the startup orphan sweep, but only if this is visible.
+        logger.warning(
+            "Failed to delete vector collection for source %s; it may be "
+            "left orphaned until the next startup's orphan sweep",
+            source_id,
+            exc_info=True,
+        )
+
+
+def _list_collection_source_ids_sync() -> list[str]:
+    """Returns the source ids that have a vector collection on the connected
+    Chroma server. Used by the startup orphan sweep."""
+    if _client is None:
+        return []
+    ids = []
+    for collection in _client.list_collections():
+        name = collection.name if hasattr(collection, "name") else collection
+        if name.startswith("src_"):
+            ids.append(name[len("src_") :])
+    return ids
 
 
 def _query_sync(source_id: str, query_text: str, top_k: int) -> list[dict[str, Any]]:
@@ -241,6 +261,10 @@ async def delete_document(source_id: str, path: str) -> None:
 
 async def delete_collection(source_id: str) -> None:
     await asyncio.to_thread(_delete_collection_sync, source_id)
+
+
+async def list_collection_source_ids() -> list[str]:
+    return await asyncio.to_thread(_list_collection_source_ids_sync)
 
 
 async def query(source_id: str, query_text: str, top_k: int) -> list[dict[str, Any]]:
