@@ -49,6 +49,14 @@ To stop everything:
 
 Re-running `./start.sh` picks up code changes automatically — it rebuilds only when the current commit differs from what it last built, or when you pass `--build` to force it.
 
+### Registering local folders on Windows (WSL2)
+
+The backend always runs inside a Linux container, regardless of the host OS, so a couple of things are worth knowing if your vault lives on Windows:
+
+- Pasting a native Windows path (e.g. `C:\Users\you\Documents\knowledge_vault`) into "Add source" just works — it's automatically translated to its WSL2 mount-point equivalent (`/mnt/c/Users/you/Documents/knowledge_vault`) before the backend looks for it.
+- By default, only your WSL2 distro's own home directory (`$HOME`) is mounted into the container. A folder that lives elsewhere on the Windows side — like the Windows `Documents` folder above — isn't reachable yet at that point, and registering it returns a clear "path not found" error.
+- To make that folder reachable, set `WINDOWS_VAULT_MOUNT` in `.env` to its WSL2-style path (same translation as above — `C:\Users\you\Documents\knowledge_vault` becomes `/mnt/c/Users/you/Documents/knowledge_vault`; see the comment in `.env.example`), then start with `./start.sh --windows` (or `./start.sh --dev --windows` for the dev stack) instead. This layers `docker-compose.windows.yml`, which mounts only that folder read-only — not the whole drive, since the backend also makes outbound network calls and exposes an MCP server, and a compromise there shouldn't be able to read arbitrary files elsewhere on your Windows filesystem.
+
 ### Configuration
 
 Copy `.env.example` to `.env` and adjust as needed. The defaults work for a single-machine setup; the file documents each option inline, including:

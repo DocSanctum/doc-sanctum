@@ -9,6 +9,11 @@
 #   deployments should run.
 # Dev (--dev): docker-compose.yml + docker-compose.override.yml
 #   (auto-merged by docker compose) — Vite dev server, backend auto-reload.
+# Windows (--windows, combinable with --dev): also layers
+#   docker-compose.windows.yml, which bind-mounts WINDOWS_VAULT_MOUNT (set in
+#   .env — see .env.example) into the backend container read-only, so a local
+#   source on the Windows side of the filesystem — not just under the WSL2
+#   home directory — is reachable. See docker-compose.windows.yml for details.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
@@ -17,6 +22,7 @@ STATE_FILE=".docker_last_build"
 MODE_STATE_FILE=".docker_last_mode"
 FORCE_BUILD=false
 DEV=false
+WINDOWS=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -26,20 +32,31 @@ for arg in "$@"; do
     --dev)
       DEV=true
       ;;
+    --windows)
+      WINDOWS=true
+      ;;
     *)
       echo "Unknown option: $arg" >&2
-      echo "Usage: $0 [--build] [--dev]" >&2
+      echo "Usage: $0 [--build] [--dev] [--windows]" >&2
       exit 1
       ;;
   esac
 done
 
 CURRENT_MODE="prod"
-COMPOSE=(docker compose -f docker-compose.yml -f docker-compose.prod.yml)
+COMPOSE_FILES=(docker-compose.yml docker-compose.prod.yml)
 if $DEV; then
   CURRENT_MODE="dev"
-  COMPOSE=(docker compose)
+  COMPOSE_FILES=(docker-compose.yml docker-compose.override.yml)
 fi
+if $WINDOWS; then
+  COMPOSE_FILES+=(docker-compose.windows.yml)
+fi
+
+COMPOSE=(docker compose)
+for f in "${COMPOSE_FILES[@]}"; do
+  COMPOSE+=(-f "$f")
+done
 
 if [ ! -f .env ]; then
   echo ".env file not found. Create one from .env.example first:"
@@ -51,6 +68,11 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
+
+if $WINDOWS && [ -z "${WINDOWS_VAULT_MOUNT:-}" ]; then
+  echo "--windows requires WINDOWS_VAULT_MOUNT to be set in .env — see .env.example." >&2
+  exit 1
+fi
 
 CURRENT_COMMIT=""
 if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then

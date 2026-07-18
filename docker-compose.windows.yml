@@ -1,0 +1,22 @@
+# Optional overlay for Windows hosts running Docker Desktop's WSL2 backend.
+#
+# docker-compose.yml only bind-mounts ${HOME} (the WSL2 distro's own home
+# directory, e.g. /home/alice) into the backend container. A "local" source
+# path that lives on a Windows drive instead — e.g. the Windows-side
+# Documents folder, reachable from WSL2 only at /mnt/c/Users/alice/Documents
+# — is invisible to the container unless this overlay is layered on top.
+#
+# Enable with: ./start.sh --windows   (or manually: docker compose
+# -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.windows.yml up -d)
+#
+# Mounts only WINDOWS_VAULT_MOUNT (set in .env — see .env.example), read-only,
+# rather than the whole drive: the backend container also makes outbound
+# network calls and exposes an MCP server, so a compromise there shouldn't be
+# able to read arbitrary files (SSH keys, credentials, ...) elsewhere on the
+# Windows filesystem. Registering more than one local source outside $HOME
+# needs a shared parent folder in WINDOWS_VAULT_MOUNT, or another line here
+# for each additional folder/drive.
+services:
+  backend:
+    volumes:
+      - ${WINDOWS_VAULT_MOUNT}:${WINDOWS_VAULT_MOUNT}:ro
