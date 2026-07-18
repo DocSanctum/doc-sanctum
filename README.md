@@ -39,7 +39,7 @@ The first run builds the images, which takes a few minutes (it also downloads a 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 
-A "Sample Docs" source is registered automatically the first time you start DocSanctum, so there's something to read and search right away — delete it from Settings once you've added your own. From there, use the "Add source" button in the sidebar to register a local folder, a GitHub repo (`owner/repo`), or a GitLab project (`group/project`). Local folders index immediately; remote repos sync in the background and you'll see their status change from "syncing" to "active" (or "partial", if some documents failed to fetch — e.g. a rate limit — while the rest indexed fine).
+A "Sample Docs" source is registered automatically the first time you start DocSanctum, so there's something to read and search right away — delete it from Settings once you've added your own. From there, use the "Add source" button in the sidebar to register a local folder, a GitHub repo (`owner/repo`), or a GitLab project (`group/project`). Every source type indexes in the background — registration returns right away and you'll see its status change from "syncing" to "active" (or "partial", if some documents failed to index — e.g. a rate limit on a remote repo — while the rest indexed fine).
 
 To stop everything:
 

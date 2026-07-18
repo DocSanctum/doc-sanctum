@@ -123,12 +123,11 @@ async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
     return Source.from_row(dict(row))
 
 
-async def _finish_remote_registration(source: Source) -> None:
-    """Build the initial vector index for a newly registered remote source in
-    the background (FR-011) so POST /sources can respond immediately instead
-    of blocking on a full-repo crawl + embed, which for a large GitHub repo
-    could take minutes with no progress feedback to the caller. Mirrors the
-    status handling already used by refresh_source/poll_now."""
+async def _finish_registration(source: Source) -> None:
+    """Build the initial vector index for a newly registered source in the
+    background, so POST /sources can respond immediately instead of risking
+    a reverse-proxy timeout on a slow crawl/embed (a large remote repo, or a
+    local vault reached over WSL2's /mnt/c 9p mount)."""
     try:
         warnings = await create_index(source)
         status, error_msg = summarize_index_warnings(warnings)
@@ -285,20 +284,10 @@ async def register_source(
         type=req.type,
         path=path,
         polling_interval_seconds=poll,
-        status="active" if is_local else "syncing",
+        status="syncing",
         icon=req.icon,
         access_token_encrypted=access_token_encrypted,
     )
-
-    index_warnings: list[dict] | None = None
-    if is_local:
-        # Local sources read straight from disk (no network round-trips), so
-        # indexing them synchronously is cheap enough to keep failing fast
-        # and clean, before anything is persisted.
-        try:
-            index_warnings = await create_index(source)
-        except EngineUnavailableError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
         await session.execute(
@@ -315,8 +304,6 @@ async def register_source(
         )
         await session.commit()
     except Exception as exc:
-        if is_local:
-            await delete_source_index(source.id)
         if "UNIQUE" in str(exc):
             raise HTTPException(status_code=409, detail="Path already registered")
         raise
@@ -327,13 +314,9 @@ async def register_source(
         register_index_listener(
             source.id, functools.partial(handle_watch_event, source, watch_root)
         )
-    else:
-        asyncio.create_task(_finish_remote_registration(source))
+    asyncio.create_task(_finish_registration(source))
 
-    result = source.to_dict()
-    if index_warnings:
-        result["index_warnings"] = index_warnings
-    return result
+    return source.to_dict()
 
 
 @router.get("/sources")
