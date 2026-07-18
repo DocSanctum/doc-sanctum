@@ -213,11 +213,24 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
 
 async def delete_source_index(source_id: str) -> None:
     """Purge the vector collection, keyword index, and tree/content cache for a
-    deleted source (FR-012)."""
-    await client.delete_collection(source_id)
-    await keyword_client.delete_source(source_id)
+    deleted source. Each step runs independently: a failure is logged rather
+    than raised, so one flaky store does not block the rest or surface an
+    HTTP error for a source that is already gone. Anything left behind is
+    reconciled later by rebuild_check's startup sweep."""
+    for step in (
+        lambda: client.delete_collection(source_id),
+        lambda: keyword_client.delete_source(source_id),
+        lambda: hash_cache.delete_source(source_id),
+    ):
+        try:
+            await step()
+        except Exception:
+            logger.exception(
+                "Cleanup step failed while deleting source %s; continuing "
+                "with the remaining cleanup steps",
+                source_id,
+            )
     clear_source(source_id)
-    await hash_cache.delete_source(source_id)
 
 
 async def create_index(source: Source) -> list[dict[str, Any]]:

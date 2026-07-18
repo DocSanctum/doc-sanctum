@@ -340,6 +340,59 @@ async def test_incomplete_write_invalidates_only_that_source(db, monkeypatch, tm
     assert "Crashed Source" in files[0].name or "Crashed-Source" in files[0].name
 
 
+async def test_orphaned_collection_is_deleted_and_live_one_is_kept(
+    db, monkeypatch, tmp_path
+):
+    """A vector collection with no matching source row (left behind by a
+    previous delete_collection call that failed) must be deleted on the next
+    startup sweep. A collection whose source row still exists must be left
+    alone."""
+    source = Source(name="Live Source", type="local", path="/tmp/live")
+    await _insert_source(db, source)
+
+    async def fake_list_collection_source_ids():
+        return [source.id, "orphaned-id"]
+
+    deleted: list[str] = []
+
+    async def fake_delete_collection(source_id):
+        deleted.append(source_id)
+
+    monkeypatch.setattr(
+        client_module, "list_collection_source_ids", fake_list_collection_source_ids
+    )
+    monkeypatch.setattr(client_module, "delete_collection", fake_delete_collection)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_orphaned_collections()
+
+    assert deleted == ["orphaned-id"]  # live source's collection untouched
+
+    files = list(events_dir.iterdir())
+    assert len(files) == 1
+    first_line = files[0].read_text().splitlines()[0]
+    assert "reason=orphaned-collection" in first_line
+    assert "orphaned-id" in first_line
+
+
+async def test_no_orphaned_collections_writes_no_event(db, monkeypatch, tmp_path):
+    async def fake_list_collection_source_ids():
+        return []
+
+    monkeypatch.setattr(
+        client_module, "list_collection_source_ids", fake_list_collection_source_ids
+    )
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_orphaned_collections()
+
+    assert not events_dir.exists() or not list(events_dir.iterdir())
+
+
 # --- rebuild_lock: cross-replica coordination ---
 
 

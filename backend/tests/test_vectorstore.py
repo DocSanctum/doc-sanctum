@@ -617,6 +617,29 @@ async def test_delete_source_index_clears_all_state(hash_cache_db, fake_client):
 
 
 @pytest.mark.asyncio
+async def test_delete_source_index_continues_after_one_step_fails(
+    hash_cache_db, fake_client
+):
+    """A failure deleting the vector collection (e.g. the vector store being
+    briefly unreachable) must not stop the keyword index and hash cache from
+    being cleaned up, and must not raise back to the caller — the source row
+    is already deleted by the time this runs."""
+    await hash_cache_module.upsert("src-1", "a.md", "somehash", "someblobsha")
+
+    async def failing_delete_collection(source_id):
+        raise ConnectionError("vector store unreachable")
+
+    fake_client.delete_collection = failing_delete_collection
+
+    await indexer_module.delete_source_index("src-1")
+
+    assert fake_client.keyword.deleted_sources == ["src-1"]
+    hashes, shas = await hash_cache_module.get_known("src-1")
+    assert hashes == {}
+    assert shas == {}
+
+
+@pytest.mark.asyncio
 async def test_create_index_raises_when_engine_unavailable(fake_client, monkeypatch):
     fake_client.engine_available = False
 

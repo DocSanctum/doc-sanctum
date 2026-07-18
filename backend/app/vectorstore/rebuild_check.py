@@ -197,6 +197,34 @@ async def _check_incomplete_writes() -> None:
             await rebuild_lock.release(source_id)
 
 
+async def _check_orphaned_collections() -> None:
+    """Delete vector collections whose source_id no longer exists in the
+    `source` table — left behind when a source's delete_collection call
+    failed (see client._delete_collection_sync)."""
+    collection_ids = await client.list_collection_source_ids()
+    if not collection_ids:
+        return
+    async with async_session_factory() as session:
+        rows = await session.execute(text("SELECT id FROM source"))
+        live_ids = {row[0] for row in rows.all()}
+    for source_id in collection_ids:
+        if source_id in live_ids:
+            continue
+        await client.delete_collection(source_id)
+        rebuild_events.record(
+            source_id=source_id,
+            source_name=source_id,
+            reason="orphaned-collection",
+            doc_count=0,
+            duration_seconds=0.0,
+            detail=(
+                "Deleted a vector collection with no matching source row, "
+                "left behind by a previous delete that failed partway."
+            ),
+        )
+        logger.warning("Deleted orphaned vector collection for source %s", source_id)
+
+
 async def check_and_recover() -> None:
     """Run once at startup, after init_engine() and before resume_local_sources()/
     start_polling_all(), so any invalidation below is picked up by the very
@@ -204,3 +232,4 @@ async def check_and_recover() -> None:
     await _check_embedding_signature()
     await _check_chunking_version()
     await _check_incomplete_writes()
+    await _check_orphaned_collections()
