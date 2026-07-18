@@ -52,7 +52,7 @@
         type="button"
         class="pane-toolbar-btn"
         :title="t('viewer.pane.closeTitle')"
-        @click.stop="closePane(paneId)"
+        @click.stop="handleClose"
       >✕</button>
     </div>
     <ReadingProgressBar v-if="pane.sourceId && pane.filePath" :container="() => scrollRef" :color="colorOf(paneId)" />
@@ -104,7 +104,17 @@ const isActive = computed(() => activePaneId.value === props.paneId)
 const paneBorderClass = computed(() => paneColorClass(colorOf(props.paneId), 'border'))
 const paneBgClass = computed(() => paneColorClass(colorOf(props.paneId), 'bg'))
 const showAddButton = computed(() => panes.value.length === 1 && canAddPane())
-const showCloseButton = computed(() => panes.value.length > 1)
+// In split view, the button closes this pane entirely. With a single pane
+// (which can never be removed), it instead just clears the open document.
+const showCloseButton = computed(() => panes.value.length > 1 || !!(pane.value.sourceId && pane.value.filePath))
+
+function handleClose() {
+  if (panes.value.length > 1) {
+    closePane(props.paneId)
+  } else {
+    setPaneDocument(props.paneId, null, null)
+  }
+}
 
 const scrollRef = ref<HTMLElement | null>(null)
 
