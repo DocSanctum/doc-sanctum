@@ -2,6 +2,7 @@ import asyncio
 import functools
 import logging
 import os
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -45,6 +46,25 @@ _DEFAULT_POLL: dict[str, int] = {
 # change, which turned out to be too much upkeep in practice. Disabled until
 # a lower-friction replacement (e.g. more git-hosting providers) ships.
 _DISABLED_SOURCE_TYPES = {"http", "localhost"}
+
+# The backend always runs inside a Linux container, regardless of the host
+# OS, so a Windows-style absolute path pasted straight from Explorer (e.g.
+# `C:\Users\alice\docs`) is never valid as-is: no leading `/` makes it look
+# relative, and its backslashes aren't path separators on Linux. WSL2 exposes
+# each Windows drive under /mnt/<lowercase drive letter>/..., which is also
+# where a container running under Docker Desktop's WSL2 integration can see
+# it (given the matching bind mount) — so translate to that form instead of
+# letting it fail confusingly downstream.
+_WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
+
+
+def _normalize_local_path(path: str) -> str:
+    match = _WINDOWS_ABS_PATH_RE.match(path)
+    if not match:
+        return os.path.expanduser(path)
+    drive = path[0].lower()
+    rest = path[2:].replace("\\", "/").lstrip("/")
+    return f"/mnt/{drive}/{rest}"
 
 
 class RegisterSourceRequest(BaseModel):
@@ -246,9 +266,15 @@ async def register_source(
 ) -> dict:
     _reject_local_source_in_scaleout(req.type)
     _reject_disabled_source_type(req.type)
-    name = req.name or req.path.rstrip("/").split("/")[-1]
-    poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
     is_local = req.type == "local"
+    path = _normalize_local_path(req.path) if is_local else req.path
+    if is_local and not os.path.isdir(path):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Path not found or not a directory (inside the backend container): {path}",
+        )
+    name = req.name or path.rstrip("/").split("/")[-1]
+    poll = req.polling_interval_seconds or _DEFAULT_POLL.get(req.type)
     access_token_encrypted = (
         encrypt_token(req.access_token)
         if req.access_token and req.type in ("github", "gitlab")
@@ -257,7 +283,7 @@ async def register_source(
     source = Source(
         name=name,
         type=req.type,
-        path=req.path,
+        path=path,
         polling_interval_seconds=poll,
         status="active" if is_local else "syncing",
         icon=req.icon,

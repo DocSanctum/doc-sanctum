@@ -17,6 +17,60 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+# --- Windows-style local path normalization + validation ---
+# Registering a local source with a Windows path (e.g. pasted straight from
+# Explorer) used to crash with a raw 500: the Linux backend has no leading
+# `/` to recognize it as absolute, so it silently treated the whole string
+# as one bogus relative directory name and blew up deep in the filesystem
+# scan. It should instead be translated to its WSL2 mount-point equivalent
+# and, if still not found, rejected up front with a clean 422.
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        (r"C:\Users\alice\docs", "/mnt/c/Users/alice/docs"),
+        ("D:/projects/notes", "/mnt/d/projects/notes"),
+        (r"c:\Users\alice\docs", "/mnt/c/Users/alice/docs"),
+    ],
+)
+def test_normalize_local_path_translates_windows_paths(raw, expected):
+    assert sources_module._normalize_local_path(raw) == expected
+
+
+def test_normalize_local_path_leaves_posix_paths_untouched():
+    assert (
+        sources_module._normalize_local_path("/home/alice/docs") == "/home/alice/docs"
+    )
+
+
+def test_normalize_local_path_expands_tilde():
+    home = os.path.expanduser("~")
+    assert sources_module._normalize_local_path("~/docs") == f"{home}/docs"
+
+
+@pytest.mark.asyncio
+async def test_register_source_rejects_nonexistent_local_path_with_422(
+    session_factory,
+):
+    req = RegisterSourceRequest(type="local", path="/nonexistent/path/for/test")
+    async with session_factory() as session:
+        with pytest.raises(HTTPException) as exc_info:
+            await sources_module.register_source(req, session)
+    assert exc_info.value.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_register_source_translates_windows_path_before_validating(
+    session_factory,
+):
+    req = RegisterSourceRequest(type="local", path=r"C:\Users\alice\knowledge_vault")
+    async with session_factory() as session:
+        with pytest.raises(HTTPException) as exc_info:
+            await sources_module.register_source(req, session)
+    assert exc_info.value.status_code == 422
+    assert "/mnt/c/Users/alice/knowledge_vault" in exc_info.value.detail
+
 
 @pytest.mark.parametrize("source_type", ["http", "localhost"])
 def test_reject_disabled_source_type_raises_422(source_type):
