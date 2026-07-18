@@ -6,6 +6,15 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.1.0',
+    date: '2026-07-18',
+    changes: [
+      'Registering a local folder on Windows now works: a native path (e.g. C:\\Users\\you\\docs) is translated automatically, and an optional --windows start mode can mount a folder outside the WSL2 home directory',
+      'Fix: registering a local source with a Windows-style or otherwise unreachable path returned a raw 500 error instead of a clear message',
+      'Fix: registering a local source could time out in the browser for a large or slow-to-scan vault; it now indexes in the background like remote sources',
+    ],
+  },
+  {
     version: '1.0.0',
     date: '2026-07-18',
     changes: [
