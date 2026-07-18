@@ -140,6 +140,20 @@ async def _get_status(factory, source_id: str) -> str:
         return row["status"]
 
 
+async def _wait_for_status(
+    factory, source_id: str, expected: str, timeout: float = 2.0
+) -> str:
+    # aiosqlite runs queries on a background thread, so the background
+    # registration task's DB write isn't guaranteed to land after a single
+    # `await asyncio.sleep(0)` — poll briefly instead of racing it.
+    deadline = asyncio.get_event_loop().time() + timeout
+    status = await _get_status(factory, source_id)
+    while status != expected and asyncio.get_event_loop().time() < deadline:
+        await asyncio.sleep(0.01)
+        status = await _get_status(factory, source_id)
+    return status
+
+
 @pytest.mark.asyncio
 async def test_resume_local_source_restarts_watcher_and_rebuilds_index(
     monkeypatch, session_factory
@@ -265,7 +279,7 @@ async def test_register_source_with_access_token_stores_encrypted(
     )
     async with session_factory() as session:
         result = await sources_module.register_source(req, session)
-    await asyncio.sleep(0)  # let _finish_remote_registration's background task run
+    await asyncio.sleep(0)  # let _finish_registration's background task run
 
     assert result["access_token_configured"] is True
     assert "access_token" not in result
@@ -290,6 +304,127 @@ async def test_register_source_without_access_token_leaves_it_unset(
     assert await _get_access_token_encrypted(session_factory, result["id"]) is None
 
 
+# --- Async local source registration ---
+# Local sources now register the same way remote ones do: respond
+# immediately with status 'syncing', then index in a background task —
+# indexing inline risked a reverse-proxy timeout on a slow scan.
+
+
+@pytest.mark.asyncio
+async def test_register_source_local_returns_syncing_before_indexing_completes(
+    monkeypatch, session_factory, tmp_path
+):
+    started = asyncio.Event()
+    finished = asyncio.Event()
+
+    async def slow_create_index(source):
+        started.set()
+        await finished.wait()
+        return []
+
+    monkeypatch.setattr(sources_module, "create_index", slow_create_index)
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        result = await asyncio.wait_for(
+            sources_module.register_source(req, session), timeout=1
+        )
+
+    assert result["status"] == "syncing"
+    await asyncio.wait_for(started.wait(), timeout=1)
+    finished.set()
+
+
+@pytest.mark.asyncio
+async def test_register_source_local_starts_watcher_before_indexing_completes(
+    monkeypatch, session_factory, tmp_path
+):
+    watched = []
+    finished = asyncio.Event()
+
+    async def slow_create_index(source):
+        await finished.wait()
+        return []
+
+    monkeypatch.setattr(sources_module, "create_index", slow_create_index)
+    monkeypatch.setattr(
+        sources_module, "start_watching", lambda sid, path: watched.append(sid)
+    )
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        result = await asyncio.wait_for(
+            sources_module.register_source(req, session), timeout=1
+        )
+
+    assert watched == [result["id"]]
+    finished.set()
+
+
+@pytest.mark.asyncio
+async def test_register_source_local_background_task_marks_active(
+    monkeypatch, session_factory, no_op_create_index, tmp_path
+):
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        result = await sources_module.register_source(req, session)
+
+    assert await _wait_for_status(session_factory, result["id"], "active") == "active"
+
+
+@pytest.mark.asyncio
+async def test_register_source_local_background_task_marks_error_on_index_failure(
+    monkeypatch, session_factory, tmp_path
+):
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    async def failing_create_index(source):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(sources_module, "create_index", failing_create_index)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        result = await sources_module.register_source(req, session)
+
+    assert await _wait_for_status(session_factory, result["id"], "error") == "error"
+
+
+@pytest.mark.asyncio
+async def test_register_source_local_duplicate_path_skips_indexing(
+    monkeypatch, session_factory, tmp_path
+):
+    calls = []
+
+    async def tracking_create_index(source):
+        calls.append(source.id)
+        return []
+
+    monkeypatch.setattr(sources_module, "create_index", tracking_create_index)
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        await sources_module.register_source(req, session)
+    await asyncio.sleep(0)
+
+    with pytest.raises(HTTPException) as exc_info:
+        async with session_factory() as session:
+            await sources_module.register_source(req, session)
+    assert exc_info.value.status_code == 409
+
+    await asyncio.sleep(0)
+    assert len(calls) == 1
+
+
 @pytest.mark.asyncio
 async def test_register_source_ignores_access_token_for_local_type(
     session_factory, no_op_create_index, tmp_path
@@ -299,6 +434,7 @@ async def test_register_source_ignores_access_token_for_local_type(
     )
     async with session_factory() as session:
         result = await sources_module.register_source(req, session)
+    await asyncio.sleep(0)  # let _finish_registration's background task run
 
     assert result["access_token_configured"] is False
     assert await _get_access_token_encrypted(session_factory, result["id"]) is None
@@ -375,6 +511,7 @@ async def test_patch_source_ignores_access_token_for_local_type(
     req = RegisterSourceRequest(type="local", path=str(tmp_path))
     async with session_factory() as session:
         registered = await sources_module.register_source(req, session)
+    await asyncio.sleep(0)  # let _finish_registration's background task run
 
     async with session_factory() as session:
         result = await sources_module.patch_source(
