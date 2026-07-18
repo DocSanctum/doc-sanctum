@@ -494,6 +494,33 @@ function handleClick(e: MouseEvent) {
   display: flex;
   justify-content: center;
   overflow-x: auto;
+  /* Thin themed horizontal scrollbar, matching .code-block-body instead of
+     the browser default (most visible on Windows, where non-overlay
+     scrollbars render as an opaque white bar by default). */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db transparent;
+}
+.prose .mermaid-block-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.prose .mermaid-block-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.prose .mermaid-block-scroll::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+.prose .mermaid-block-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+:root.dark .prose .mermaid-block-scroll {
+  scrollbar-color: #374151 transparent;
+}
+:root.dark .prose .mermaid-block-scroll::-webkit-scrollbar-thumb {
+  background: #374151;
+}
+:root.dark .prose .mermaid-block-scroll::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
 }
 .prose .mermaid-block .mermaid svg {
   max-width: 100%;
