@@ -74,13 +74,15 @@ If your network only reaches the internet through a proxy, set these in `.env` b
 ```bash
 HTTP_PROXY=http://proxy.internal.example.com:8080
 HTTPS_PROXY=http://proxy.internal.example.com:8080
-NO_PROXY=localhost,127.0.0.1
+NO_PROXY=localhost,127.0.0.1,vectorstore
 ```
 
 They're used in two places:
 
 - **At build time** — `pip install`, `npm install`, and the embedding model download all go through the proxy.
 - **At runtime** — the backend's outbound requests to remote GitHub/GitLab/HTTP sources go through it too.
+
+`vectorstore` must stay in `NO_PROXY` whenever `HTTP_PROXY`/`HTTPS_PROXY` is set: the backend talks to the `vectorstore` container over the docker-internal hostname `vectorstore:8000` via an httpx-based client, which honors these env vars by default. Without the exclusion, that in-network traffic gets routed through the proxy too — which can't reach a docker-internal hostname — and semantic search stays stuck reporting the vector store unreachable.
 
 Because these are baked in as build args, changing them in `.env` only takes effect on the next rebuild: run `./start.sh --build` (or `./start.sh --dev --build`) after editing them.
 
