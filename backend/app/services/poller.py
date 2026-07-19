@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from sqlalchemy import text
@@ -103,3 +104,17 @@ async def poll_now(source: Source) -> None:
     await _poll_source(source)
     if source.id not in _tasks:
         _tasks[source.id] = asyncio.create_task(_run_poller(source))
+
+
+async def stop_polling(source_id: str) -> None:
+    """Cancel and await a source's recurring poll loop, so a deleted source's
+    background poller cannot outlive it and keep recreating its vector
+    collection every interval (see delete_source in api/sources.py). Without
+    this, nothing ever stopped `_run_poller` — it ran forever, since neither
+    `_tasks` nor its task was ever cleared on delete."""
+    task = _tasks.pop(source_id, None)
+    if task is None:
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task

@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import functools
 import logging
 import os
@@ -14,7 +15,7 @@ from ..core.config import settings
 from ..core.crypto import encrypt_token
 from ..core.database import async_session_factory, get_session, get_setting, set_setting
 from ..models.source import Source, SourceIcon, SourceType
-from ..services.poller import poll_now
+from ..services.poller import poll_now, stop_polling
 from ..services.watcher import register_index_listener, start_watching, stop_watching
 from ..vectorstore.indexer import (
     EngineUnavailableError,
@@ -123,6 +124,34 @@ async def _get_or_404(session: AsyncSession, source_id: str) -> Source:
     return Source.from_row(dict(row))
 
 
+# source_id -> the one-shot background task building/resuming its initial
+# vector index (register_source's _finish_registration, or
+# resume_local_sources' _resume_local_source). Tracked so delete_source can
+# cancel and await it before deleting the vector collection — otherwise a
+# task still mid-index can call get_or_create_collection after the
+# collection was just deleted, recreating it (see stop_polling in
+# services/poller.py for the same problem with the recurring poller).
+_indexing_tasks: dict[str, asyncio.Task] = {}
+
+
+def _track_indexing_task(source_id: str, task: asyncio.Task) -> None:
+    def _untrack(done: asyncio.Task) -> None:
+        if _indexing_tasks.get(source_id) is done:
+            _indexing_tasks.pop(source_id, None)
+
+    _indexing_tasks[source_id] = task
+    task.add_done_callback(_untrack)
+
+
+async def _cancel_indexing_task(source_id: str) -> None:
+    task = _indexing_tasks.pop(source_id, None)
+    if task is None or task.done():
+        return
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
 async def _finish_registration(source: Source) -> None:
     """Build the initial vector index for a newly registered source in the
     background, so POST /sources can respond immediately instead of risking
@@ -209,7 +238,10 @@ async def resume_local_sources() -> None:
             .all()
         )
     for row in rows:
-        asyncio.create_task(_resume_local_source(Source.from_row(dict(row))))
+        source = Source.from_row(dict(row))
+        _track_indexing_task(
+            source.id, asyncio.create_task(_resume_local_source(source))
+        )
 
 
 async def seed_sample_source() -> None:
@@ -314,7 +346,7 @@ async def register_source(
         register_index_listener(
             source.id, functools.partial(handle_watch_event, source, watch_root)
         )
-    asyncio.create_task(_finish_registration(source))
+    _track_indexing_task(source.id, asyncio.create_task(_finish_registration(source)))
 
     return source.to_dict()
 
@@ -339,6 +371,11 @@ async def delete_source(
     await _get_or_404(session, source_id)
     await session.execute(text("DELETE FROM source WHERE id = :id"), {"id": source_id})
     await session.commit()
+    # Stop anything that could still write to this source's vector collection
+    # before deleting it, so a task that's already past this point can't
+    # recreate the collection via get_or_create_collection right after.
+    await stop_polling(source_id)
+    await _cancel_indexing_task(source_id)
     await delete_source_index(source_id)
     stop_watching(source_id)
 

@@ -633,3 +633,99 @@ async def test_poll_source_sets_error_status_when_private_repo_has_no_token(
         )
     assert row["status"] == "error"
     assert row["error_message"]
+
+
+# --- delete_source vs. in-flight background indexing (race condition fix) ---
+# A source deleted while its initial index was still building could have that
+# background task call get_or_create_collection *after* the collection was
+# just deleted, resurrecting it as an orphan with no matching source row —
+# and, for remote sources, the recurring poller kept doing the same thing on
+# every interval forever, since nothing ever cancelled it on delete.
+
+
+@pytest.mark.asyncio
+async def test_delete_source_cancels_in_flight_indexing_task_before_deleting_collection(
+    monkeypatch, session_factory, tmp_path
+):
+    started = asyncio.Event()
+    finished = asyncio.Event()
+    completed_indexing = False
+
+    async def slow_create_index(source):
+        started.set()
+        await finished.wait()
+        nonlocal completed_indexing
+        completed_indexing = True
+        return []
+
+    monkeypatch.setattr(sources_module, "create_index", slow_create_index)
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+    monkeypatch.setattr(sources_module, "stop_watching", lambda sid: None)
+
+    deleted_collections = []
+
+    async def fake_delete_source_index(source_id):
+        deleted_collections.append(source_id)
+
+    monkeypatch.setattr(sources_module, "delete_source_index", fake_delete_source_index)
+
+    async def fake_stop_polling(source_id):
+        return None
+
+    monkeypatch.setattr(sources_module, "stop_polling", fake_stop_polling)
+
+    req = RegisterSourceRequest(type="local", path=str(tmp_path))
+    async with session_factory() as session:
+        result = await asyncio.wait_for(
+            sources_module.register_source(req, session), timeout=1
+        )
+    source_id = result["id"]
+    await asyncio.wait_for(started.wait(), timeout=1)
+    assert source_id in sources_module._indexing_tasks
+
+    async with session_factory() as session:
+        await asyncio.wait_for(
+            sources_module.delete_source(source_id, session), timeout=1
+        )
+
+    assert source_id not in sources_module._indexing_tasks
+    assert deleted_collections == [source_id]
+
+    # Unblock the (already-cancelled) background coroutine and confirm it
+    # never resumes past the cancellation point — if it did, it would call
+    # get_or_create_collection well after delete_source_index ran above.
+    finished.set()
+    await asyncio.sleep(0)
+    assert completed_indexing is False
+
+
+@pytest.mark.asyncio
+async def test_delete_source_stops_the_recurring_poller(monkeypatch, session_factory):
+    source = Source(
+        id="s-remote-del",
+        name="repo",
+        type="github",
+        path="owner/repo",
+        polling_interval_seconds=600,
+    )
+    await _insert_source(session_factory, source)
+
+    async def loop_forever():
+        while True:
+            await asyncio.sleep(0.01)
+
+    poller_module._tasks["s-remote-del"] = asyncio.create_task(loop_forever())
+
+    async def fake_delete_source_index(source_id):
+        return None
+
+    monkeypatch.setattr(sources_module, "delete_source_index", fake_delete_source_index)
+    monkeypatch.setattr(sources_module, "stop_watching", lambda sid: None)
+
+    async with session_factory() as session:
+        await asyncio.wait_for(
+            sources_module.delete_source("s-remote-del", session), timeout=1
+        )
+
+    assert "s-remote-del" not in poller_module._tasks
