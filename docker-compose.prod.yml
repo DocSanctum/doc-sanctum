@@ -43,3 +43,6 @@ services:
 
   vectorstore:
     logging: *default-logging
+
+  vectorstore-vacuum:
+    logging: *default-logging
