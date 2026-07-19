@@ -26,8 +26,26 @@
 #      LB, not at an individual replica's port from the range above.
 # -----------------------------------------------------------------------------
 services:
+  # One-shot: deletes vector segment directories orphaned by a deleted
+  # collection (delete_collection() never removes them itself — confirmed
+  # by hand against a real server, they leak on disk forever otherwise) and
+  # VACUUMs chroma.sqlite3 when enough space is reclaimable. Must run before
+  # `vectorstore` opens the same files — a running server holds a lock that
+  # makes this unsafe, so `vectorstore` waits for this to finish (below).
+  # See scripts/vectorstore_maintenance.py for the full rationale.
+  vectorstore-vacuum:
+    image: python:3.11-slim
+    volumes:
+      - vectorstore_data:/data
+      - ./scripts/vectorstore_maintenance.py:/vectorstore_maintenance.py:ro
+    command: ["python3", "/vectorstore_maintenance.py"]
+    restart: "no"
+
   vectorstore:
     image: chromadb/chroma:latest
+    depends_on:
+      vectorstore-vacuum:
+        condition: service_completed_successfully
     ports:
       - "${VECTOR_STORE_HOST_PORT:-8001}:8000"  # host-facing port, for local inspection only
     volumes:
