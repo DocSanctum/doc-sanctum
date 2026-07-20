@@ -12,6 +12,8 @@ DocSanctum pulls markdown documentation scattered across a local folder, GitHub 
 
 It's meant to run on your own machine or your team's own server. Nothing leaves it unless you tell it to.
 
+https://github.com/user-attachments/assets/e4d861a0-b839-4707-8e1c-19dbbe9ba31f
+
 ## Why you might want this
 
 Most teams end up with documentation spread across a handful of repos, a local notes folder, maybe a wiki nobody updates. DocSanctum doesn't try to replace any of that — it just gives you one viewer and one search box on top of what already exists.
@@ -42,6 +44,14 @@ The first run builds the images, which takes a few minutes (it also downloads a 
 - Backend API: http://localhost:8000
 
 A "Sample Docs" source is registered automatically the first time you start DocSanctum, so there's something to read and search right away — delete it from Settings once you've added your own. From there, use the "Add source" button in the sidebar to register a local folder, a GitHub repo (`owner/repo`), or a GitLab project (`group/project`). Every source type indexes in the background — registration returns right away and you'll see its status change from "syncing" to "active" (or "partial", if some documents failed to index — e.g. a rate limit on a remote repo — while the rest indexed fine).
+
+Adding a local folder:
+
+https://github.com/user-attachments/assets/372777b4-8db8-4c9e-9e4d-f795779c4a94
+
+Adding a GitHub repo:
+
+https://github.com/user-attachments/assets/3e30f65e-ae00-434e-ac63-316455e2c40d
 
 To stop everything:
 
