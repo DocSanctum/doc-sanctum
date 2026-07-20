@@ -6,6 +6,8 @@
 
 > Turn markdown scattered across local folders, GitHub, and GitLab into one searchable hub — and a knowledge base your AI assistant can query directly over MCP.
 
+**Self-hosted semantic RAG, over MCP.**
+
 DocSanctum pulls markdown documentation scattered across a local folder, GitHub repositories, and GitLab projects into one place you can actually browse and search. Point it at where your docs live, and it builds a single tree you can read, search, and — if you use AI coding assistants — query directly through a built-in MCP server.
 
 It's meant to run on your own machine or your team's own server. Nothing leaves it unless you tell it to.
