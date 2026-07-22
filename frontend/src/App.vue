@@ -7,9 +7,13 @@
     <!-- Sidebar -->
     <aside
       class="flex flex-col border-r border-gray-200 dark:border-gray-700 shrink-0 relative bg-white dark:bg-gray-900"
-      :style="{ width: sidebarWidth + 'px' }"
+      :class="{ 'transition-[width] duration-150 ease-in-out': !dragging }"
+      :style="{ width: (sidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth) + 'px' }"
     >
-      <div class="flex items-center justify-between px-3 py-3 border-b border-gray-200 dark:border-gray-700">
+      <div
+        class="flex border-b border-gray-200 dark:border-gray-700"
+        :class="sidebarCollapsed ? 'flex-col items-center gap-3 px-1.5 py-3' : 'items-center justify-between px-3 py-3'"
+      >
         <button
           type="button"
           class="flex items-center gap-1.5 font-semibold text-sm"
@@ -19,26 +23,32 @@
           <svg viewBox="0 0 460 350" class="h-4 w-auto shrink-0" aria-hidden="true">
             <path d="M223.90,333.93 C200.65,317.70 183.85,308.84 163.50,302.09 C141.10,294.66 122.07,291.84 94.50,291.88 C75.32,291.91 60.93,293.41 41.99,297.36 C34.83,298.86 30.12,299.41 29.50,298.83 C28.27,297.68 28.10,62.57 29.33,61.33 C29.79,60.88 34.96,60.50 40.83,60.50 L51.50,60.50 L51.75,164.88 L52.01,269.26 L56.25,268.64 C66.18,267.17 90.08,266.78 101.50,267.90 C135.29,271.20 170.69,283.22 196.79,300.25 C200.88,302.92 204.42,304.92 204.65,304.68 C205.52,303.82 188.13,289.54 178.13,282.92 C149.69,264.07 122.06,255.51 85.75,254.31 C72.88,253.89 66.67,253.31 65.98,252.47 C65.31,251.66 65.06,213.37 65.23,138.09 C65.47,38.78 65.68,24.81 67.00,23.98 C69.02,22.70 100.46,22.74 111.03,24.04 C121.91,25.38 139.17,29.45 150.00,33.24 C178.00,43.03 206.28,62.15 224.43,83.55 L229.77,89.84 L236.63,81.91 C261.60,53.07 298.68,32.40 337.99,25.41 C355.87,22.23 390.15,21.75 393.04,24.64 C393.66,25.26 393.92,67.19 393.75,139.55 L393.50,253.50 L375.88,254.18 C354.66,254.99 338.97,257.60 322.50,263.08 C299.25,270.80 275.69,284.43 261.24,298.53 L253.50,306.08 L262.24,300.54 C287.81,284.33 316.65,273.71 346.54,269.51 C355.94,268.18 363.99,267.89 383.29,268.16 L408.00,268.50 L408.00,164.75 L408.00,61.00 L419.50,61.00 L431.00,61.00 L431.04,125.25 C431.12,253.54 430.91,298.49 430.21,299.14 C429.82,299.50 424.52,298.76 418.42,297.49 C363.47,286.03 310.82,291.86 266.50,314.32 C254.57,320.37 241.49,328.65 235.22,334.13 C231.06,337.76 229.35,337.73 223.90,333.93 Z M234.00,313.23 C238.96,305.19 258.78,285.67 270.00,277.76 C300.28,256.43 337.75,244.00 371.75,244.00 L384.00,244.00 L384.00,138.35 L384.00,32.71 L367.25,33.29 C349.64,33.91 340.02,35.29 324.44,39.44 C291.54,48.20 260.81,67.79 240.94,92.68 L235.21,99.86 L234.59,113.18 C234.25,120.51 233.53,155.52 232.99,191.00 C231.79,269.20 230.92,301.00 229.97,301.00 C229.58,301.00 228.95,291.21 228.59,279.25 C227.94,258.36 225.02,117.34 225.00,106.00 C224.99,100.57 224.88,100.38 216.58,90.50 C194.00,63.64 160.69,44.23 125.00,37.14 C109.99,34.16 99.18,33.00 86.28,33.00 L75.00,33.00 L75.00,138.50 L75.00,244.00 L87.12,244.00 C115.76,244.00 144.65,251.68 170.74,266.23 C192.90,278.59 212.48,295.18 223.96,311.32 C226.97,315.54 229.67,318.98 229.96,318.95 C230.26,318.93 232.07,316.35 234.00,313.23 Z M313.17,194.75 C310.76,177.18 310.60,170.55 312.48,167.66 C314.73,164.23 315.59,164.31 317.55,168.10 C318.96,170.82 319.02,172.72 318.05,183.35 C316.69,198.26 315.96,203.00 315.02,203.00 C314.63,203.00 313.79,199.29 313.17,194.75 Z M281.50,155.33 C272.05,154.16 265.06,152.72 265.48,152.03 C266.61,150.21 297.29,147.82 299.78,149.37 C301.54,150.45 301.28,154.68 299.42,155.39 C297.78,156.02 286.77,155.98 281.50,155.33 Z M329.61,154.47 C327.69,152.55 328.57,150.11 331.61,148.96 C335.15,147.61 362.42,150.25 363.53,152.05 C364.08,152.94 361.51,153.57 351.50,154.98 C340.73,156.49 331.42,156.28 329.61,154.47 Z M312.40,136.48 C310.62,133.77 310.82,126.94 313.20,109.25 C315.01,95.75 315.99,98.19 318.04,121.29 C319.05,132.62 318.99,134.36 317.57,136.54 C315.53,139.65 314.46,139.64 312.40,136.48 Z" fill="currentColor" fill-rule="evenodd"/>
           </svg>
-          DocSanctum
+          <span v-if="!sidebarCollapsed">DocSanctum</span>
         </button>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2" :class="{ 'flex-col': sidebarCollapsed }">
           <button
             class="text-sm hover:text-blue-400"
             :title="t('app.openSearch', { shortcut: searchShortcutLabel })"
             @click="search.open()"
           >🔍</button>
           <button class="text-lg hover:text-blue-400" :title="t('app.addSource')" @click="showAdd = true">＋</button>
+          <button
+            class="text-sm text-gray-400 hover:text-blue-400"
+            :title="sidebarCollapsed ? t('app.expandSidebar') : t('app.collapseSidebar')"
+            @click="toggleSidebarCollapsed"
+          >{{ sidebarCollapsed ? '»' : '«' }}</button>
         </div>
       </div>
       <div class="overflow-y-auto flex-1 py-2 sidebar-scroll">
         <SourceList
           :selected-source-id="treeSourceId"
+          :collapsed="sidebarCollapsed"
           @select-source="selectSource"
           @delete-source="requestDelete"
           @refresh-source="refreshSource"
           @edit-source="requestEdit"
         />
-        <div v-if="treeSourceId" class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
+        <div v-if="treeSourceId && !sidebarCollapsed" class="border-t border-gray-200 dark:border-gray-700 mt-2 pt-2">
           <FileTree
             :source-id="treeSourceId"
             @select-file="selectFile"
@@ -47,25 +57,30 @@
       </div>
 
       <!-- Settings button -->
-      <div class="border-t border-gray-200 dark:border-gray-700 px-3 py-2 shrink-0">
+      <div class="border-t border-gray-200 dark:border-gray-700 py-2 shrink-0" :class="sidebarCollapsed ? 'px-1.5' : 'px-3'">
         <button
           class="flex items-center gap-2 w-full px-2 py-2 rounded text-sm transition-colors"
-          :class="view === 'settings' || view === 'changelog'
-            ? 'bg-blue-600 text-white'
-            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'"
+          :class="[
+            view === 'settings' || view === 'changelog'
+              ? 'bg-blue-600 text-white'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+            sidebarCollapsed ? 'justify-center' : '',
+          ]"
+          :title="sidebarCollapsed ? t('app.settings') : undefined"
           @click="toggleSettings"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-          {{ t('app.settings') }}
+          <span v-if="!sidebarCollapsed">{{ t('app.settings') }}</span>
         </button>
       </div>
 
       <!-- Resize handle -->
       <div
+        v-if="!sidebarCollapsed"
         class="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500/40 transition-colors"
         @mousedown.prevent="startDrag"
       />
@@ -192,6 +207,14 @@ function onDrag(e: MouseEvent) {
 }
 function stopDrag() { dragging.value = false }
 
+// Sidebar collapse (icon-only rail flush against the left edge)
+const SIDEBAR_COLLAPSED_WIDTH = 56
+const sidebarCollapsed = ref(localStorage.getItem('ds-sidebar-collapsed') === 'true')
+function toggleSidebarCollapsed() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem('ds-sidebar-collapsed', String(sidebarCollapsed.value))
+}
+
 // Pane resize (분할 보기일 때 두 패널 사이 경계 드래그, FR-009)
 const PANE_MIN_RATIO = 0.2
 const PANE_MAX_RATIO = 0.8
@@ -215,6 +238,9 @@ function paneFlexBasis(index: number): string {
 
 function selectSource(id: string) {
   treeSourceId.value = id
+  // Picking a source from the collapsed icon rail needs the file tree, which
+  // only has room to render once the sidebar is expanded.
+  if (sidebarCollapsed.value) sidebarCollapsed.value = false
 }
 
 function selectFile(sourceId: string, path: string) {

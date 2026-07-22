@@ -22,6 +22,8 @@ export const ko: MessageSchema = {
     settings: '설정',
     openSearch: '검색 ({shortcut})',
     closeSettingsTitle: '설정 닫기',
+    collapseSidebar: '사이드바 접기',
+    expandSidebar: '사이드바 펼치기',
   },
   sidebar: {
     sourceList: {

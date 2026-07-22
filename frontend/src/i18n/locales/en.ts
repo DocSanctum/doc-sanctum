@@ -20,6 +20,8 @@ export const en = {
     settings: 'Settings',
     openSearch: 'Search ({shortcut})',
     closeSettingsTitle: 'Close settings',
+    collapseSidebar: 'Collapse sidebar',
+    expandSidebar: 'Expand sidebar',
   },
   sidebar: {
     sourceList: {
