@@ -1,7 +1,34 @@
 <template>
   <div class="source-list">
-    <div v-if="sourcesQuery.isPending.value" class="text-sm text-gray-400 px-3 py-2">{{ t('sidebar.sourceList.loading') }}</div>
-    <div v-else-if="sourcesQuery.isError.value" class="text-sm text-red-400 px-3 py-2">{{ t('sidebar.sourceList.loadError') }}</div>
+    <div
+      v-if="sourcesQuery.isPending.value"
+      class="text-sm text-gray-400 truncate"
+      :class="collapsed ? 'px-1 py-2 text-center' : 'px-3 py-2'"
+      :title="collapsed ? t('sidebar.sourceList.loading') : undefined"
+    >{{ collapsed ? '…' : t('sidebar.sourceList.loading') }}</div>
+    <div
+      v-else-if="sourcesQuery.isError.value"
+      class="text-sm text-red-400 truncate"
+      :class="collapsed ? 'px-1 py-2 text-center' : 'px-3 py-2'"
+      :title="collapsed ? t('sidebar.sourceList.loadError') : undefined"
+    >{{ collapsed ? '⚠' : t('sidebar.sourceList.loadError') }}</div>
+    <ul v-else-if="collapsed" class="flex flex-col items-center gap-1 px-1.5">
+      <li
+        v-for="source in sourcesQuery.data.value"
+        :key="source.id"
+        class="relative w-9 h-9 flex items-center justify-center rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 shrink-0"
+        :class="{ 'bg-gray-100 dark:bg-gray-700': selectedSourceId === source.id }"
+        :title="source.name"
+        @click="$emit('select-source', source.id)"
+      >
+        <span class="text-sm leading-none">{{ source.icon || source.name.charAt(0).toUpperCase() }}</span>
+        <span
+          class="absolute bottom-0.5 right-0.5 inline-block w-1.5 h-1.5 rounded-full"
+          :class="statusDot(source.status)"
+          :title="source.error_message ?? source.status"
+        />
+      </li>
+    </ul>
     <ul v-else>
       <li
         v-for="source in sourcesQuery.data.value"
@@ -47,7 +74,9 @@ import { useI18n } from 'vue-i18n'
 import type { SourceStatus } from '../../types'
 import { useSources } from '../../composables/useSources'
 
-defineProps<{ selectedSourceId: string | null }>()
+withDefaults(defineProps<{ selectedSourceId: string | null; collapsed?: boolean }>(), {
+  collapsed: false,
+})
 defineEmits<{
   'select-source': [id: string]
   'refresh-source': [id: string]
