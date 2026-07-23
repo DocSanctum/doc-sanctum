@@ -12,6 +12,7 @@
         <span class="shrink-0 px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{ match.source_name }}</span>
         <span class="truncate">{{ match.path }}</span>
         <span class="shrink-0">:{{ match.line_number }}</span>
+        <span v-if="match.page != null" class="shrink-0 px-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{ t('search.pageLabel', { page: match.page }) }}</span>
       </div>
       <pre class="text-xs font-mono whitespace-pre-wrap break-all leading-snug"><span
         v-for="(line, i) in match.context"

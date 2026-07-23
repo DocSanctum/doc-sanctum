@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 from ..models.source import Source
+from .document_formats import is_supported
 from .github import fetch_github_tree
 from .gitlab import fetch_gitlab_tree
 from .manifest import fetch_manifest_tree
@@ -39,7 +40,7 @@ def _scan_dir(abs_dir: str, rel_dir: str) -> list[dict[str, Any]]:
                 children.append(
                     {"path": rel, "name": entry.name, "is_dir": True, "children": sub}
                 )
-        elif entry.name.endswith(".md"):
+        elif is_supported(entry.name):
             children.append(_build_node(entry.path, rel, entry.name))
     return children
 

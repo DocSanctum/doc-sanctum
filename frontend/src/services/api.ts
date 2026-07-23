@@ -30,8 +30,11 @@ export const api = {
   getTree: (sourceId: string) =>
     request<DirectoryTree>(`/sources/${sourceId}/tree`),
 
+  getFileUrl: (sourceId: string, path: string) =>
+    `${BASE}/sources/${sourceId}/file?path=${encodeURIComponent(path)}`,
+
   getFileContent: (sourceId: string, path: string) =>
-    fetch(`${BASE}/sources/${sourceId}/file?path=${encodeURIComponent(path)}`).then(r => {
+    fetch(api.getFileUrl(sourceId, path)).then(r => {
       if (!r.ok) throw new Error(r.statusText)
       return r.text()
     }),

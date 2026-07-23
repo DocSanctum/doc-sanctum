@@ -15,6 +15,7 @@ from .document_cache import (
     set_cached,
     set_cached_content,
 )
+from .document_formats import ExtractedDocument, extract_text
 from .github import _content_api_url, _github_headers, _parse_github_url
 from .gitlab import _content_raw_url, _gitlab_headers, _parse_gitlab_url
 from .token_resolver import resolve_access_token
@@ -102,7 +103,7 @@ async def get_tree_with_cache(
             }, warning
 
 
-async def _read_local(source: Source, path: str) -> str:
+async def _read_local(source: Source, path: str) -> bytes:
     expanded = os.path.expanduser(source.path)
     safe_root = os.path.realpath(expanded)
     target = os.path.realpath(os.path.join(expanded, path))
@@ -110,11 +111,11 @@ async def _read_local(source: Source, path: str) -> str:
         raise ValueError("Access denied: path traversal detected")
     if not os.path.isfile(target):
         raise ValueError(f"File not found: {path}")
-    with open(target, encoding="utf-8") as f:
+    with open(target, "rb") as f:
         return f.read()
 
 
-async def _read_github(source: Source, path: str) -> str:
+async def _read_github(source: Source, path: str) -> bytes:
     host, owner, repo = _parse_github_url(source.path)
     url = _content_api_url(host, owner, repo, path)
     token = resolve_access_token(source)
@@ -133,10 +134,10 @@ async def _read_github(source: Source, path: str) -> str:
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
     resp.raise_for_status()
-    return resp.text
+    return resp.content
 
 
-async def _read_gitlab(source: Source, path: str) -> str:
+async def _read_gitlab(source: Source, path: str) -> bytes:
     host, project_path = _parse_gitlab_url(source.path)
     url = _content_raw_url(host, project_path, path)
     token = resolve_access_token(source)
@@ -151,10 +152,10 @@ async def _read_gitlab(source: Source, path: str) -> str:
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
     resp.raise_for_status()
-    return resp.text
+    return resp.content
 
 
-async def _read_http(source: Source, path: str) -> str:
+async def _read_http(source: Source, path: str) -> bytes:
     base = source.path.rstrip("/")
     url = f"{base}/{path.lstrip('/')}"
     async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
@@ -162,10 +163,10 @@ async def _read_http(source: Source, path: str) -> str:
     if resp.status_code == 404:
         raise ValueError(f"File not found: {path}")
     resp.raise_for_status()
-    return resp.text
+    return resp.content
 
 
-async def _fetch_remote(source: Source, path: str) -> str:
+async def _fetch_remote(source: Source, path: str) -> bytes:
     if source.type == "github":
         return await _read_github(source, path)
     if source.type == "gitlab":
@@ -173,11 +174,12 @@ async def _fetch_remote(source: Source, path: str) -> str:
     return await _read_http(source, path)
 
 
-async def read_with_cache(
-    source: Source, path: str
-) -> tuple[str, dict[str, Any] | None]:
-    """Read document content, applying the (source_id, path) content cache to
-    remote sources only (FR-004, FR-005). Returns (content, warning_or_None)."""
+async def _read_raw(source: Source, path: str) -> tuple[bytes, dict[str, Any] | None]:
+    """Fetch a document's raw bytes, applying the (source_id, path) content
+    cache to remote sources only (FR-004, FR-005). Returns (raw, warning).
+    Shared by read_with_cache() (which extracts text on top) and
+    read_raw_with_cache() (which returns the bytes as-is, e.g. for a PDF
+    download response) so both go through exactly one fetch+cache path."""
     if source.type == "local":
         return await _read_local(source, path), None
 
@@ -186,9 +188,9 @@ async def read_with_cache(
         return cached["data"], None
 
     try:
-        content = await _fetch_remote(source, path)
-        set_cached_content(source.id, path, content)
-        return content, None
+        raw = await _fetch_remote(source, path)
+        set_cached_content(source.id, path, raw)
+        return raw, None
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code in (403, 429) and cached is not None:
             mark_stale_content(source.id, path)
@@ -201,3 +203,21 @@ async def read_with_cache(
             }
             return cached["data"], warning
         raise
+
+
+async def read_raw_with_cache(
+    source: Source, path: str
+) -> tuple[bytes, dict[str, Any] | None]:
+    """Read a document's raw bytes, unextracted — used where the original
+    file content is what's wanted (e.g. serving a PDF download)."""
+    return await _read_raw(source, path)
+
+
+async def read_with_cache(
+    source: Source, path: str
+) -> tuple[ExtractedDocument, dict[str, Any] | None]:
+    """Read and extract a document's text content, applying the
+    (source_id, path) content cache to remote sources only (FR-004, FR-005).
+    Returns (extracted, warning_or_None)."""
+    raw, warning = await _read_raw(source, path)
+    return extract_text(path, raw), warning

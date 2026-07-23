@@ -38,6 +38,24 @@ def test_build_blob_tree_carries_blob_sha_on_files_only():
     assert intro["sha"] == "sha-intro"
 
 
+def test_build_blob_tree_treats_pdf_and_markdown_blobs_identically():
+    """build_blob_tree has no format-specific branching — it just nests
+    whatever blob list it's given (014-pdf-parser-support: format filtering
+    happens before this function is called, in document_formats.is_supported)."""
+    nodes = build_blob_tree(
+        [
+            {"path": "README.md", "sha": "sha-readme"},
+            {"path": "docs/report.pdf", "sha": "sha-report"},
+        ]
+    )
+    by_name = {n["name"]: n for n in nodes}
+
+    assert by_name["README.md"]["sha"] == "sha-readme"
+    report = by_name["docs"]["children"][0]
+    assert report["path"] == "docs/report.pdf"
+    assert report["sha"] == "sha-report"
+
+
 @pytest.mark.asyncio
 async def test_auth_fallback_uses_anonymous_response_when_it_succeeds():
     """A misconfigured or under-scoped token must not break access that

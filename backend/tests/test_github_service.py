@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import httpx
 import pytest
 from backend.app.services.github import (
     _api_tree_url,
     _content_api_url,
     _github_headers,
     _parse_github_url,
+    fetch_github_tree,
 )
 
 
@@ -77,3 +79,36 @@ def test_github_headers_includes_given_token():
 def test_github_headers_omits_auth_when_no_token():
     headers = _github_headers(None)
     assert "Authorization" not in headers
+
+
+@pytest.mark.asyncio
+async def test_fetch_github_tree_includes_pdf_blobs_alongside_markdown(monkeypatch):
+    tree_response = {
+        "tree": [
+            {"path": "README.md", "sha": "sha1", "type": "blob"},
+            {"path": "docs/report.pdf", "sha": "sha2", "type": "blob"},
+            {"path": "assets/logo.png", "sha": "sha3", "type": "blob"},
+            {"path": "docs", "sha": "sha4", "type": "tree"},
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=tree_response)
+
+    transport = httpx.MockTransport(handler)
+    orig_init = httpx.AsyncClient.__init__
+
+    def patched_init(self, *a, **kw):
+        kw["transport"] = transport
+        orig_init(self, *a, **kw)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+
+    result = await fetch_github_tree("https://github.com/owner/repo", "src-1")
+
+    paths = {c["path"] for c in result["root"]["children"]}
+    assert paths == {"README.md", "docs"}
+    docs_children = next(c for c in result["root"]["children"] if c["path"] == "docs")[
+        "children"
+    ]
+    assert {c["path"] for c in docs_children} == {"docs/report.pdf"}

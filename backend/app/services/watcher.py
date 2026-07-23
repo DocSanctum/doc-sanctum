@@ -8,13 +8,15 @@ from typing import Any
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from .document_formats import is_supported
+
 logger = logging.getLogger(__name__)
 
 IndexListener = Callable[[dict[str, Any]], Awaitable[None]]
 
 # source_id -> async callback invoked (in addition to the SSE queue) for every
-# local .md change, so the vector index stays in sync regardless of whether an
-# SSE client is connected (FR-010).
+# local supported-document change, so the vector index stays in sync
+# regardless of whether an SSE client is connected (FR-010).
 _index_listeners: dict[str, IndexListener] = {}
 
 
@@ -45,7 +47,7 @@ class _MDHandler(FileSystemEventHandler):
         self._queue = queue
 
     def _put(self, event_type: str, path: str, old_path: str | None = None) -> None:
-        if not path.endswith(".md"):
+        if not is_supported(path):
             return
         payload = {"event": event_type, "source_id": self._source_id, "path": path}
         if old_path:

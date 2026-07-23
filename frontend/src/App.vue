@@ -142,6 +142,7 @@ import SettingsPanel from './components/Settings/SettingsPanel.vue'
 import ChangelogPage from './components/Settings/ChangelogPage.vue'
 import ViewerPane from './components/Viewer/ViewerPane.vue'
 import CommandPalette from './components/CommandPalette/CommandPalette.vue'
+import { api } from './services/api'
 import { useSources } from './composables/useSources'
 import { usePanes } from './composables/usePanes'
 import { useTreeReveal } from './composables/useTreeReveal'
@@ -244,6 +245,12 @@ function selectSource(id: string) {
 }
 
 function selectFile(sourceId: string, path: string) {
+  // PDFs have no in-app viewer (spec: FR-010) -- open/download via the
+  // browser's native PDF handling instead of routing into a viewer pane.
+  if (path.toLowerCase().endsWith('.pdf')) {
+    window.open(api.getFileUrl(sourceId, path), '_blank')
+    return
+  }
   treeSourceId.value = sourceId
   openInActivePane(sourceId, path)
   view.value = 'viewer'

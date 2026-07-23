@@ -23,7 +23,7 @@ async def _search_source(
 
 
 async def search_documents_handler(query: str, source_id: str | None = None) -> str:
-    """Search MD files for a keyword and return matching lines with context.
+    """Search documents (Markdown or PDF) for a keyword and return matching lines with context.
 
     Args:
         query: Search keyword (case-insensitive substring match).

@@ -6,22 +6,25 @@ import time
 from sqlalchemy import text
 
 from ..core.database import async_session_factory, get_setting, set_setting
+from ..keywordindex.client import KEYWORD_INDEX_SCHEMA_VERSION
 from . import chunker, client, hash_cache, rebuild_events, rebuild_lock
 
 logger = logging.getLogger(__name__)
 
 _EMBEDDING_SIGNATURE_KEY = "embedding_model_signature"
 _CHUNKING_VERSION_KEY = "chunking_algorithm_version"
+_KEYWORD_SCHEMA_VERSION_KEY = "keyword_index_schema_version"
 
-# Sentinel lock rows for the two independent global-mismatch cases below,
+# Sentinel lock rows for the three independent global-mismatch cases below,
 # distinct from each other and from the per-source locks used for
 # incomplete-write recovery further down — all share the same
 # rebuild_lock table. Kept separate (rather than folded into one signature)
 # so an operator can tell, from the rebuild event's reason alone, whether an
-# embedding-model change or a chunking-algorithm change caused a given
-# rebuild.
+# embedding-model change, a chunking-algorithm change, or a keyword-index
+# schema change caused a given rebuild.
 _GLOBAL_LOCK_ID = "__embedding_signature__"
 _CHUNKING_LOCK_ID = "__chunking_version__"
+_KEYWORD_SCHEMA_LOCK_ID = "__keyword_schema_version__"
 
 
 async def _source_name(source_id: str) -> str:
@@ -153,6 +156,70 @@ async def _check_chunking_version() -> None:
         await rebuild_lock.release(_CHUNKING_LOCK_ID)
 
 
+async def _check_keyword_schema_version() -> None:
+    """If the keyword (FTS5) index's row schema changed since the last run
+    (keywordindex.client.KEYWORD_INDEX_SCHEMA_VERSION bumped), doc_fts was
+    just dropped and recreated by core.database.create_tables() — which
+    means every previously indexed document is now missing from keyword
+    search until it's re-upserted. Invalidate the entire hash cache so every
+    source is fully rebuilt on its next sync (repopulating both the vector
+    and keyword stores), and record one rebuild event describing why.
+    Structurally mirrors _check_chunking_version() above but stays fully
+    independent (own setting key, own lock, own reason).
+
+    Same "missing stored value doesn't necessarily mean fresh install" case
+    as _check_chunking_version(): this tracking was introduced after doc_fts
+    already existed, so an upgrading install can have a populated hash cache
+    with no stored value here yet."""
+    current = str(KEYWORD_INDEX_SCHEMA_VERSION)
+
+    stored = await get_setting(_KEYWORD_SCHEMA_VERSION_KEY)
+    if stored == current:
+        return  # unchanged, no action needed
+
+    if not await rebuild_lock.try_acquire(_KEYWORD_SCHEMA_LOCK_ID):
+        logger.info(
+            "Keyword index schema version changed (%s -> %s) but another "
+            "replica is already handling the rebuild; skipping",
+            stored,
+            current,
+        )
+        return
+    try:
+        started = time.monotonic()
+        invalidated = await hash_cache.wipe_all()
+        await set_setting(_KEYWORD_SCHEMA_VERSION_KEY, current)
+        duration = time.monotonic() - started
+        if stored is None and invalidated == 0:
+            # A genuinely fresh install: nothing to invalidate, just start
+            # tracking the version.
+            return
+        rebuild_events.record(
+            source_id="*",
+            source_name="all sources",
+            reason="keyword-schema-mismatch",
+            doc_count=invalidated,
+            duration_seconds=duration,
+            detail=(
+                f"Stored keyword index schema version "
+                f"'{stored if stored is not None else '(none — pre-existing install)'}' "
+                f"no longer matches the configured '{current}'. Invalidated "
+                f"{invalidated} cached document hash(es) across all "
+                "sources; each will be re-indexed (vector and keyword) on "
+                "its next sync."
+            ),
+        )
+        logger.warning(
+            "Keyword index schema version changed (%s -> %s); invalidated "
+            "%d cached document hash(es), full rebuild will follow",
+            stored,
+            current,
+            invalidated,
+        )
+    finally:
+        await rebuild_lock.release(_KEYWORD_SCHEMA_LOCK_ID)
+
+
 async def _check_incomplete_writes() -> None:
     """A document cache row left 'in_progress' means the previous process
     died mid-write for that source. Invalidate just that source's cache
@@ -231,5 +298,6 @@ async def check_and_recover() -> None:
     first sync each source performs."""
     await _check_embedding_signature()
     await _check_chunking_version()
+    await _check_keyword_schema_version()
     await _check_incomplete_writes()
     await _check_orphaned_collections()

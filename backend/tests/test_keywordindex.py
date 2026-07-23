@@ -18,6 +18,7 @@ _CREATE_DOC_FTS = """
 CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
     source_id UNINDEXED,
     path UNINDEXED,
+    page UNINDEXED,
     content,
     tokenize = 'trigram'
 )
@@ -91,15 +92,15 @@ def test_search_lines_context_includes_surrounding():
 
 @pytest.mark.asyncio
 async def test_upsert_then_query_finds_document(session_factory):
-    await upsert_document("s1", "a.md", "hello keyword search world")
+    await upsert_document("s1", "a.md", [(None, "hello keyword search world")])
     hits = await query(["s1"], "keyword")
     assert [h["path"] for h in hits] == ["a.md"]
 
 
 @pytest.mark.asyncio
 async def test_upsert_replaces_previous_content(session_factory):
-    await upsert_document("s1", "a.md", "old content here")
-    await upsert_document("s1", "a.md", "new content here")
+    await upsert_document("s1", "a.md", [(None, "old content here")])
+    await upsert_document("s1", "a.md", [(None, "new content here")])
     hits_old = await query(["s1"], "old content")
     hits_new = await query(["s1"], "new content")
     assert hits_old == []
@@ -108,17 +109,68 @@ async def test_upsert_replaces_previous_content(session_factory):
 
 @pytest.mark.asyncio
 async def test_delete_document_removes_it_from_results(session_factory):
-    await upsert_document("s1", "a.md", "hello keyword world")
+    await upsert_document("s1", "a.md", [(None, "hello keyword world")])
     await delete_document("s1", "a.md")
     hits = await query(["s1"], "keyword")
     assert hits == []
 
 
+# --- Per-page storage (PDF support) ---
+
+
+@pytest.mark.asyncio
+async def test_upsert_document_with_none_page_produces_single_row(session_factory):
+    """A Markdown-shaped call (single (None, text) entry) must still store
+    exactly one row, unchanged from before per-page support existed."""
+    await upsert_document("s1", "a.md", [(None, "hello keyword world")])
+    hits = await query(["s1"], "keyword")
+    assert len(hits) == 1
+    assert hits[0]["page"] is None
+
+
+@pytest.mark.asyncio
+async def test_upsert_document_with_multiple_pages_stores_one_row_per_page(
+    session_factory,
+):
+    await upsert_document(
+        "s1",
+        "b.pdf",
+        [
+            (1, "keyword on page one"),
+            (2, "nothing relevant"),
+            (3, "keyword on page three"),
+        ],
+    )
+    hits = await query(["s1"], "keyword")
+    assert sorted(h["page"] for h in hits) == [1, 3]
+
+
+@pytest.mark.asyncio
+async def test_upsert_document_replaces_all_pages_of_previous_version(session_factory):
+    await upsert_document(
+        "s1", "b.pdf", [(1, "old keyword text"), (2, "more old keyword text")]
+    )
+    await upsert_document("s1", "b.pdf", [(1, "new content only")])
+    old_hits = await query(["s1"], "old keyword")
+    new_hits = await query(["s1"], "new content")
+    assert old_hits == []
+    assert [h["page"] for h in new_hits] == [1]
+
+
+@pytest.mark.asyncio
+async def test_delete_document_removes_every_page_row_in_one_call(session_factory):
+    await upsert_document(
+        "s1", "b.pdf", [(1, "keyword page one"), (2, "keyword page two")]
+    )
+    await delete_document("s1", "b.pdf")
+    assert await query(["s1"], "keyword") == []
+
+
 @pytest.mark.asyncio
 async def test_delete_source_removes_all_its_documents(session_factory):
-    await upsert_document("s1", "a.md", "hello keyword world")
-    await upsert_document("s1", "b.md", "another keyword doc")
-    await upsert_document("s2", "c.md", "unrelated keyword doc")
+    await upsert_document("s1", "a.md", [(None, "hello keyword world")])
+    await upsert_document("s1", "b.md", [(None, "another keyword doc")])
+    await upsert_document("s2", "c.md", [(None, "unrelated keyword doc")])
     await delete_source("s1")
     assert await query(["s1"], "keyword") == []
     assert [h["path"] for h in await query(["s2"], "keyword")] == ["c.md"]
@@ -129,24 +181,24 @@ async def test_delete_source_removes_all_its_documents(session_factory):
 
 @pytest.mark.asyncio
 async def test_query_scopes_to_given_source_ids(session_factory):
-    await upsert_document("s1", "a.md", "shared keyword here")
-    await upsert_document("s2", "b.md", "shared keyword here")
+    await upsert_document("s1", "a.md", [(None, "shared keyword here")])
+    await upsert_document("s2", "b.md", [(None, "shared keyword here")])
     hits = await query(["s1"], "keyword")
     assert [h["source_id"] for h in hits] == ["s1"]
 
 
 @pytest.mark.asyncio
 async def test_query_searches_multiple_source_ids_at_once(session_factory):
-    await upsert_document("s1", "a.md", "shared keyword here")
-    await upsert_document("s2", "b.md", "shared keyword here")
-    await upsert_document("s3", "c.md", "no match here")
+    await upsert_document("s1", "a.md", [(None, "shared keyword here")])
+    await upsert_document("s2", "b.md", [(None, "shared keyword here")])
+    await upsert_document("s3", "c.md", [(None, "no match here")])
     hits = await query(["s1", "s2"], "keyword")
     assert {h["source_id"] for h in hits} == {"s1", "s2"}
 
 
 @pytest.mark.asyncio
 async def test_query_matches_substring_inside_longer_word(session_factory):
-    await upsert_document("s1", "a.md", "메모리게임 관련 문서")
+    await upsert_document("s1", "a.md", [(None, "메모리게임 관련 문서")])
     hits = await query(["s1"], "게임")  # 2 chars: exercises the short-query fallback
     assert [h["path"] for h in hits] == ["a.md"]
 
@@ -155,14 +207,14 @@ async def test_query_matches_substring_inside_longer_word(session_factory):
 async def test_query_short_query_still_finds_match_without_fts(session_factory):
     # "게임" is 2 characters — shorter than the trigram tokenizer's minimum,
     # so this only works via the non-FTS fallback scan (research.md §3).
-    await upsert_document("s1", "a.md", "이건 게임 문서입니다")
+    await upsert_document("s1", "a.md", [(None, "이건 게임 문서입니다")])
     hits = await query(["s1"], "게임")
     assert [h["path"] for h in hits] == ["a.md"]
 
 
 @pytest.mark.asyncio
 async def test_query_no_match_returns_empty(session_factory):
-    await upsert_document("s1", "a.md", "nothing relevant")
+    await upsert_document("s1", "a.md", [(None, "nothing relevant")])
     assert await query(["s1"], "완전히다른단어") == []
 
 
@@ -185,7 +237,7 @@ async def test_index_survives_a_fresh_engine_on_the_same_db_file(monkeypatch, tm
     async with engine1.begin() as conn:
         await conn.execute(text(_CREATE_DOC_FTS))
     monkeypatch.setattr(keywordindex_module, "async_session_factory", factory1)
-    await upsert_document("s1", "a.md", "keyword search survives restart")
+    await upsert_document("s1", "a.md", [(None, "keyword search survives restart")])
     await engine1.dispose()
 
     # A brand new engine/session factory on the same file stands in for the

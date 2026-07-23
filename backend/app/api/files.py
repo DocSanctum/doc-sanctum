@@ -1,14 +1,18 @@
 import os
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_session
 from ..models.source import Source
-from ..services.document_access import get_tree_with_cache, read_with_cache
+from ..services.document_access import (
+    get_tree_with_cache,
+    read_raw_with_cache,
+    read_with_cache,
+)
 from ..services.document_cache import get_cached
 
 router = APIRouter(tags=["files"])
@@ -49,27 +53,31 @@ async def get_tree(
     return tree
 
 
-@router.get("/sources/{source_id}/file", response_class=PlainTextResponse)
+@router.get("/sources/{source_id}/file")
 async def get_file(
     source_id: str,
     path: str = Query(...),
     session: AsyncSession = Depends(get_session),
-) -> str:
+) -> Response:
     source = await _get_source_or_404(session, source_id)
+    is_pdf = path.lower().endswith(".pdf")
 
     if source.type != "local":
         # github/http/localhost sources have no local file to stat — fetch
         # (and cache) the content over the network instead (previously this
         # endpoint only handled "local" and always 404'd for remote sources).
         try:
-            content, _warning = await read_with_cache(source, path)
+            if is_pdf:
+                raw, _warning = await read_raw_with_cache(source, path)
+                return Response(content=raw, media_type="application/pdf")
+            extracted, _warning = await read_with_cache(source, path)
+            return PlainTextResponse(extracted.text)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
             raise HTTPException(
                 status_code=502, detail=f"Failed to fetch file from source: {exc}"
             ) from exc
-        return content
 
     # Path traversal guard
     expanded = os.path.expanduser(source.path)
@@ -79,5 +87,8 @@ async def get_file(
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.isfile(target):
         raise HTTPException(status_code=404, detail="File not found")
+    if is_pdf:
+        with open(target, "rb") as f:
+            return Response(content=f.read(), media_type="application/pdf")
     with open(target, encoding="utf-8") as f:
-        return f.read()
+        return PlainTextResponse(f.read())

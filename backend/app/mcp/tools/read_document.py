@@ -9,7 +9,7 @@ from ...services.document_access import read_with_cache
 
 
 async def read_document_handler(source_id: str, path: str) -> str:
-    """Read the full content of a specific MD file.
+    """Read the full text content of a specific document (Markdown or PDF).
 
     Args:
         source_id: UUID of the source containing the file.
@@ -30,13 +30,13 @@ async def read_document_handler(source_id: str, path: str) -> str:
         raise ValueError(f"Source not found: {source_id}")
 
     source = Source.from_row(dict(row))
-    content, warning = await read_with_cache(source, path)
+    extracted, warning = await read_with_cache(source, path)
 
     result: dict[str, Any] = {
         "path": path,
         "source_id": source.id,
         "source_name": source.name,
-        "content": content,
+        "content": extracted.text,
     }
     if warning:
         result["warning"] = warning

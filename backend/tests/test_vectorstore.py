@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 
 import backend.app.vectorstore.client as client_module
@@ -10,7 +11,8 @@ import backend.app.vectorstore.tokenizer as tokenizer_module
 import pytest
 import pytest_asyncio
 from backend.app.models.source import Source
-from backend.app.vectorstore.chunker import MAX_CHUNK_TOKENS, chunk_markdown
+from backend.app.services.document_formats import ExtractedDocument
+from backend.app.vectorstore.chunker import MAX_CHUNK_TOKENS, Chunk, chunk_markdown
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -364,8 +366,17 @@ class _FakeKeywordClient:
         self.deleted_sources.append(source_id)
 
 
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+
 def _source(source_id: str = "src-1") -> Source:
     return Source(id=source_id, name="demo", type="local", path="/tmp/whatever")
+
+
+def _md_extracted(text: str) -> ExtractedDocument:
+    """A Markdown-shaped ExtractedDocument (no page concept) — what
+    read_with_cache() would return for a .md file."""
+    return ExtractedDocument(text=text, pages=None, page_starts=None)
 
 
 @pytest_asyncio.fixture
@@ -404,7 +415,7 @@ async def test_index_document_success_records_hash(
     hash_cache_db, fake_client, monkeypatch
 ):
     async def fake_read_with_cache(source, path):
-        return "# Heading\n\nSome content here.", None
+        return _md_extracted("# Heading\n\nSome content here."), None
 
     monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
 
@@ -444,7 +455,7 @@ async def test_index_document_write_failure_clears_in_progress_marker(
     having crashed mid-write and trigger an unnecessary full rebuild."""
 
     async def fake_read_with_cache(source, path):
-        return "# Heading\n\nSome content here.", None
+        return _md_extracted("# Heading\n\nSome content here."), None
 
     async def failing_upsert_chunks(source_id, source_name, path, chunks):
         raise RuntimeError("Embedding engine is not available")
@@ -459,6 +470,43 @@ async def test_index_document_write_failure_clears_in_progress_marker(
     assert await hash_cache_module.sources_with_in_progress() == []
     hashes, _ = await hash_cache_module.get_known("src-1")
     assert "a.md" not in hashes
+
+
+@pytest.mark.asyncio
+async def test_index_document_scanned_pdf_with_no_text_returns_warning(
+    hash_cache_db, fake_client, tmp_path
+):
+    """A whole-document PDF with no extractable text anywhere (User Story 3,
+    FR-007) must be reported as a per-document failure, not silently
+    dropped — this exercises the real local read+extract path end to end,
+    not a mocked read_with_cache."""
+    with open(os.path.join(FIXTURES, "scanned.pdf"), "rb") as f:
+        (tmp_path / "scanned.pdf").write_bytes(f.read())
+    source = Source(id="src-1", name="demo", type="local", path=str(tmp_path))
+
+    warning = await indexer_module._index_document(source, "scanned.pdf")
+
+    assert warning is not None
+    assert warning["path"] == "scanned.pdf"
+    assert warning["reason"] == "index_error"
+    assert fake_client.upserted == []
+
+
+@pytest.mark.asyncio
+async def test_index_document_mixed_pdf_with_one_blank_page_does_not_warn(
+    hash_cache_db, fake_client, tmp_path
+):
+    """A PDF where only *some* pages lack extractable text (FR-008's
+    page-level case, as opposed to FR-007's whole-document case) must index
+    successfully — no warning solely because one page is blank/image-only."""
+    with open(os.path.join(FIXTURES, "mixed.pdf"), "rb") as f:
+        (tmp_path / "mixed.pdf").write_bytes(f.read())
+    source = Source(id="src-1", name="demo", type="local", path=str(tmp_path))
+
+    warning = await indexer_module._index_document(source, "mixed.pdf")
+
+    assert warning is None
+    assert fake_client.upserted == [("src-1", "mixed.pdf", 1)]
 
 
 @pytest.mark.asyncio
@@ -477,7 +525,7 @@ async def test_sync_source_index_skips_download_when_blob_sha_unchanged(
 
     async def fake_read_with_cache(source, path):
         read_calls.append(path)
-        return contents[path], None
+        return _md_extracted(contents[path]), None
 
     monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
     monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
@@ -526,7 +574,7 @@ async def test_sync_source_index_fetches_documents_concurrently(
             # Yield control so overlapping fetches actually pile up in-flight
             # instead of each completing before the next one starts.
             await asyncio.sleep(0.01)
-            return f"# {path}\n\nbody", None
+            return _md_extracted(f"# {path}\n\nbody"), None
         finally:
             in_flight -= 1
 
@@ -688,3 +736,70 @@ async def test_handle_watch_event_resolves_relative_path(
         {"event": "file_deleted", "source_id": "src-1", "path": str(new_file)},
     )
     assert calls == [("remove", "sub/new.md")]
+
+
+def test_chunk_metadata_omits_page_key_when_none():
+    chunk = Chunk(index=0, text="hello", char_start=0, char_end=5, page=None)
+    meta = client_module._chunk_metadata("src-1", "demo", "a.md", chunk)
+    assert "page" not in meta
+    assert meta["chunk_index"] == 0
+
+
+def test_chunk_metadata_includes_page_key_when_set():
+    chunk = Chunk(index=1, text="world", char_start=6, char_end=11, page=3)
+    meta = client_module._chunk_metadata("src-1", "demo", "b.pdf", chunk)
+    assert meta["page"] == 3
+
+
+class _FakeCollection:
+    """Mimics just enough of a Chroma collection's API surface for
+    _upsert_sync/_query_sync to round-trip metadata through it."""
+
+    def __init__(self) -> None:
+        self._rows: dict[str, tuple[str, dict]] = {}
+
+    def upsert(self, ids, documents, metadatas) -> None:
+        for doc_id, doc_text, meta in zip(ids, documents, metadatas):
+            self._rows[doc_id] = (doc_text, meta)
+
+    def count(self) -> int:
+        return len(self._rows)
+
+    def query(self, query_texts, n_results):
+        # Order doesn't matter for these tests -- return every stored row.
+        docs = [text for text, _ in self._rows.values()]
+        metas = [meta for _, meta in self._rows.values()]
+        distances = [0.0 for _ in self._rows]
+        return {"documents": [docs], "metadatas": [metas], "distances": [distances]}
+
+
+def test_upsert_then_query_round_trips_page_and_defaults_to_none_when_absent(
+    monkeypatch,
+):
+    fake = _FakeCollection()
+    monkeypatch.setattr(client_module, "_require_collection", lambda source_id: fake)
+
+    md_chunk = Chunk(index=0, text="markdown chunk", char_start=0, char_end=14)
+    pdf_chunk = Chunk(index=0, text="pdf chunk", char_start=0, char_end=9, page=2)
+
+    client_module._upsert_sync("src-1", "demo", "a.md", [md_chunk])
+    client_module._upsert_sync("src-1", "demo", "b.pdf", [pdf_chunk])
+
+    hits = client_module._query_sync("src-1", "irrelevant query", top_k=10)
+    by_path = {hit["path"]: hit for hit in hits}
+    assert by_path["a.md"]["page"] is None
+    assert by_path["b.pdf"]["page"] == 2
+
+
+def test_query_sync_defaults_page_to_none_for_pre_feature_metadata(monkeypatch):
+    """A chunk embedded before this feature shipped has no "page" key in its
+    stored metadata at all -- _query_sync must not KeyError on it."""
+    fake = _FakeCollection()
+    fake._rows["src-1:a.md:0"] = (
+        "old chunk",
+        {"source_id": "src-1", "source_name": "demo", "path": "a.md", "chunk_index": 0},
+    )
+    monkeypatch.setattr(client_module, "_require_collection", lambda source_id: fake)
+
+    hits = client_module._query_sync("src-1", "irrelevant query", top_k=10)
+    assert hits[0]["page"] is None

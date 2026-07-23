@@ -42,6 +42,7 @@ class SearchMatch(BaseModel):
     path: str
     line_number: int
     line: str
+    page: int | None = None
     context: list[str]
 
 
@@ -90,6 +91,7 @@ class SemanticMatch(BaseModel):
     source_name: str
     path: str
     chunk_index: int
+    page: int | None = None
     score: float
     excerpt: str
 

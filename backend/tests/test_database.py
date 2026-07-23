@@ -88,3 +88,75 @@ async def test_migration_adds_access_token_column_to_pre_existing_sources(temp_e
             .first()
         )
         assert row["access_token_encrypted"] is None
+
+
+async def test_create_tables_adds_page_column_to_pre_existing_doc_fts(temp_engine):
+    """014-pdf-parser-support: a doc_fts table created before PDF support
+    shipped has no `page` column, and FTS5 tables can't be ALTERed in place
+    (research.md §4) — create_tables() must detect this and drop+recreate
+    the table with the column added, without erroring."""
+    old_schema = """
+    CREATE VIRTUAL TABLE doc_fts USING fts5(
+        source_id UNINDEXED,
+        path UNINDEXED,
+        content,
+        tokenize = 'trigram'
+    )
+    """
+    async with temp_engine.begin() as conn:
+        await conn.execute(text(old_schema))
+        await conn.execute(
+            text(
+                "INSERT INTO doc_fts (source_id, path, content)"
+                " VALUES ('s1', 'a.md', 'pre-migration content')"
+            )
+        )
+
+    await database_module.create_tables()  # runs the migration (drop+recreate)
+
+    async with temp_engine.begin() as conn:
+        columns = {
+            row[1]
+            for row in (
+                await conn.execute(text("PRAGMA table_info(doc_fts)"))
+            ).fetchall()
+        }
+        assert "page" in columns
+
+        # The old row is gone -- expected, since recreating doc_fts empties
+        # it; rebuild_check._check_keyword_schema_version() is what forces
+        # a full reindex to repopulate it, not this migration itself.
+        result = await conn.execute(text("SELECT COUNT(*) FROM doc_fts"))
+        assert result.scalar_one() == 0
+
+        # New inserts with an explicit page work post-migration.
+        await conn.execute(
+            text(
+                "INSERT INTO doc_fts (source_id, path, page, content)"
+                " VALUES ('s1', 'b.pdf', 2, 'post-migration content')"
+            )
+        )
+        result = await conn.execute(
+            text("SELECT page FROM doc_fts WHERE path = 'b.pdf'")
+        )
+        assert result.scalar_one() == 2
+
+
+async def test_create_tables_leaves_already_migrated_doc_fts_untouched(temp_engine):
+    """Calling create_tables() again (e.g. on every backend restart) once
+    doc_fts already has the `page` column must not drop existing rows —
+    only a *missing* column triggers the recreate."""
+    await database_module.create_tables()
+    async with temp_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO doc_fts (source_id, path, page, content)"
+                " VALUES ('s1', 'a.md', NULL, 'already migrated content')"
+            )
+        )
+
+    await database_module.create_tables()  # simulates a second startup
+
+    async with temp_engine.begin() as conn:
+        result = await conn.execute(text("SELECT COUNT(*) FROM doc_fts"))
+        assert result.scalar_one() == 1
