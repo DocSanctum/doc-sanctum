@@ -78,14 +78,45 @@ async def lifespan(app: FastAPI):
         yield
 
 
+class _McpAwareCors:
+    # External MCP clients (the Obsidian plugin, or any other MCP client
+    # that happens to run inside a browser-like renderer) are subject to
+    # CORS just like a website, but unlike our own bundled frontend there's
+    # no fixed set of client origins to allowlist ahead of time. The /mcp
+    # and /mcp-sse mounts carry no cookies/credentials, so reflecting back
+    # whatever origin asks is no more exposed than the mount already is to
+    # plain (non-browser) HTTP clients — CORS only ever gated browser-JS
+    # access here. Everything else keeps the narrow frontend-only allowlist.
+    def __init__(self, app: ASGIApp) -> None:
+        self._narrow = CORSMiddleware(
+            app,
+            allow_origins=["http://localhost:3000", "http://localhost:5173"],
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+        self._permissive = CORSMiddleware(
+            app,
+            allow_origin_regex=".*",
+            allow_methods=["*"],
+            allow_headers=["*"],
+            # Without this, browser-based clients can't read the
+            # Mcp-Session-Id response header from JS (CORS hides
+            # non-safelisted response headers by default), so they send
+            # every request after initialize with no session ID and the
+            # MCP session manager rejects them.
+            expose_headers=["*"],
+        )
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["path"].startswith("/mcp"):
+            await self._permissive(scope, receive, send)
+        else:
+            await self._narrow(scope, receive, send)
+
+
 app = FastAPI(title="DocSanctum", lifespan=lifespan)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(_McpAwareCors)
 app.add_middleware(_NormalizeMcpMountPath)
 
 app.include_router(sources.router, prefix="/api/v1")
