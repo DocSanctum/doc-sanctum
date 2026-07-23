@@ -13,7 +13,7 @@ DEFAULT_TOP_K = 5
 async def semantic_search_documents_handler(
     query: str, source_id: str | None = None, top_k: int | None = None
 ) -> str:
-    """Search MD documents by semantic meaning using a natural-language query.
+    """Search documents (Markdown or PDF) by semantic meaning using a natural-language query.
 
     Args:
         query: Natural-language search query.

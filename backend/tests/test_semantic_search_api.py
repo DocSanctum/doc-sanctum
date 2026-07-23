@@ -69,12 +69,13 @@ def fake_vector_client(monkeypatch):
     return fake
 
 
-def _hit(path: str, source: Source, score: float) -> dict:
+def _hit(path: str, source: Source, score: float, page: int | None = None) -> dict:
     return {
         "path": path,
         "source_id": source.id,
         "source_name": source.name,
         "chunk_index": 0,
+        "page": page,
         "score": score,
         "excerpt": f"excerpt of {path}",
     }
@@ -95,6 +96,23 @@ async def test_ranks_hits_across_sources_by_score(session_factory, fake_vector_c
 
     assert [r.path for r in result.results] == ["high.md", "low.md"]
     assert result.warnings == []
+
+
+async def test_semantic_search_includes_page_for_pdf_hit_and_omits_it_for_markdown(
+    session_factory, fake_vector_client
+):
+    s1 = Source(name="s1", type="local", path="/a")
+    await _insert_source(session_factory, s1)
+
+    fake_vector_client.hits_by_source = {
+        s1.id: [_hit("a.md", s1, 0.5), _hit("b.pdf", s1, 0.9, page=2)],
+    }
+
+    result = await search_module.semantic_search(q="query")
+
+    by_path = {r.path: r for r in result.results}
+    assert by_path["a.md"].page is None
+    assert by_path["b.pdf"].page == 2
 
 
 async def test_source_id_scopes_results(session_factory, fake_vector_client):

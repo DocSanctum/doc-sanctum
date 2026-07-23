@@ -172,6 +172,7 @@ export const en = {
     warning: '{name}: {message}',
     openInPane: 'Open in pane {paneId}',
     openInLabel: 'Open in:',
+    pageLabel: 'p. {page}',
     modeKeyword: 'Keyword',
     modeSemantic: 'Semantic',
     tabSwitchHint: 'Tab to switch to {mode} mode',

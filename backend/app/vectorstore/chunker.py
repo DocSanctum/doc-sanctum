@@ -52,6 +52,10 @@ class Chunk:
     text: str
     char_start: int
     char_end: int
+    # 1-based PDF page this chunk's text starts on; None for Markdown chunks
+    # (no page concept) and left unset by chunk_markdown() itself — assigned
+    # by the caller afterwards when the source document has page boundaries.
+    page: int | None = None
 
 
 def _split_by_headings(text: str) -> list[tuple[int, str]]:

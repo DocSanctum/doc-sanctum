@@ -112,6 +112,7 @@ export interface SearchMatch {
   path: string
   line_number: number
   line: string
+  page?: number | null
   context: string[]
 }
 
@@ -135,6 +136,7 @@ export interface SemanticMatch {
   source_name: string
   path: string
   chunk_index: number
+  page?: number | null
   score: number
   excerpt: string
 }

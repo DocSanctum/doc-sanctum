@@ -124,6 +124,27 @@ describe('CommandPalette', () => {
     expect(wrapper.text()).toContain('More matches in this document')
   })
 
+  it('shows the page number for a PDF match and omits it for a Markdown match', async () => {
+    vi.mocked(api.getSources).mockResolvedValue([makeSource('s1')])
+    vi.mocked(api.search).mockResolvedValue({
+      query: 'kw',
+      matches: [
+        makeMatch({ path: 'a.md', page: null }),
+        makeMatch({ path: 'b.pdf', page: 2 }),
+      ],
+      warnings: [],
+    })
+    wrapper = mountPalette()
+    useSearch().open()
+    await flushPromises()
+
+    useSearch().setQuery('kw')
+    await wait(300)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('p. 2')
+  })
+
   it('shows warnings from partially failed sources', async () => {
     vi.mocked(api.getSources).mockResolvedValue([makeSource('s1')])
     vi.mocked(api.search).mockResolvedValue({
@@ -351,6 +372,25 @@ describe('CommandPalette', () => {
     expect(wrapper.text()).toContain('docs-a')
     expect(wrapper.text()).toContain('guides/auth.md')
     expect(wrapper.text()).toContain('OAuth2 flow...')
+  })
+
+  it('shows the page number for a semantic PDF match', async () => {
+    vi.mocked(api.getSources).mockResolvedValue([makeSource('s1')])
+    vi.mocked(api.semanticSearch).mockResolvedValue({
+      query: 'auth',
+      results: [makeSemanticMatch({ path: 'guides/auth.pdf', page: 4 })],
+      warnings: [],
+    })
+    wrapper = mountPalette()
+    useSearch().open()
+    useSearch().setMode('semantic')
+    await flushPromises()
+
+    useSearch().setQuery('auth')
+    await wait(300)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('p. 4')
   })
 
   // US3: engine-unavailable warning distinct from "no results" (T016)

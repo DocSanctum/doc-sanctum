@@ -11,6 +11,7 @@
       <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-1">
         <span class="shrink-0 px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{ match.source_name }}</span>
         <span class="truncate">{{ match.path }}</span>
+        <span v-if="match.page != null" class="shrink-0 px-1 rounded bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200">{{ t('search.pageLabel', { page: match.page }) }}</span>
       </div>
       <p class="text-xs text-gray-500 dark:text-gray-400 whitespace-pre-wrap break-words leading-snug">{{ match.excerpt }}</p>
     </div>

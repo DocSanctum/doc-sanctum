@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import backend.app.core.database as database_module
+import backend.app.keywordindex.client as keywordindex_module
 import backend.app.vectorstore.chunker as chunker_module
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
@@ -11,6 +12,7 @@ import backend.app.vectorstore.rebuild_lock as rebuild_lock_module
 import pytest
 import pytest_asyncio
 from backend.app.models.source import Source
+from backend.app.services.document_formats import ExtractedDocument
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -143,7 +145,9 @@ async def test_unchanged_source_reembeds_nothing_on_second_sync(
         return _docs(content_by_path), None
 
     async def fake_read_with_cache(_source, path):
-        return content_by_path[path], None
+        return ExtractedDocument(
+            text=content_by_path[path], pages=None, page_starts=None
+        ), None
 
     monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
     monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
@@ -169,7 +173,9 @@ async def test_partial_change_reembeds_only_changed_doc_and_prunes_deleted(
         return _docs(content_by_path), None
 
     async def fake_read_with_cache(_source, path):
-        return content_by_path[path], None
+        return ExtractedDocument(
+            text=content_by_path[path], pages=None, page_starts=None
+        ), None
 
     monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
     monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
@@ -412,3 +418,84 @@ async def test_acquire_succeeds_after_expiry(db):
     # ttl_seconds=0 means expires_at is already in the past by the time the
     # next attempt runs, so a different holder can reclaim it.
     assert await rebuild_lock_module.try_acquire("s1", ttl_seconds=300) is True
+
+
+# --- _check_keyword_schema_version (014-pdf-parser-support): FTS5 tables
+# can't be ALTERed in place, so doc_fts is dropped and recreated when its
+# schema changes (core/database.py) -- this check is what forces a full
+# reindex afterwards, mirroring _check_chunking_version's pattern. ---
+
+
+async def test_keyword_schema_version_mismatch_invalidates_cache_and_writes_distinct_event(
+    db, monkeypatch, tmp_path
+):
+    """A keyword-index-schema-version mismatch (doc_fts was just recreated
+    by create_tables()) must invalidate the hash cache so previously
+    indexed documents get re-upserted into the now-empty doc_fts, recorded
+    under its own reason distinct from model-mismatch/chunking-mismatch."""
+    from backend.app.core.database import set_setting
+
+    await set_setting(
+        "keyword_index_schema_version", "0"
+    )  # stale: real value is KEYWORD_INDEX_SCHEMA_VERSION
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_keyword_schema_version()
+
+    hashes, _ = await hash_cache_module.get_known("s1")
+    assert hashes == {}  # cache invalidated -> next sync fully re-indexes
+
+    files = list(events_dir.iterdir())
+    assert len(files) == 1
+    first_line = files[0].read_text().splitlines()[0]
+    assert first_line.startswith(
+        "REBUILT source=all sources reason=keyword-schema-mismatch"
+    )
+    assert "reason=model-mismatch" not in first_line
+    assert "reason=chunking-mismatch" not in first_line
+
+
+async def test_keyword_schema_version_first_run_stores_value_without_rebuild_event(
+    db, monkeypatch, tmp_path
+):
+    """A genuinely fresh install just starts tracking the version — no
+    rebuild event, since there's nothing in the hash cache to invalidate."""
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_keyword_schema_version()
+
+    assert not events_dir.exists() or not list(events_dir.iterdir())
+
+    from backend.app.core.database import get_setting
+
+    stored = await get_setting("keyword_index_schema_version")
+    assert stored == str(keywordindex_module.KEYWORD_INDEX_SCHEMA_VERSION)
+
+
+async def test_keyword_schema_version_first_observation_with_existing_data_still_rebuilds(
+    db, monkeypatch, tmp_path
+):
+    """An installation upgrading into this check for the first time (doc_fts
+    just got recreated without a page column previously existing) can
+    already have documents indexed — a missing stored version must NOT be
+    treated as "nothing to invalidate" in that case."""
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_keyword_schema_version()
+
+    hashes, _ = await hash_cache_module.get_known("s1")
+    assert hashes == {}
+
+    files = list(events_dir.iterdir())
+    assert len(files) == 1
+    first_line = files[0].read_text().splitlines()[0]
+    assert first_line.startswith(
+        "REBUILT source=all sources reason=keyword-schema-mismatch"
+    )

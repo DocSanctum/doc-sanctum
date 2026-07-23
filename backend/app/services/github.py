@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from .document_formats import is_supported
 from .tree_utils import build_blob_tree, request_with_auth_fallback
 
 _NO_AUTH_HEADERS = {"Accept": "application/vnd.github+json"}
@@ -60,10 +61,10 @@ async def fetch_github_tree(
         )
         resp.raise_for_status()
     data = resp.json()
-    md_blobs = [
+    blobs = [
         {"path": item["path"], "sha": item["sha"]}
         for item in data.get("tree", [])
-        if item["path"].endswith(".md") and item["type"] == "blob"
+        if is_supported(item["path"]) and item["type"] == "blob"
     ]
     return {
         "source_id": source_id,
@@ -71,6 +72,6 @@ async def fetch_github_tree(
             "path": "",
             "name": f"{owner}/{repo}",
             "is_dir": True,
-            "children": build_blob_tree(md_blobs),
+            "children": build_blob_tree(blobs),
         },
     }

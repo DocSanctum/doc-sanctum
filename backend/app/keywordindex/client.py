@@ -9,6 +9,13 @@ from ..core.database import async_session_factory
 MAX_MATCHES_PER_FILE = 10
 CONTEXT_LINES = 2
 
+# Bumped whenever doc_fts's schema/row-shape changes in a way that requires
+# dropping and recreating the table (see core/database.py — FTS5 tables
+# can't be altered in place). rebuild_check._check_keyword_schema_version()
+# compares this against a stored setting to detect the change and trigger a
+# full reindex, mirroring vectorstore.chunker.CHUNKING_VERSION's pattern.
+KEYWORD_INDEX_SCHEMA_VERSION = 1
+
 # The trigram tokenizer can't match anything shorter than 3 characters (no
 # full trigram exists for a 1-2 char string) — verified against the real
 # SQLite build this project ships with (research.md §3). Below this length,
@@ -43,22 +50,31 @@ def _fts_phrase(query: str) -> str:
     return '"' + query.replace('"', '""') + '"'
 
 
-async def upsert_document(source_id: str, path: str, content: str) -> None:
-    """Replace the stored row for (source_id, path) with new content. FTS5
+async def upsert_document(
+    source_id: str, path: str, pages: list[tuple[int | None, str]]
+) -> None:
+    """Replace the stored row(s) for (source_id, path) with new content. FTS5
     virtual tables have no unique constraint to upsert against, so this is a
-    delete-then-insert, same pattern as the vector store's document replace."""
+    delete-then-insert, same pattern as the vector store's document replace.
+
+    ``pages`` is a list of (page_number, page_text) — a document with no page
+    concept (Markdown) passes a single [(None, whole_text)] entry, matching
+    today's one-row-per-document shape; a PDF passes one entry per physical
+    page (including blank ones), so a keyword match's row always carries the
+    page it came from."""
     async with async_session_factory() as session:
         await session.execute(
             text("DELETE FROM doc_fts WHERE source_id = :sid AND path = :path"),
             {"sid": source_id, "path": path},
         )
-        await session.execute(
-            text(
-                "INSERT INTO doc_fts (source_id, path, content) "
-                "VALUES (:sid, :path, :content)"
-            ),
-            {"sid": source_id, "path": path, "content": content},
-        )
+        for page, content in pages:
+            await session.execute(
+                text(
+                    "INSERT INTO doc_fts (source_id, path, page, content) "
+                    "VALUES (:sid, :path, :page, :content)"
+                ),
+                {"sid": source_id, "path": path, "page": page, "content": content},
+            )
         await session.commit()
 
 
@@ -100,7 +116,7 @@ async def query(source_ids: list[str], query_text: str) -> list[dict[str, Any]]:
             params["match"] = _fts_phrase(query_text)
             rows = await session.execute(
                 text(
-                    "SELECT source_id, path, content FROM doc_fts "
+                    "SELECT source_id, path, page, content FROM doc_fts "
                     f"WHERE doc_fts MATCH :match AND source_id IN ({placeholders})"
                 ),
                 params,
@@ -108,7 +124,7 @@ async def query(source_ids: list[str], query_text: str) -> list[dict[str, Any]]:
         else:
             rows = await session.execute(
                 text(
-                    "SELECT source_id, path, content FROM doc_fts "
+                    "SELECT source_id, path, page, content FROM doc_fts "
                     f"WHERE source_id IN ({placeholders})"
                 ),
                 params,
@@ -122,5 +138,6 @@ async def query(source_ids: list[str], query_text: str) -> list[dict[str, Any]]:
         for hit in hits:
             hit["path"] = row.path
             hit["source_id"] = row.source_id
+            hit["page"] = row.page
         results.extend(hits)
     return results

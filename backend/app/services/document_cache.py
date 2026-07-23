@@ -57,7 +57,7 @@ def get_cached_content(source_id: str, path: str) -> dict[str, Any] | None:
     return entry
 
 
-def set_cached_content(source_id: str, path: str, content: str) -> None:
+def set_cached_content(source_id: str, path: str, content: bytes) -> None:
     _content_cache[_content_key(source_id, path)] = {
         "data": content,
         "fetched_at": time.monotonic(),

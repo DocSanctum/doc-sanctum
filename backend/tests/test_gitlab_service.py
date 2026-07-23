@@ -112,3 +112,33 @@ async def test_fetch_gitlab_tree_reuses_page_one_auth_decision(monkeypatch):
     assert calls == [(1, False), (1, True), (2, True)]
     paths = {c["path"] for c in result["root"]["children"]}
     assert "README.md" in paths
+
+
+@pytest.mark.asyncio
+async def test_fetch_gitlab_tree_includes_pdf_blobs_alongside_markdown(monkeypatch):
+    items = [
+        {"id": "sha1", "path": "README.md", "type": "blob"},
+        {"id": "sha2", "path": "docs/report.pdf", "type": "blob"},
+        {"id": "sha3", "path": "assets/logo.png", "type": "blob"},
+    ]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=items, headers={})
+
+    transport = httpx.MockTransport(handler)
+    orig_init = httpx.AsyncClient.__init__
+
+    def patched_init(self, *a, **kw):
+        kw["transport"] = transport
+        orig_init(self, *a, **kw)
+
+    monkeypatch.setattr(httpx.AsyncClient, "__init__", patched_init)
+
+    result = await fetch_gitlab_tree("https://gitlab.com/group/project", "src-1")
+
+    paths = {c["path"] for c in result["root"]["children"]}
+    assert paths == {"README.md", "docs"}
+    docs_children = next(c for c in result["root"]["children"] if c["path"] == "docs")[
+        "children"
+    ]
+    assert {c["path"] for c in docs_children} == {"docs/report.pdf"}

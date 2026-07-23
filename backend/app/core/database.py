@@ -43,17 +43,44 @@ async def create_tables() -> None:
         # substring-style matching without a language-specific analyzer,
         # case-insensitive by default. source_id/path are UNINDEXED (stored
         # but not tokenized) since they're only ever used for exact-match
-        # filtering/grouping, never full-text search.
+        # filtering/grouping, never full-text search. `page` (added for PDF
+        # support) is NULL for a Markdown document's single row, or a
+        # 1-based page number for one of a PDF's per-page rows.
+        #
+        # FTS5 virtual tables cannot be altered in place (verified directly:
+        # "ALTER TABLE ... ADD COLUMN" raises "virtual tables may not be
+        # altered") — so an existing doc_fts predating the `page` column is
+        # dropped and recreated below, rather than migrated with ALTER TABLE.
         await conn.execute(
             text("""
             CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
                 source_id UNINDEXED,
                 path UNINDEXED,
+                page UNINDEXED,
                 content,
                 tokenize = 'trigram'
             )
         """)
         )
+        doc_fts_columns = {
+            row[1]
+            for row in (
+                await conn.execute(text("PRAGMA table_info(doc_fts)"))
+            ).fetchall()
+        }
+        if "page" not in doc_fts_columns:
+            await conn.execute(text("DROP TABLE doc_fts"))
+            await conn.execute(
+                text("""
+                CREATE VIRTUAL TABLE doc_fts USING fts5(
+                    source_id UNINDEXED,
+                    path UNINDEXED,
+                    page UNINDEXED,
+                    content,
+                    tokenize = 'trigram'
+                )
+            """)
+            )
         # Durable replacement for the old in-process _doc_hashes/_doc_shas
         # dicts — lets sync_source_index skip re-embedding unchanged
         # documents across a backend restart. sync_state marks a row

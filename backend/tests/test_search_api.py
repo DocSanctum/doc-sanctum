@@ -48,13 +48,16 @@ async def _insert_source(factory, source: Source) -> None:
         await session.commit()
 
 
-def _match(path: str, source: Source, line_number: int = 1) -> dict:
+def _match(
+    path: str, source: Source, line_number: int = 1, page: int | None = None
+) -> dict:
     return {
         "path": path,
         "source_id": source.id,
         "source_name": source.name,
         "line_number": line_number,
         "line": f"match in {path}",
+        "page": page,
         "context": [f"match in {path}"],
     }
 
@@ -85,6 +88,24 @@ async def test_search_merges_matches_across_sources(
 
     assert {m.path for m in result.matches} == {"a.md", "b.md"}
     assert result.warnings == []
+
+
+async def test_search_includes_page_for_pdf_match_and_omits_it_for_markdown(
+    session_factory, fake_search_source
+):
+    s1 = Source(name="s1", type="local", path="/a")
+    await _insert_source(session_factory, s1)
+
+    fake_search_source[s1.id] = (
+        [_match("a.md", s1), _match("b.pdf", s1, page=2)],
+        None,
+    )
+
+    result = await search_module.search(q="keyword")
+
+    by_path = {m.path: m for m in result.matches}
+    assert by_path["a.md"].page is None
+    assert by_path["b.pdf"].page == 2
 
 
 async def test_search_scoped_to_source_id(session_factory, fake_search_source):

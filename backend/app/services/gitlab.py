@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import httpx
 
+from .document_formats import is_supported
 from .tree_utils import build_blob_tree, get_with_retry, request_with_auth_fallback
 
 
@@ -53,7 +54,7 @@ async def fetch_gitlab_tree(
     host, project_path = _parse_gitlab_url(url)
     base = _project_api_base(host, project_path)
     token_configured = bool(token)
-    md_blobs: list[dict[str, Any]] = []
+    blobs: list[dict[str, Any]] = []
     page = 1
     # Determined from page 1's response, then reused as-is for every later
     # page — re-probing anonymous-then-auth on each of a large repo's 100+
@@ -86,10 +87,10 @@ async def fetch_gitlab_tree(
                 )
             resp.raise_for_status()
             items = resp.json()
-            md_blobs.extend(
+            blobs.extend(
                 {"path": item["path"], "sha": item["id"]}
                 for item in items
-                if item["type"] == "blob" and item["path"].endswith(".md")
+                if item["type"] == "blob" and is_supported(item["path"])
             )
             next_page = resp.headers.get("x-next-page")
             if not next_page:
@@ -101,6 +102,6 @@ async def fetch_gitlab_tree(
             "path": "",
             "name": project_path.rsplit("/", 1)[-1],
             "is_dir": True,
-            "children": build_blob_tree(md_blobs),
+            "children": build_blob_tree(blobs),
         },
     }

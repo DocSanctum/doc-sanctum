@@ -8,12 +8,14 @@ from typing import Any
 
 from ..keywordindex import client as keyword_client
 from ..models.source import Source
+from ..services import document_formats
 from ..services.document_access import (
     flatten_tree,
     get_tree_with_cache,
     read_with_cache,
 )
 from ..services.document_cache import clear_source
+from ..services.document_formats import ExtractedDocument
 from . import client, hash_cache
 from .chunker import chunk_markdown
 
@@ -31,8 +33,18 @@ class EngineUnavailableError(RuntimeError):
     """Raised when the local embedding engine cannot be used at all (FR-014)."""
 
 
-def _hash_content(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+def _hash_content(text_content: str) -> str:
+    return hashlib.sha256(text_content.encode("utf-8")).hexdigest()
+
+
+def _keyword_pages(extracted: ExtractedDocument) -> list[tuple[int | None, str]]:
+    """Shape an ExtractedDocument for keyword_client.upsert_document: one
+    (page_number, text) row per physical page for a PDF (including blank
+    pages, so a document's row count matches its real page count), or a
+    single (None, text) row for a document with no page concept."""
+    if extracted.pages is None:
+        return [(None, extracted.text)]
+    return list(enumerate(extracted.pages, start=1))
 
 
 async def _list_documents(
@@ -50,14 +62,21 @@ async def _list_documents(
 
 
 async def _index_document(
-    source: Source, path: str, sha: str | None = None, content: str | None = None
+    source: Source,
+    path: str,
+    sha: str | None = None,
+    extracted: ExtractedDocument | None = None,
 ) -> dict[str, Any] | None:
     """Chunk and embed a single document. Returns a warning dict on per-document
     failure (FR-009), or None on success.
 
-    ``content`` may be supplied by a caller that has already downloaded the
-    document (sync_source_index prefetches content concurrently), avoiding a
-    redundant read; when omitted the content is fetched here.
+    ``extracted`` may be supplied by a caller that has already downloaded and
+    extracted the document (sync_source_index prefetches concurrently),
+    avoiding a redundant read; when omitted it is fetched here. A PDF with no
+    extractable text anywhere in it surfaces as a document_formats.
+    NoExtractableTextError from read_with_cache(), which the broad except
+    below turns into exactly this function's normal per-document failure
+    path — no special-casing needed for that condition specifically.
 
     The cache row is marked 'in_progress' before the vector-store write starts
     and 'clean' (via hash_cache.upsert) only after it commits, so a process
@@ -69,16 +88,21 @@ async def _index_document(
     per-document warning below, so any 'in_progress' marker it left behind
     is cleared rather than left looking like a crash on the next startup."""
     try:
-        if content is None:
-            content, _warning = await read_with_cache(source, path)
-        chunks = chunk_markdown(content)
+        if extracted is None:
+            extracted, _warning = await read_with_cache(source, path)
+        chunks = chunk_markdown(extracted.text)
+        if extracted.page_starts is not None:
+            for chunk in chunks:
+                chunk.page = document_formats.page_for_offset(
+                    extracted.page_starts, chunk.char_start
+                )
         if not chunks:
             await hash_cache.delete(source.id, path)
             return None
         await hash_cache.mark_in_progress(source.id, path)
         await client.upsert_chunks(source.id, source.name, path, chunks)
-        await keyword_client.upsert_document(source.id, path, content)
-        await hash_cache.upsert(source.id, path, _hash_content(content), sha)
+        await keyword_client.upsert_document(source.id, path, _keyword_pages(extracted))
+        await hash_cache.upsert(source.id, path, _hash_content(extracted.text), sha)
         return None
     except Exception as exc:
         logger.warning(
@@ -129,14 +153,15 @@ async def handle_watch_event(
 
 async def _prefetch(
     source: Source, path: str, sha: str | None, sem: asyncio.Semaphore
-) -> tuple[str, str | None, str | None, dict[str, Any] | None]:
-    """Download one document's content under a concurrency bound. Returns
-    (path, sha, content, warning); on a fetch failure content is None and
-    warning describes it (same shape as a per-document index failure)."""
+) -> tuple[str, str | None, ExtractedDocument | None, dict[str, Any] | None]:
+    """Download and extract one document under a concurrency bound. Returns
+    (path, sha, extracted, warning); on a fetch/extraction failure (including
+    a PDF with no extractable text, FR-007) extracted is None and warning
+    describes it (same shape as a per-document index failure)."""
     async with sem:
         try:
-            content, _warning = await read_with_cache(source, path)
-            return path, sha, content, None
+            extracted, _warning = await read_with_cache(source, path)
+            return path, sha, extracted, None
         except Exception as exc:
             return (
                 path,
@@ -185,18 +210,19 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
     if tree_warning is not None:
         warnings.append(tree_warning)
 
-    for path, sha, content, warning in fetched:
+    for path, sha, extracted, warning in fetched:
         if warning is not None:
             warnings.append(warning)
             continue
-        # content is only None on a fetch failure, which is reported via
-        # `warning` and handled above, so it is always present here.
-        assert content is not None
+        # extracted is only None on a fetch/extraction failure, which is
+        # reported via `warning` and handled above, so it is always present
+        # here.
+        assert extracted is not None
         # A sha-less source can only detect an unchanged document by comparing
         # the freshly fetched content's hash against the last-indexed one.
-        if sha is None and known_hashes.get(path) == _hash_content(content):
+        if sha is None and known_hashes.get(path) == _hash_content(extracted.text):
             continue
-        warning = await _index_document(source, path, sha, content=content)
+        warning = await _index_document(source, path, sha, extracted=extracted)
         if warning:
             warnings.append(warning)
 

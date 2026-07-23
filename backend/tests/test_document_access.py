@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 import backend.app.services.document_access as document_access_module
 import backend.app.services.document_cache as cache_module
+import backend.app.services.watcher as watcher_module
 import pytest
 from backend.app.models.source import Source
+
+FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
 
 
 @pytest.fixture(autouse=True)
@@ -77,3 +81,88 @@ async def test_sequential_calls_after_cache_populated_do_not_refetch(monkeypatch
     await document_access_module.get_tree_with_cache(source)
 
     assert call_count == 1
+
+
+def _local_source(tmp_path) -> Source:
+    return Source(
+        id="src-local",
+        name="local",
+        type="local",
+        path=str(tmp_path),
+        created_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+@pytest.mark.asyncio
+async def test_read_with_cache_extracts_pdf_text_for_local_source(tmp_path):
+    with open(os.path.join(FIXTURES, "sample.pdf"), "rb") as f:
+        raw = f.read()
+    (tmp_path / "sample.pdf").write_bytes(raw)
+
+    extracted, warning = await document_access_module.read_with_cache(
+        _local_source(tmp_path), "sample.pdf"
+    )
+
+    assert warning is None
+    assert "zephyrquartz-page2-marker" in extracted.text
+    assert extracted.pages is not None
+
+
+@pytest.mark.asyncio
+async def test_read_raw_with_cache_returns_original_bytes_for_local_source(tmp_path):
+    with open(os.path.join(FIXTURES, "sample.pdf"), "rb") as f:
+        raw = f.read()
+    (tmp_path / "sample.pdf").write_bytes(raw)
+
+    fetched, warning = await document_access_module.read_raw_with_cache(
+        _local_source(tmp_path), "sample.pdf"
+    )
+
+    assert warning is None
+    assert fetched == raw
+
+
+@pytest.mark.asyncio
+async def test_read_with_cache_and_read_raw_with_cache_share_remote_byte_cache(
+    monkeypatch,
+):
+    """Both read_with_cache() (text-extracting) and read_raw_with_cache()
+    (bytes-passthrough) must go through the same underlying fetch+cache, so
+    reading a remote document's raw bytes and its extracted text doesn't
+    double the number of upstream fetches."""
+    fetch_count = 0
+
+    async def fake_fetch_remote(source, path):
+        nonlocal fetch_count
+        fetch_count += 1
+        return b"remote markdown content"
+
+    monkeypatch.setattr(document_access_module, "_fetch_remote", fake_fetch_remote)
+
+    source = _make_source("src-shared-cache")
+    extracted, _ = await document_access_module.read_with_cache(source, "a.md")
+    raw, _ = await document_access_module.read_raw_with_cache(source, "a.md")
+
+    assert extracted.text == "remote markdown content"
+    assert raw == b"remote markdown content"
+    assert fetch_count == 1
+
+
+def test_watcher_recognizes_pdf_alongside_markdown(monkeypatch):
+    """The local filesystem watcher's per-event filter must accept .pdf
+    files the same way it already accepts .md files, and continue to
+    reject unsupported extensions."""
+    loop = asyncio.new_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    handler = watcher_module._MDHandler("src-watch", loop, queue)
+
+    handler._put("file_created", "/watched/report.pdf")
+    handler._put("file_created", "/watched/image.png")
+
+    loop.run_until_complete(asyncio.sleep(0))
+    loop.close()
+
+    queued_paths = []
+    while not queue.empty():
+        queued_paths.append(queue.get_nowait()["path"])
+    assert queued_paths == ["/watched/report.pdf"]

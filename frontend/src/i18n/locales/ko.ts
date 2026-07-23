@@ -174,6 +174,7 @@ export const ko: MessageSchema = {
     warning: '{name}: {message}',
     openInPane: '패널 {paneId}에서 열기',
     openInLabel: '열기:',
+    pageLabel: '{page}페이지',
     modeKeyword: '키워드',
     modeSemantic: '의미 기반',
     tabSwitchHint: 'Tab로 {mode} 모드 전환',

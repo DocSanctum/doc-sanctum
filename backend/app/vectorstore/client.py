@@ -161,6 +161,23 @@ def _require_collection(source_id: str) -> Any:
 # so a slow embed/query/upsert can't stall the shared FastAPI/MCP event loop. ---
 
 
+def _chunk_metadata(
+    source_id: str, source_name: str, path: str, c: Chunk
+) -> dict[str, Any]:
+    meta: dict[str, Any] = {
+        "source_id": source_id,
+        "source_name": source_name,
+        "path": path,
+        "chunk_index": c.index,
+    }
+    # Chroma metadata values must be str/int/float/bool — omit the key
+    # entirely for a Markdown chunk (page=None) rather than storing a
+    # sentinel; _query_sync reads it back defensively via meta.get("page").
+    if c.page is not None:
+        meta["page"] = c.page
+    return meta
+
+
 def _upsert_sync(
     source_id: str, source_name: str, path: str, chunks: list[Chunk]
 ) -> None:
@@ -168,15 +185,7 @@ def _upsert_sync(
     collection.upsert(
         ids=[f"{source_id}:{path}:{c.index}" for c in chunks],
         documents=[c.text for c in chunks],
-        metadatas=[
-            {
-                "source_id": source_id,
-                "source_name": source_name,
-                "path": path,
-                "chunk_index": c.index,
-            }
-            for c in chunks
-        ],
+        metadatas=[_chunk_metadata(source_id, source_name, path, c) for c in chunks],
     )
 
 
@@ -237,6 +246,7 @@ def _query_sync(source_id: str, query_text: str, top_k: int) -> list[dict[str, A
                 "source_id": meta["source_id"],
                 "source_name": meta["source_name"],
                 "chunk_index": meta["chunk_index"],
+                "page": meta.get("page"),
                 "score": 1.0 / (1.0 + dist),
                 "excerpt": doc_text,
             }
