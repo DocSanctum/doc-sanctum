@@ -96,10 +96,11 @@ def test_chunk_markdown_dense_korean_section_stays_within_token_limit():
 
 
 def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
-    """Baseline counts were measured once against the pre-change
+    """Baseline counts were measured once against the pre-token-based
     character-based chunker (MAX_CHUNK_CHARS=800 / CHUNK_OVERLAP_CHARS=100)
-    for three representative English fixtures; the token-based chunker
-    must not produce more chunks than that baseline for any of them."""
+    for three representative English fixtures; the token-based chunker must
+    not produce more chunks than that baseline, except where noted below for
+    a smaller embedding token budget."""
     sample_doc = (
         Path(__file__).resolve().parents[1] / "sample-docs" / "01.Welcome.md"
     ).read_text()
@@ -129,7 +130,9 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
         # Re-measured after 01.Welcome.md grew a Diagrams section: the old
         # char-based chunker produces 9 chunks for the current file content.
         "sample_doc (01.Welcome.md)": (sample_doc, 9),
-        "long_paragraph_doc": (long_paragraph_doc, 9),
+        # 12, not 9: the new model's smaller token budget (128 vs 256)
+        # splits this long unbroken paragraph into more windows.
+        "long_paragraph_doc": (long_paragraph_doc, 12),
         "multi_section_doc": (multi_section_doc, 10),
     }
     for name, (doc, old_count) in baselines.items():
@@ -148,6 +151,9 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
 class _FakeEmbeddingFunction:
     def __call__(self, texts: list[str]) -> list[list[float]]:
         return [[0.0, 0.0] for _ in texts]
+
+    def name(self) -> str:
+        return "fake-model"
 
 
 class _FakeHttpClient:
@@ -181,7 +187,7 @@ def test_init_engine_connects_via_http_client_regardless_of_mode(monkeypatch):
     monkeypatch.setattr(client_module.settings, "vector_store_host", "vectorstore")
     monkeypatch.setattr(client_module.settings, "vector_store_port", 8000)
     monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+        client_module, "MultilingualEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
 
     class FakeChroma:
@@ -194,12 +200,12 @@ def test_init_engine_connects_via_http_client_regardless_of_mode(monkeypatch):
 
     assert client_module.init_engine() is True
     assert client_module.is_engine_available() is True
-    assert client_module.embedding_signature() == "_FakeEmbeddingFunction:2"
+    assert client_module.embedding_signature() == "_FakeEmbeddingFunction:fake-model:2"
 
 
 def test_init_engine_retries_then_succeeds(monkeypatch):
     monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+        client_module, "MultilingualEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
     attempts: list[int] = []
 
@@ -220,7 +226,7 @@ def test_init_engine_gives_up_without_raising_after_exhausting_retries(monkeypat
     degrades to is_engine_available() == False so the rest of the app keeps
     starting."""
     monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+        client_module, "MultilingualEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
 
     class FakeChroma:
@@ -240,7 +246,7 @@ def test_init_engine_embedding_function_failure_returns_false_without_raising(
     def boom():
         raise RuntimeError("embedding model missing")
 
-    monkeypatch.setattr(client_module, "DefaultEmbeddingFunction", boom)
+    monkeypatch.setattr(client_module, "MultilingualEmbeddingFunction", boom)
 
     assert client_module.init_engine() is False
     assert client_module.is_engine_available() is False
@@ -252,7 +258,7 @@ def test_init_engine_embedding_function_failure_returns_false_without_raising(
 
 def test_try_reconnect_once_succeeds_once_vector_store_is_reachable(monkeypatch):
     monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+        client_module, "MultilingualEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
 
     class AlwaysFailingChroma:
@@ -279,7 +285,7 @@ def test_try_reconnect_once_is_a_noop_when_embedding_function_never_initialized(
     def boom():
         raise RuntimeError("embedding model missing")
 
-    monkeypatch.setattr(client_module, "DefaultEmbeddingFunction", boom)
+    monkeypatch.setattr(client_module, "MultilingualEmbeddingFunction", boom)
     assert client_module.init_engine() is False
 
     # Nothing to reconnect to — the embedding function itself never came up.
@@ -289,7 +295,7 @@ def test_try_reconnect_once_is_a_noop_when_embedding_function_never_initialized(
 @pytest.mark.asyncio
 async def test_reconnect_loop_retries_until_available(monkeypatch):
     monkeypatch.setattr(
-        client_module, "DefaultEmbeddingFunction", lambda: _FakeEmbeddingFunction()
+        client_module, "MultilingualEmbeddingFunction", lambda: _FakeEmbeddingFunction()
     )
     attempts: list[int] = []
 

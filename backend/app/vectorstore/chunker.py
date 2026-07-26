@@ -3,19 +3,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from . import tokenizer
+from . import embedding, tokenizer
 
-# Sized to the embedding model's real input capacity (256 tokens), measured
-# with the exact tokenizer that will embed the resulting chunks, rather than
-# an approximate character count. The 12.5% overlap ratio matches what the
-# previous character-based constants used.
-MAX_CHUNK_TOKENS = 256
-CHUNK_OVERLAP_TOKENS = 32
+# Sourced from the embedding model's own max sequence length so it can't
+# drift out of sync. 12.5% overlap, same ratio as before.
+MAX_CHUNK_TOKENS = embedding.MAX_SEQ_LENGTH
+CHUNK_OVERLAP_TOKENS = MAX_CHUNK_TOKENS // 8
 
-# Bumped whenever this chunking algorithm materially changes, so
-# rebuild_check._check_chunking_version() can detect the change and trigger
-# a full reindex of everything that was chunked under the old rule.
-CHUNKING_VERSION = 2
+# Bump on any material change so rebuild_check triggers a full reindex.
+CHUNKING_VERSION = 3
 
 _HEADING_RE = re.compile(r"^#{1,4}\s+.*$", re.MULTILINE)
 

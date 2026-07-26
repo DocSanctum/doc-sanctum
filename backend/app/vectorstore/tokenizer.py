@@ -23,18 +23,10 @@ def _get_tokenizer() -> Any:
     with _init_lock:
         if _tokenizer is None:
             try:
-                # Reuse chromadb's own embedding-model download/cache
-                # machinery so the tokenizer always comes from the exact
-                # same cached files the embedding model itself will use —
-                # a no-op if they're already present (e.g. baked into the
-                # Docker image at build time), or a one-time download on a
-                # machine that has never run the embedding function before.
-                from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import (
-                    ONNXMiniLM_L6_V2,
-                )
+                # Reuse the embedding function's own cached model files.
+                from .embedding import MultilingualEmbeddingFunction
 
-                ef = ONNXMiniLM_L6_V2()
-                ef._download_model_if_not_exists()
+                ef = MultilingualEmbeddingFunction()
                 tok = ef.tokenizer
             except Exception as exc:
                 raise TokenizerUnavailableError(

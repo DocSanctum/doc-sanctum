@@ -201,8 +201,12 @@ async def test_partial_change_reembeds_only_changed_doc_and_prunes_deleted(
 async def test_first_run_stores_signature_without_rebuild_event(
     db, monkeypatch, tmp_path
 ):
+    class _Fn:
+        def name(self) -> str:
+            return "some-model"
+
     monkeypatch.setattr(client_module, "_embedding_dimension", 384)
-    monkeypatch.setattr(client_module, "_embedding_function", object())
+    monkeypatch.setattr(client_module, "_embedding_function", _Fn())
 
     events_dir = tmp_path / "events"
     monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
@@ -223,7 +227,8 @@ async def test_signature_mismatch_invalidates_cache_and_writes_event(
     monkeypatch.setattr(client_module, "_embedding_dimension", 384)
 
     class _Fn:
-        pass
+        def name(self) -> str:
+            return "new-model"
 
     monkeypatch.setattr(client_module, "_embedding_function", _Fn())
 
@@ -239,6 +244,39 @@ async def test_signature_mismatch_invalidates_cache_and_writes_event(
     assert len(files) == 1
     first_line = files[0].read_text().splitlines()[0]
     assert first_line.startswith("REBUILT source=all sources reason=model-mismatch")
+
+
+async def test_signature_detects_model_change_within_same_wrapper_class(
+    db, monkeypatch, tmp_path
+):
+    """Two models sharing a wrapper class must still register as a change,
+    not just a change of wrapper class."""
+    from backend.app.core.database import set_setting
+
+    class _Fn:
+        def __init__(self, model_name: str) -> None:
+            self._model_name = model_name
+
+        def name(self) -> str:
+            return self._model_name
+
+    monkeypatch.setattr(client_module, "_embedding_dimension", 384)
+    monkeypatch.setattr(client_module, "_embedding_function", _Fn("model-a"))
+    stored_signature = client_module.embedding_signature()
+    await set_setting("embedding_model_signature", stored_signature)
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    # Same wrapper class (_Fn), same dimension, different model.
+    monkeypatch.setattr(client_module, "_embedding_function", _Fn("model-b"))
+    assert client_module.embedding_signature() != stored_signature
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_embedding_signature()
+
+    hashes, _ = await hash_cache_module.get_known("s1")
+    assert hashes == {}  # the model-b swap is detected and triggers a rebuild
 
 
 async def test_chunking_version_mismatch_invalidates_cache_and_writes_distinct_event(

@@ -36,10 +36,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # so extend it with the same corporate CA(s) for libraries (httpx) that rely on it.
 RUN cat /usr/local/share/ca-certificates/corporate/*.crt 2>/dev/null >> "$(python -c 'import certifi; print(certifi.where())')" || true
 
-# Pre-download and warm the local semantic-search embedding model at build
-# time (research.md §2 deployment note) so registering a source doesn't pay
-# a first-run network download, and the container can run fully offline.
-RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])"
+# Pre-download and warm the embedding model at build time for offline use.
+COPY app/ app/
+RUN python -c "from app.vectorstore.embedding import MultilingualEmbeddingFunction; MultilingualEmbeddingFunction()(['warmup'])"
 
 COPY . .
 
