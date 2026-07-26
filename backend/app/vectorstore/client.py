@@ -7,10 +7,10 @@ import time
 from typing import Any
 
 import chromadb
-from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
 from ..core.config import settings
 from .chunker import Chunk
+from .embedding import MultilingualEmbeddingFunction
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +41,14 @@ def _collection_name(source_id: str) -> str:
 
 def embedding_signature() -> str | None:
     """Identifying signature of the currently configured embedding function
-    (name + vector dimension), used to detect that the embedding model
-    changed since the vector store was last written to. None until
-    init_engine() has run successfully at least once."""
+    (class + model name + dimension), used to detect that the embedding
+    model changed since the vector store was last written to. Includes the
+    model name, not just the class, so two models sharing a wrapper class
+    still register as a change. None until init_engine() has run
+    successfully at least once."""
     if _embedding_dimension is None:
         return None
-    return f"{type(_embedding_function).__name__}:{_embedding_dimension}"
+    return f"{type(_embedding_function).__name__}:{_embedding_function.name()}:{_embedding_dimension}"
 
 
 def init_engine() -> bool:
@@ -71,7 +73,7 @@ def init_engine() -> bool:
         if _embedding_function is not None:
             return _engine_available
         try:
-            _embedding_function = DefaultEmbeddingFunction()
+            _embedding_function = MultilingualEmbeddingFunction()
             vectors = _embedding_function(["healthcheck"])
             _embedding_dimension = len(vectors[0])
         except Exception:
