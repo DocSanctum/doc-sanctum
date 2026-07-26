@@ -6,6 +6,14 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.2.0',
+    date: '2026-07-26',
+    changes: [
+      'PDF files are now indexed and searched alongside Markdown, across local folders, GitHub, GitLab, and the filesystem watcher; search results include a page number',
+      'Semantic search now uses a multilingual embedding model, greatly improving relevance for Korean (and other non-English) content, with no change to English search quality',
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-07-18',
     changes: [
