@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -6,6 +8,16 @@ from ..core.database import get_setting, set_setting
 router = APIRouter(prefix="/mcp", tags=["mcp"])
 
 SETTING_KEY = "mcp_enabled"
+
+
+# The container has no way to know how docker-compose actually published its
+# port to the host (BACKEND_PORT is a range; --scale/prior conflicts can
+# shift the real mapping higher) — this only reports the operator's
+# configured starting port, which is correct for the common single-replica
+# case and is still far better than a hardcoded guess.
+def _host_port() -> int:
+    return int(os.environ.get("BACKEND_PORT", "8000"))
+
 
 TOOLS = [
     {
@@ -30,6 +42,7 @@ class McpStatus(BaseModel):
     enabled: bool
     sse_url: str
     http_url: str
+    host_port: int
     tools: list[dict]
 
 
@@ -43,6 +56,7 @@ async def get_mcp_status():
         enabled=await is_enabled(),
         sse_url="/mcp-sse/sse",
         http_url="/mcp",
+        host_port=_host_port(),
         tools=TOOLS,
     )
 
@@ -51,5 +65,9 @@ async def get_mcp_status():
 async def patch_mcp_status(body: McpPatch):
     await set_setting(SETTING_KEY, "true" if body.enabled else "false")
     return McpStatus(
-        enabled=body.enabled, sse_url="/mcp-sse/sse", http_url="/mcp", tools=TOOLS
+        enabled=body.enabled,
+        sse_url="/mcp-sse/sse",
+        http_url="/mcp",
+        host_port=_host_port(),
+        tools=TOOLS,
     )

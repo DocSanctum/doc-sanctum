@@ -384,9 +384,13 @@ const copiedLabel = ref('')
 
 function backendOrigin() {
   const h = window.location.hostname
-  return h === 'localhost' || h === '127.0.0.1'
-    ? `http://${h}:8000`
-    : window.location.origin
+  if (h !== 'localhost' && h !== '127.0.0.1') return window.location.origin
+  // host_port is the operator's configured BACKEND_PORT, not necessarily
+  // the port docker actually published (a range, and only the compose/host
+  // layer knows the final mapping) — correct for the common single-replica
+  // case, still a guess if docker had to fall back further into the range.
+  const port = mcpStatus.value?.host_port ?? 8000
+  return `http://${h}:${port}`
 }
 
 const endpoints = computed(() => {

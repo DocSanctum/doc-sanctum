@@ -59,6 +59,7 @@ export interface McpStatus {
   enabled: boolean
   sse_url: string
   http_url: string
+  host_port: number
   tools: McpTool[]
 }
 

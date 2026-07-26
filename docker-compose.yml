@@ -78,6 +78,11 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
     environment:
+      # The container can't introspect its own docker-published host port
+      # (that's decided by the compose/host layer, not visible from inside),
+      # so this just passes through the operator's configured starting
+      # port for the frontend to display as the MCP connection address.
+      - BACKEND_PORT=${BACKEND_PORT:-8000}
       - DATABASE_URL=sqlite+aiosqlite:////data/db.sqlite3
       - DEFAULT_POLL_INTERVAL=${DEFAULT_POLL_INTERVAL:-300}
       - HOME=${HOME}
