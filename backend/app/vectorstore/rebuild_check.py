@@ -39,8 +39,12 @@ async def _source_name(source_id: str) -> str:
 async def _check_embedding_signature() -> None:
     """If the configured embedding model changed since the last run, every
     persisted vector is potentially incompatible — invalidate the entire
-    hash cache so every source is fully rebuilt on its next sync, and
-    record one rebuild event describing the mismatch."""
+    hash cache so every source is fully rebuilt on its next sync, delete
+    every existing vector collection (each one's embedding dimension is
+    fixed at creation time by Chroma, so leaving a collection created under
+    the old model in place would make the next upsert fail once the new
+    model's dimension differs), and record one rebuild event describing the
+    mismatch."""
     current = client.embedding_signature()
     if current is None:
         return  # engine unavailable; nothing to compare
@@ -64,6 +68,9 @@ async def _check_embedding_signature() -> None:
     try:
         started = time.monotonic()
         invalidated = await hash_cache.wipe_all()
+        collection_ids = await client.list_collection_source_ids()
+        for source_id in collection_ids:
+            await client.delete_collection(source_id)
         await set_setting(_EMBEDDING_SIGNATURE_KEY, current)
         duration = time.monotonic() - started
         rebuild_events.record(
@@ -75,16 +82,20 @@ async def _check_embedding_signature() -> None:
             detail=(
                 f"Stored embedding signature '{stored}' no longer matches the "
                 f"configured '{current}'. Invalidated {invalidated} cached "
-                "document hash(es) across all sources; each will be "
-                "re-embedded on its next sync."
+                f"document hash(es) and deleted {len(collection_ids)} vector "
+                "collection(s) still configured for the old embedding model "
+                "across all sources; each will be fully re-embedded into a "
+                "freshly created collection on its next sync."
             ),
         )
         logger.warning(
             "Embedding model signature changed (%s -> %s); invalidated %d "
-            "cached document hash(es), full rebuild will follow",
+            "cached document hash(es) and deleted %d vector collection(s), "
+            "full rebuild will follow",
             stored,
             current,
             invalidated,
+            len(collection_ids),
         )
     finally:
         await rebuild_lock.release(_GLOBAL_LOCK_ID)

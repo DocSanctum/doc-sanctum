@@ -246,6 +246,51 @@ async def test_signature_mismatch_invalidates_cache_and_writes_event(
     assert first_line.startswith("REBUILT source=all sources reason=model-mismatch")
 
 
+async def test_signature_mismatch_deletes_existing_vector_collections(
+    db, monkeypatch, tmp_path
+):
+    """A stale collection created under the old embedding model must be
+    deleted, not just left in place — Chroma fixes a collection's embedding
+    dimension at creation time, so an in-place upsert under a new model with
+    a different dimension would otherwise fail on the next sync."""
+    from backend.app.core.database import set_setting
+
+    await set_setting("embedding_model_signature", "OldFn:128")
+    await hash_cache_module.upsert("s1", "a.md", "h1", None)
+
+    monkeypatch.setattr(client_module, "_embedding_dimension", 384)
+
+    class _Fn:
+        def name(self) -> str:
+            return "new-model"
+
+    monkeypatch.setattr(client_module, "_embedding_function", _Fn())
+
+    deleted: list[str] = []
+
+    async def fake_list_collection_source_ids() -> list[str]:
+        return ["s1", "s2"]
+
+    async def fake_delete_collection(source_id: str) -> None:
+        deleted.append(source_id)
+
+    monkeypatch.setattr(
+        client_module, "list_collection_source_ids", fake_list_collection_source_ids
+    )
+    monkeypatch.setattr(client_module, "delete_collection", fake_delete_collection)
+
+    events_dir = tmp_path / "events"
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", events_dir)
+
+    await rebuild_check_module._check_embedding_signature()
+
+    assert sorted(deleted) == ["s1", "s2"]
+
+    files = list(events_dir.iterdir())
+    detail = files[0].read_text()
+    assert "deleted 2 vector collection" in detail
+
+
 async def test_signature_detects_model_change_within_same_wrapper_class(
     db, monkeypatch, tmp_path
 ):
