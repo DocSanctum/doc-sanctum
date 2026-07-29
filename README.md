@@ -1,3 +1,9 @@
+<p align="center">
+  <a href="https://github.com/DocSanctum">
+    <img src="https://raw.githubusercontent.com/DocSanctum/.github/main/assets/logo.png" alt="DocSanctum" width="240">
+  </a>
+</p>
+
 # DocSanctum
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
