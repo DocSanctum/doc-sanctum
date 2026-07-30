@@ -44,7 +44,7 @@ cp .env.example .env
 ./start.sh
 ```
 
-The first run builds the images, which takes a few minutes (it also downloads a small local embedding model — `all-MiniLM-L6-v2`, ~90MB, no GPU or API key required — so semantic search works offline afterward). Once it's up:
+The first run builds the images, which takes a few minutes (it also downloads a small local embedding model — `paraphrase-multilingual-MiniLM-L12-v2`, ~113MB, no GPU or API key required — so semantic search works offline afterward, in both English and Korean). Once it's up:
 
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
