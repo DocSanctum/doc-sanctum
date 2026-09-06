@@ -74,6 +74,7 @@ export const en = {
     emptyState: 'Select a markdown file on the left',
     breadcrumb: {
       ariaLabel: 'Document path',
+      copyPath: 'Copy absolute path',
     },
     markdownViewer: {
       loading: 'Loading file...',

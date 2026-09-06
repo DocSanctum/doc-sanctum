@@ -76,6 +76,7 @@ export const ko: MessageSchema = {
     emptyState: '좌측에서 MD 파일을 선택하세요',
     breadcrumb: {
       ariaLabel: '문서 경로',
+      copyPath: '절대 경로 복사',
     },
     markdownViewer: {
       loading: '파일 로딩 중...',
