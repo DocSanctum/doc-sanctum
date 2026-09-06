@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, it, expect, vi } from 'vitest'
+import { mount, flushPromises } from '@vue/test-utils'
 import Breadcrumb from '../src/components/Viewer/Breadcrumb.vue'
 
 describe('Breadcrumb', () => {
@@ -29,6 +29,42 @@ describe('Breadcrumb', () => {
     })
 
     expect(wrapper.find('.crumb-ellipsis').exists()).toBe(true)
+  })
+
+  it('copies the source root joined with the document path', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    Object.defineProperty(navigator, 'permissions', {
+      value: {
+        query: vi.fn().mockResolvedValue({
+          state: 'granted',
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }),
+      },
+      configurable: true,
+    })
+
+    const wrapper = mount(Breadcrumb, {
+      props: { path: 'guide/setup.md', sourceRoot: '/home/me/docs/' },
+    })
+    await flushPromises()
+    await wrapper.find('.crumb-copy-btn').trigger('click')
+
+    expect(writeText).toHaveBeenCalledWith('/home/me/docs/guide/setup.md')
+  })
+
+  it('shell-quotes a copied path that contains a space', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    const wrapper = mount(Breadcrumb, {
+      props: { path: 'Game/code + cline.md', sourceRoot: '/home/me/docs' },
+    })
+    await flushPromises()
+    await wrapper.find('.crumb-copy-btn').trigger('click')
+
+    expect(writeText).toHaveBeenCalledWith('"/home/me/docs/Game/code + cline.md"')
   })
 
   it('renders nothing for an empty path', () => {

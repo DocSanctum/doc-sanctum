@@ -11,18 +11,73 @@
       <span v-else class="crumb-current">{{ item.label }}</span>
       <span v-if="i < items.length - 1" class="crumb-sep">/</span>
     </template>
+    <button
+      type="button"
+      class="crumb-copy-btn"
+      :class="{ 'copy-ok': copied, 'copy-fail': copyFailed }"
+      :title="copyTitle"
+      :aria-label="copyTitle"
+      @click="copyAbsolutePath"
+    >
+      <svg v-if="copied" viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10.5 8 14.5 16 6" /></svg>
+      <svg v-else viewBox="0 0 20 20" aria-hidden="true">
+        <rect x="7" y="7" width="9" height="10" rx="1.5" />
+        <path d="M13 4.5H5.5A1.5 1.5 0 0 0 4 6v7.5" />
+      </svg>
+    </button>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useClipboard } from '@vueuse/core'
 import { useTreeReveal } from '../../composables/useTreeReveal'
 
-const props = defineProps<{ path: string }>()
+const props = defineProps<{ path: string; sourceRoot?: string }>()
 const emit = defineEmits<{ 'select-segment': [path: string] }>()
 const { t } = useI18n()
 const { reveal } = useTreeReveal()
+const { copy, copied, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
+const copyFailed = ref(false)
+
+// The source root is the registered source's own location: an absolute
+// filesystem path for local sources, a repository/base URL for remote ones.
+const absolutePath = computed(() =>
+  props.sourceRoot ? `${props.sourceRoot.replace(/\/+$/, '')}/${props.path}` : props.path
+)
+
+// Quote only when the path needs it, so an ordinary path stays paste-able
+// anywhere; `!` forces single quotes because history expansion fires in "…".
+function quoteForShell(path: string): string {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(path)) return path
+  if (path.includes('!')) return `'${path.replace(/'/g, `'\\''`)}'`
+  return `"${path.replace(/(["\\$`])/g, '\\$1')}"`
+}
+
+const copyTitle = computed(() => {
+  if (copied.value) return t('common.copied')
+  if (copyFailed.value) return t('common.copyFailed')
+  return t('viewer.breadcrumb.copyPath')
+})
+
+async function copyAbsolutePath() {
+  copyFailed.value = false
+  if (!clipboardSupported.value) {
+    flashFailure()
+    return
+  }
+  try {
+    await copy(quoteForShell(absolutePath.value))
+  } catch {
+    flashFailure()
+  }
+}
+
+function flashFailure() {
+  copyFailed.value = true
+  window.setTimeout(() => { copyFailed.value = false }, 1500)
+}
 
 function onSegmentClick(fullPath: string) {
   // 어떤 세그먼트를 클릭하든 항상 현재 파일까지의 전체 경로를 공개(reveal)한다.
@@ -103,5 +158,40 @@ const items = computed<DisplayItem[]>(() => {
 }
 .crumb-sep {
   opacity: 0.5;
+}
+.crumb-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.15rem;
+  padding: 0.15rem;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.6;
+}
+.crumb-copy-btn svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.crumb-copy-btn:hover,
+.crumb-copy-btn:focus-visible {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  opacity: 1;
+}
+.crumb-copy-btn.copy-ok {
+  color: #10b981;
+  opacity: 1;
+}
+.crumb-copy-btn.copy-fail {
+  color: #ef4444;
+  opacity: 1;
 }
 </style>

@@ -4,7 +4,7 @@
       <div v-if="loading" class="text-gray-400 text-sm">{{ t('viewer.markdownViewer.loading') }}</div>
       <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
       <template v-else>
-        <Breadcrumb :path="filePath" />
+        <Breadcrumb :path="filePath" :source-root="sourceRoot" />
         <div
           ref="contentRef"
           class="prose dark:prose-invert max-w-none"
@@ -53,6 +53,7 @@ import { useTheme } from '../../composables/useTheme'
 import { useToc } from '../../composables/useToc'
 import { useViewerUrl } from '../../composables/useViewerUrl'
 import { useSearchReveal } from '../../composables/useSearchReveal'
+import { useSources } from '../../composables/useSources'
 import type { PaneId } from '../../types'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
@@ -70,6 +71,11 @@ const { theme } = useTheme()
 const { getHeadingId, setHeadingId, buildPermalink } = useViewerUrl()
 const { copy, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
 const { revealTarget, revealToken } = useSearchReveal()
+const { sourcesQuery } = useSources()
+
+const sourceRoot = computed(
+  () => sourcesQuery.data.value?.find((s) => s.id === props.sourceId)?.path
+)
 
 const raw = ref('')
 const loading = ref(false)
