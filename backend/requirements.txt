@@ -10,4 +10,4 @@ mcp==1.29.0
 chromadb==1.5.9
 geoip2fast==1.2.2
 cryptography==50.0.0
-pypdf==6.15.0
+pypdf==6.16.1
