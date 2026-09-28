@@ -170,7 +170,34 @@ onKeyStroke('Escape', () => {
   if (fullscreenMermaidSvg.value) closeMermaidFullscreen()
 })
 
-watch(rendered, () => nextTick(() => renderMermaidBlocks()))
+// Rewrites rendered <a> tags so native browser gestures (ctrl/cmd+click,
+// middle-click, right-click "open in new tab") work correctly: external
+// links get a real target="_blank"/rel attribute pair instead of relying on
+// JS to reopen them, and internal .md links get their href swapped for a
+// real, navigable permalink URL (the original relative path is kept in
+// data-internal-path for handleClick's in-pane fast-navigation).
+function rewriteAnchors() {
+  if (!contentRef.value) return
+  const anchors = contentRef.value.querySelectorAll<HTMLAnchorElement>('a')
+  for (const a of anchors) {
+    if (a.classList.contains('header-anchor')) continue
+    const href = a.getAttribute('href') ?? ''
+    if (href.startsWith('http://') || href.startsWith('https://')) {
+      a.setAttribute('target', '_blank')
+      a.setAttribute('rel', 'noopener noreferrer')
+      continue
+    }
+    if (href.startsWith('#')) continue
+    if (href.endsWith('.md')) {
+      const dir = props.filePath.split('/').slice(0, -1).join('/')
+      const resolved = dir ? `${dir}/${href}` : href
+      a.dataset.internalPath = href
+      a.setAttribute('href', buildPermalink(props.sourceId, resolved, ''))
+    }
+  }
+}
+
+watch(rendered, () => nextTick(() => { renderMermaidBlocks(); rewriteAnchors() }))
 watch(theme, () => nextTick(() => renderMermaidBlocks()))
 
 async function load() {
@@ -338,19 +365,20 @@ function handleClick(e: MouseEvent) {
 
   const anchor = target.closest('a')
   if (!anchor) return
+
+  // Modifier-key clicks, middle-click, and "open link in new tab" must fall
+  // through to the browser's native handling — rewriteAnchors() has already
+  // given the anchor a real target/href for that to work correctly.
+  if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return
+
   const href = anchor.getAttribute('href') ?? ''
-
-  if (href.startsWith('http://') || href.startsWith('https://')) {
-    e.preventDefault()
-    window.open(href, '_blank', 'noopener,noreferrer')
-    return
-  }
-
+  if (href.startsWith('http://') || href.startsWith('https://')) return
   if (href.startsWith('#')) return
 
-  if (href.endsWith('.md')) {
+  const internalPath = anchor.dataset.internalPath
+  if (internalPath) {
     e.preventDefault()
-    emit('navigate', href)
+    emit('navigate', internalPath)
   }
 }
 </script>
