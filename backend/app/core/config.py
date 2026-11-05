@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # rebinding page cannot reach it under its own domain. "*" disables it.
     allowed_hosts: str = "localhost,127.0.0.1"
 
+    # In-container ports for the two backend listeners. The remote one serves
+    # only the MCP mounts behind a bearer token, for clients on other machines.
+    api_listen_port: int = 8000
+    remote_mcp_listen_port: int = 8100
+
     @property
     def allowed_host_list(self) -> list[str]:
         return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]

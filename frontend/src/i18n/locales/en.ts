@@ -155,6 +155,16 @@ export const en = {
       enableBtn: 'Enable',
       disableBtn: 'Disable',
       tools: 'Tools ({count})',
+      remote: {
+        label: 'Remote access (other machines)',
+        hint: 'Other PCs connect to this URL and must send the header below. Replace <this-pc-ip> with this machine\'s LAN or VPN address.',
+        notReachable: 'Only reachable from this machine. Set REMOTE_MCP_BIND_ADDRESS=0.0.0.0 in .env and restart to allow other PCs.',
+        header: 'Authorization header',
+        show: 'Show',
+        hide: 'Hide',
+        regenerate: 'Regenerate',
+        regenerateConfirm: 'Regenerate the token? Every remote client using the current token will stop working until updated.',
+      },
     },
     changelog: {
       viewAll: 'View full history →',

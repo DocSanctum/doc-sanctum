@@ -157,6 +157,16 @@ export const ko: MessageSchema = {
       enableBtn: '활성화',
       disableBtn: '비활성화',
       tools: '도구 ({count}개)',
+      remote: {
+        label: '원격 접속 (다른 PC)',
+        hint: '다른 PC는 이 주소로 접속하고 아래 헤더를 함께 보내야 합니다. <this-pc-ip>는 이 PC의 LAN 또는 VPN 주소로 바꿔 주세요.',
+        notReachable: '지금은 이 PC에서만 접속할 수 있습니다. 다른 PC에서 쓰려면 .env에 REMOTE_MCP_BIND_ADDRESS=0.0.0.0을 넣고 다시 시작하세요.',
+        header: 'Authorization 헤더',
+        show: '보기',
+        hide: '숨기기',
+        regenerate: '재발급',
+        regenerateConfirm: '토큰을 재발급할까요? 지금 토큰을 쓰는 원격 클라이언트는 새 토큰으로 바꿀 때까지 접속할 수 없습니다.',
+      },
     },
     changelog: {
       viewAll: '전체 이력 보기 →',

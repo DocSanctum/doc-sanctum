@@ -6,7 +6,7 @@
 # (docker-compose.yml + docker-compose.prod.yml) — see docker-compose.prod.yml.
 services:
   backend:
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: python -m app.serve --reload
     volumes:
       # Bind-mount the source over the image's baked-in copy of it, so
       # --reload actually has something on disk to watch for changes.

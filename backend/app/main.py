@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .api import deployment, files, locale, search, sources, sse
@@ -13,6 +12,7 @@ from .api.sources import resume_local_sources, seed_sample_source
 from .core.config import settings
 from .core.crypto import ensure_master_key
 from .core.database import create_tables
+from .core.remote_mcp import ListenerGuard, get_or_create_token
 from .mcp.server import mcp
 from .services.poller import start_polling_all
 from .vectorstore.client import init_engine, is_engine_available, reconnect_loop
@@ -59,6 +59,7 @@ class _NormalizeMcpMountPath:
 async def lifespan(app: FastAPI):
     await create_tables()
     ensure_master_key()
+    await get_or_create_token()
     init_engine()
     if not is_engine_available():
         # Keeps retrying at a relaxed interval in the background, so the app
@@ -122,7 +123,11 @@ app.add_middleware(_McpAwareCors)
 app.add_middleware(_NormalizeMcpMountPath)
 # Added last so it runs first and rejects a foreign Host before any route,
 # including the origin-permissive /mcp mount, sees the request.
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_host_list)
+app.add_middleware(
+    ListenerGuard,
+    allowed_hosts=settings.allowed_host_list,
+    remote_port=settings.remote_mcp_listen_port,
+)
 
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")

@@ -47,6 +47,9 @@ export const api = {
   setMcpEnabled: (enabled: boolean) =>
     request<McpStatus>('/mcp/status', { method: 'PATCH', body: JSON.stringify({ enabled }) }),
 
+  rotateRemoteMcpToken: () =>
+    request<McpStatus>('/mcp/remote-token', { method: 'POST' }),
+
   getDeploymentMode: () => request<DeploymentStatus>('/deployment'),
 
   getLocale: () => request<LocaleResult>('/locale'),

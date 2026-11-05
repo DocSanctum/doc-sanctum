@@ -36,6 +36,7 @@ async def test_lifespan_survives_init_engine_failure(monkeypatch):
     # irrelevant to this test's focus and not writable in a sandboxed test
     # environment.
     monkeypatch.setattr(main_module, "ensure_master_key", lambda: None)
+    monkeypatch.setattr(main_module, "get_or_create_token", lambda: _noop_coro())
     monkeypatch.setattr(main_module, "init_engine", failing_init_engine)
     monkeypatch.setattr(main_module, "check_and_recover", lambda: _noop_coro())
     monkeypatch.setattr(main_module, "start_polling_all", fake_start_polling_all)
