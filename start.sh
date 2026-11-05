@@ -69,6 +69,12 @@ set -a
 source .env
 set +a
 
+# Standalone runs one backend replica, so publish it on a single fixed port.
+# Exported rather than unset, because compose would re-read it from .env.
+if [ "${DEPLOYMENT_MODE:-standalone}" != "scaleout" ]; then
+  export BACKEND_PORT_MAX="${BACKEND_PORT:-8000}"
+fi
+
 if $WINDOWS && [ -z "${WINDOWS_VAULT_MOUNT:-}" ]; then
   echo "--windows requires WINDOWS_VAULT_MOUNT to be set in .env — see .env.example." >&2
   exit 1

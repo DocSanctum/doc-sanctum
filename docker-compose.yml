@@ -12,11 +12,11 @@
 #      GitHub/HTTP sources. Registering one returns 422.
 #   4. `vectorstore_data` persists the shared index across restarts/redeploys
 #      of any replica — do not delete it unless you intend to lose the index.
-#   5. `BACKEND_PORT` is now a host port *range* (default 8000-8009), because
-#      a fixed single port can't be published by more than one replica —
-#      `--scale backend=2` fails outright otherwise ("port is already
-#      allocated"). Each replica binds the next free port in the range, so
-#      with 2 replicas up you'll see them on 8000 and 8001, including their
+#   5. Set BACKEND_PORT_MAX to turn `BACKEND_PORT` into a host port *range*
+#      (e.g. 8000-8009), because a fixed single port can't be published by
+#      more than one replica — `--scale backend=2` fails outright otherwise
+#      ("port is already allocated"). Each replica binds a free port in the
+#      range, so with 2 replicas up you'll see them on 8000 and 8001, including their
 #      MCP endpoints (`:8000/mcp`, `:8001/mcp`, ...) — the MCP address is NOT
 #      the same across replicas when accessed directly.
 #   6. Put a load balancer in front with least-connections (or similar
@@ -80,7 +80,9 @@ services:
     ports:
       # The API has no auth and can read files under $HOME, so it is only
       # reachable from this machine unless BIND_ADDRESS is widened in .env.
-      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
+      # A range only when BACKEND_PORT_MAX is set: Docker hands out range ports
+      # round-robin, so a range would move the MCP URL on every recreate.
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-${BACKEND_PORT:-8000}}:8000"
     environment:
       # The container can't introspect its own docker-published host port
       # (that's decided by the compose/host layer, not visible from inside),
