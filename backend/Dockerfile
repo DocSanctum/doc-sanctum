@@ -42,4 +42,5 @@ RUN python -c "from app.vectorstore.embedding import MultilingualEmbeddingFuncti
 
 COPY . .
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Serves the API on 8000 and the token-protected remote MCP listener on 8100.
+CMD ["python", "-m", "app.serve"]

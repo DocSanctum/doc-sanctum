@@ -208,6 +208,37 @@
           </div>
         </div>
 
+        <!-- Remote access -->
+        <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 space-y-2">
+          <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.mcp.remote.label') }}</div>
+          <p class="text-xs" :class="mcpStatus.remote_reachable ? 'text-gray-500 dark:text-gray-400' : 'text-amber-600 dark:text-amber-400'">
+            {{ mcpStatus.remote_reachable ? t('settings.mcp.remote.hint') : t('settings.mcp.remote.notReachable') }}
+          </p>
+          <div class="flex items-center gap-2">
+            <code class="flex-1 text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 truncate font-mono">{{ remoteUrl }}</code>
+            <button
+              class="text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              @click="copyUrl(remoteUrl, 'remote-url')"
+            >{{ copiedLabel === 'remote-url' ? `✓ ${t('common.copied')}` : t('common.copy') }}</button>
+          </div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">{{ t('settings.mcp.remote.header') }}</div>
+          <div class="flex items-center gap-2">
+            <code class="flex-1 text-xs bg-gray-100 dark:bg-gray-800 rounded px-2 py-1.5 text-gray-700 dark:text-gray-300 truncate font-mono">{{ remoteHeaderDisplay }}</code>
+            <button
+              class="text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              @click="tokenVisible = !tokenVisible"
+            >{{ tokenVisible ? t('settings.mcp.remote.hide') : t('settings.mcp.remote.show') }}</button>
+            <button
+              class="text-xs px-2 py-1.5 rounded border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors shrink-0"
+              @click="copyUrl(remoteHeader, 'remote-token')"
+            >{{ copiedLabel === 'remote-token' ? `✓ ${t('common.copied')}` : t('common.copy') }}</button>
+            <button
+              class="text-xs px-2 py-1.5 rounded border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors shrink-0"
+              @click="rotateRemoteToken"
+            >{{ t('settings.mcp.remote.regenerate') }}</button>
+          </div>
+        </div>
+
         <!-- Tools -->
         <div class="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
           <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">{{ t('settings.mcp.tools', { count: mcpStatus.tools.length }) }}</div>
@@ -400,6 +431,19 @@ const endpoints = computed(() => {
     { label: 'SSE', url: `${o}${mcpStatus.value?.sse_url ?? '/mcp-sse/sse'}`, badge: 'legacy' },
   ]
 })
+
+const tokenVisible = ref(false)
+
+const remoteUrl = computed(() => `http://<this-pc-ip>:${mcpStatus.value?.remote_port ?? 8020}/mcp`)
+const remoteHeader = computed(() => `Authorization: Bearer ${mcpStatus.value?.remote_token ?? ''}`)
+const remoteHeaderDisplay = computed(() =>
+  tokenVisible.value ? remoteHeader.value : 'Authorization: Bearer ••••••••••••',
+)
+
+async function rotateRemoteToken() {
+  if (!window.confirm(t('settings.mcp.remote.regenerateConfirm'))) return
+  mcpStatus.value = await api.rotateRemoteMcpToken()
+}
 
 async function loadMcpStatus() {
   mcpLoading.value = true

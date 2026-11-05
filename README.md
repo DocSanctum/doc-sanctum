@@ -167,13 +167,26 @@ url = "http://localhost:8000/mcp"
 }
 ```
 
-Replace `localhost` with your server's actual host/IP if DocSanctum isn't running on the same machine as the MCP client.
+### From another machine
+
+The ports above only listen on the machine running DocSanctum, and they need no token. For MCP clients on other machines (your LAN, or a VPN such as Tailscale), DocSanctum has a separate remote MCP port. It serves only the MCP endpoints and requires a bearer token, so other machines can query your documents but can never reach the web UI or REST API.
+
+1. Set `REMOTE_MCP_BIND_ADDRESS=0.0.0.0` in `.env` (the port defaults to `REMOTE_MCP_PORT=8020`) and run `./start.sh` again.
+2. Copy the token from Settings → MCP Server → Remote access. You can regenerate it there too, which immediately locks out every client still using the old one.
+3. Point the remote client at `http://<this machine's IP>:8020/mcp` with the header `Authorization: Bearer <token>`, e.g. for Claude Code:
+
+   ```bash
+   claude mcp add --transport http docsanctum http://192.168.1.20:8020/mcp \
+     --header "Authorization: Bearer <token>"
+   ```
+
+Traffic on this port is plain HTTP, so keep it on a network you trust rather than exposing it to the internet.
 
 ## Contributing
 
 Contributions are welcome — bug reports, fixes, and features alike. A few things that make this easier:
 
-1. Run the dev stack instead of the production one — it runs the Vite dev server and `uvicorn --reload` against your working tree (bind-mounted into the containers), so edits show up immediately without a rebuild:
+1. Run the dev stack instead of the production one — it runs the Vite dev server and an auto-reloading backend against your working tree (bind-mounted into the containers), so edits show up immediately without a rebuild:
 
    ```bash
    ./start.sh --dev

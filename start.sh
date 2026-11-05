@@ -73,6 +73,7 @@ set +a
 # Exported rather than unset, because compose would re-read it from .env.
 if [ "${DEPLOYMENT_MODE:-standalone}" != "scaleout" ]; then
   export BACKEND_PORT_MAX="${BACKEND_PORT:-8000}"
+  export REMOTE_MCP_PORT_MAX="${REMOTE_MCP_PORT:-8020}"
 fi
 
 if $WINDOWS && [ -z "${WINDOWS_VAULT_MOUNT:-}" ]; then
@@ -121,6 +122,7 @@ echo ""
 echo "doc-sanctum is up ($CURRENT_MODE mode)."
 echo "  Frontend: http://localhost:${FRONTEND_PORT:-3000}"
 echo "  Backend API: http://localhost:${BACKEND_PORT:-8000}"
+echo "  Remote MCP:  port ${REMOTE_MCP_PORT:-8020} on ${REMOTE_MCP_BIND_ADDRESS:-127.0.0.1} (token in Settings)"
 echo ""
 echo "View logs: docker compose logs -f"
 echo "Stop: ./stop.sh"

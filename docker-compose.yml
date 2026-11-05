@@ -83,12 +83,17 @@ services:
       # A range only when BACKEND_PORT_MAX is set: Docker hands out range ports
       # round-robin, so a range would move the MCP URL on every recreate.
       - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-${BACKEND_PORT:-8000}}:8000"
+      # Remote MCP listener: only the MCP mounts, behind a bearer token. This
+      # is the port to open to other machines, via REMOTE_MCP_BIND_ADDRESS.
+      - "${REMOTE_MCP_BIND_ADDRESS:-127.0.0.1}:${REMOTE_MCP_PORT:-8020}-${REMOTE_MCP_PORT_MAX:-${REMOTE_MCP_PORT:-8020}}:8100"
     environment:
       # The container can't introspect its own docker-published host port
       # (that's decided by the compose/host layer, not visible from inside),
       # so this just passes through the operator's configured starting
       # port for the frontend to display as the MCP connection address.
       - BACKEND_PORT=${BACKEND_PORT:-8000}
+      - REMOTE_MCP_PORT=${REMOTE_MCP_PORT:-8020}
+      - REMOTE_MCP_BIND_ADDRESS=${REMOTE_MCP_BIND_ADDRESS:-127.0.0.1}
       - DATABASE_URL=sqlite+aiosqlite:////data/db.sqlite3
       - DEFAULT_POLL_INTERVAL=${DEFAULT_POLL_INTERVAL:-300}
       - HOME=${HOME}

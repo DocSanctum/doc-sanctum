@@ -61,6 +61,9 @@ export interface McpStatus {
   http_url: string
   host_port: number
   tools: McpTool[]
+  remote_port: number
+  remote_reachable: boolean
+  remote_token: string
 }
 
 export interface RegisterSourcePayload {
