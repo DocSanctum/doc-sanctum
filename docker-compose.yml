@@ -47,7 +47,9 @@ services:
       vectorstore-vacuum:
         condition: service_completed_successfully
     ports:
-      - "${VECTOR_STORE_HOST_PORT:-8001}:8000"  # host-facing port, for local inspection only
+      # Host-facing port for local inspection only. Chroma has no auth and the
+      # backend reaches it over the compose network, so it stays on loopback.
+      - "127.0.0.1:${VECTOR_STORE_HOST_PORT:-8001}:8000"
     volumes:
       # chromadb/chroma persists to /data by default (see its startup log:
       # "Saving data to: /data") — the container's own /chroma/chroma path is
@@ -76,7 +78,9 @@ services:
         NO_PROXY: ${NO_PROXY:-}
         HOME: ${HOME}
     ports:
-      - "${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
+      # The API has no auth and can read files under $HOME, so it is only
+      # reachable from this machine unless BIND_ADDRESS is widened in .env.
+      - "${BIND_ADDRESS:-127.0.0.1}:${BACKEND_PORT:-8000}-${BACKEND_PORT_MAX:-8009}:8000"
     environment:
       # The container can't introspect its own docker-published host port
       # (that's decided by the compose/host layer, not visible from inside),
@@ -89,6 +93,7 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
       - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY:-}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-localhost,127.0.0.1}
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-standalone}  # standalone | scaleout
       - VECTOR_STORE_HOST=${VECTOR_STORE_HOST:-vectorstore}  # both modes now use the persistent vectorstore service
       - VECTOR_STORE_PORT=8000                                # vectorstore's in-network port

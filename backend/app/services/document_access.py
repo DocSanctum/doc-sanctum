@@ -15,7 +15,7 @@ from .document_cache import (
     set_cached,
     set_cached_content,
 )
-from .document_formats import ExtractedDocument, extract_text
+from .document_formats import ExtractedDocument, extract_text, is_supported
 from .github import _content_api_url, _github_headers, _parse_github_url
 from .gitlab import _content_raw_url, _gitlab_headers, _parse_gitlab_url
 from .token_resolver import resolve_access_token
@@ -180,6 +180,10 @@ async def _read_raw(source: Source, path: str) -> tuple[bytes, dict[str, Any] | 
     Shared by read_with_cache() (which extracts text on top) and
     read_raw_with_cache() (which returns the bytes as-is, e.g. for a PDF
     download response) so both go through exactly one fetch+cache path."""
+    # Only indexable document types are served, so a caller cannot read
+    # arbitrary files such as .env or SSH keys that sit under a source root.
+    if not is_supported(path):
+        raise ValueError(f"Unsupported document type: {path}")
     if source.type == "local":
         return await _read_local(source, path), None
 

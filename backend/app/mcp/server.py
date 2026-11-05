@@ -17,8 +17,8 @@ mcp = FastMCP(
     # allowed_origins list) rejects every request that carries an Origin
     # header at all, independently of main.py's CORS config — it's a
     # separate check inside the MCP SDK's transport layer, not something
-    # CORSMiddleware can reach. This mount has no cookies/credentials, so
-    # it's gated the same way CORS is: open to any client origin.
+    # CORSMiddleware can reach. Origins stay open for external MCP clients;
+    # DNS rebinding is instead blocked app-wide by TrustedHostMiddleware.
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
 )
 
