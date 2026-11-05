@@ -29,7 +29,7 @@ services:
     build:
       target: prod
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${FRONTEND_PORT:-3000}:80"
     logging: *default-logging
     healthcheck:
       # 127.0.0.1, not localhost: musl (alpine) resolves localhost to ::1

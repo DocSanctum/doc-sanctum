@@ -14,6 +14,7 @@ from ..services.document_access import (
     read_with_cache,
 )
 from ..services.document_cache import get_cached
+from ..services.document_formats import is_supported
 
 router = APIRouter(tags=["files"])
 
@@ -60,6 +61,10 @@ async def get_file(
     session: AsyncSession = Depends(get_session),
 ) -> Response:
     source = await _get_source_or_404(session, source_id)
+    # Only indexable document types are served, so a caller cannot read
+    # arbitrary files such as .env or SSH keys that sit under a source root.
+    if not is_supported(path):
+        raise HTTPException(status_code=404, detail="File not found")
     is_pdf = path.lower().endswith(".pdf")
 
     if source.type != "local":

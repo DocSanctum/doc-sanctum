@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     vector_store_host: str = "vectorstore"
     vector_store_port: int = 8000
 
+    # Comma-separated Host header names the backend answers to, so a DNS
+    # rebinding page cannot reach it under its own domain. "*" disables it.
+    allowed_hosts: str = "localhost,127.0.0.1"
+
+    @property
+    def allowed_host_list(self) -> list[str]:
+        return [h.strip() for h in self.allowed_hosts.split(",") if h.strip()]
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
 
