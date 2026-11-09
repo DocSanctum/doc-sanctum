@@ -16,16 +16,30 @@ logger = logging.getLogger(__name__)
 # Multilingual replacement for chromadb's DefaultEmbeddingFunction
 # (English-only all-MiniLM-L6-v2). Built on onnxruntime + tokenizers
 # directly, not sentence-transformers/torch, to avoid a heavy new dependency.
-MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
+MODEL_NAME = "multilingual-e5-small"
 
 # Pinned to a specific commit so the served model can't silently drift.
-_MODEL_REPO = "Xenova/paraphrase-multilingual-MiniLM-L12-v2"
-_MODEL_REVISION = "2c4055b12046f11709e9df2c122e59ffbdc2f900"
+_MODEL_REPO = "Xenova/multilingual-e5-small"
+_MODEL_REVISION = "761b726dd34fb83930e26aab4e9ac3899aa1fa78"
 _MODEL_BASE_URL = f"https://huggingface.co/{_MODEL_REPO}/resolve/{_MODEL_REVISION}"
 
-# Per this model's sentence_bert_config.json; not the same as
-# all-MiniLM-L6-v2's 256.
-MAX_SEQ_LENGTH = 128
+# The model's own input limit. Chunks stay well below it, so the task prefixes
+# below can never push a chunk's tail past the truncation point.
+MAX_SEQ_LENGTH = 512
+
+# Chunk size the indexer targets. Measured on real notes, 256 tokens ranked as
+# well as 512 at about 1.5x the embedding throughput and far less peak memory.
+TARGET_CHUNK_TOKENS = 256
+
+# E5 models are trained with these task prefixes and rank worse without them.
+QUERY_PREFIX = "query: "
+PASSAGE_PREFIX = "passage: "
+
+_PAD_TOKEN = "<pad>"
+
+# Larger batches run no faster on CPU, and at 32 a reindex of 256-token chunks
+# pushed the backend against its default 2 GB memory limit.
+_BATCH_SIZE = 8
 
 DOWNLOAD_PATH = Path.home() / ".cache" / "chroma" / "onnx_models" / MODEL_NAME
 _MODEL_FILES = {
@@ -74,7 +88,9 @@ class MultilingualEmbeddingFunction(EmbeddingFunction[Documents]):
         self._download_model_if_not_exists()
         tok = self.Tokenizer.from_file(str(DOWNLOAD_PATH / "tokenizer.json"))
         tok.enable_truncation(max_length=MAX_SEQ_LENGTH)
-        tok.enable_padding(pad_id=0, pad_token="[PAD]", length=MAX_SEQ_LENGTH)
+        # No fixed length: encode_batch pads to each batch's longest input, so
+        # short chunks don't pay the memory and CPU cost of full-length padding.
+        tok.enable_padding(pad_id=tok.token_to_id(_PAD_TOKEN), pad_token=_PAD_TOKEN)
         return tok
 
     @cached_property
@@ -95,12 +111,12 @@ class MultilingualEmbeddingFunction(EmbeddingFunction[Documents]):
         )
 
     def _forward(
-        self, documents: list[str], batch_size: int = 32
+        self, documents: list[str], batch_size: int = _BATCH_SIZE
     ) -> npt.NDArray[np.float32]:
         all_embeddings = []
         for i in range(0, len(documents), batch_size):
             batch = documents[i : i + batch_size]
-            encoded = [self.tokenizer.encode(d) for d in batch]
+            encoded = self.tokenizer.encode_batch(batch)
             input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
             attention_mask = np.array(
                 [e.attention_mask for e in encoded], dtype=np.int64
@@ -130,12 +146,18 @@ class MultilingualEmbeddingFunction(EmbeddingFunction[Documents]):
 
         return np.concatenate(all_embeddings)
 
-    def __call__(self, input: Documents) -> Embeddings:
-        embeddings = self._forward(list(input))
+    def _embed(self, texts: list[str]) -> Embeddings:
+        embeddings = self._forward(texts)
         return cast(
             Embeddings,
             [np.array(embedding, dtype=np.float32) for embedding in embeddings],
         )
+
+    def __call__(self, input: Documents) -> Embeddings:
+        return self._embed([PASSAGE_PREFIX + text for text in input])
+
+    def embed_query(self, input: Documents) -> Embeddings:
+        return self._embed([QUERY_PREFIX + text for text in input])
 
     @staticmethod
     def name() -> str:
