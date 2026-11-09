@@ -5,13 +5,13 @@ from dataclasses import dataclass
 
 from . import embedding, tokenizer
 
-# Sourced from the embedding model's own max sequence length so it can't
-# drift out of sync. 12.5% overlap, same ratio as before.
-MAX_CHUNK_TOKENS = embedding.MAX_SEQ_LENGTH
+# Sourced from the embedding module so it can't drift out of sync. 12.5%
+# overlap, same ratio as before.
+MAX_CHUNK_TOKENS = embedding.TARGET_CHUNK_TOKENS
 CHUNK_OVERLAP_TOKENS = MAX_CHUNK_TOKENS // 8
 
 # Bump on any material change so rebuild_check triggers a full reindex.
-CHUNKING_VERSION = 3
+CHUNKING_VERSION = 4
 
 _HEADING_RE = re.compile(r"^#{1,4}\s+.*$", re.MULTILINE)
 

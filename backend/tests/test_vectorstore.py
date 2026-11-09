@@ -130,9 +130,7 @@ def test_chunk_markdown_no_more_chunks_than_old_char_based_baseline():
         # Re-measured after 01.Welcome.md grew a Diagrams section: the old
         # char-based chunker produces 9 chunks for the current file content.
         "sample_doc (01.Welcome.md)": (sample_doc, 9),
-        # 12, not 9: the new model's smaller token budget (128 vs 256)
-        # splits this long unbroken paragraph into more windows.
-        "long_paragraph_doc": (long_paragraph_doc, 12),
+        "long_paragraph_doc": (long_paragraph_doc, 9),
         "multi_section_doc": (multi_section_doc, 10),
     }
     for name, (doc, old_count) in baselines.items():
