@@ -119,15 +119,17 @@ class _McpAwareCors:
 
 app = FastAPI(title="DocSanctum", lifespan=lifespan)
 
-app.add_middleware(_McpAwareCors)
-app.add_middleware(_NormalizeMcpMountPath)
-# Added last so it runs first and rejects a foreign Host before any route,
-# including the origin-permissive /mcp mount, sees the request.
+# Starlette runs the last-added middleware first. The guard rejects a foreign
+# Host or a bad token before any route sees the request.
 app.add_middleware(
     ListenerGuard,
     allowed_hosts=settings.allowed_host_list,
     remote_port=settings.remote_mcp_listen_port,
 )
+# CORS wraps the guard so its 401 responses carry CORS headers. Otherwise a
+# browser-based client sees an opaque network error instead of the status.
+app.add_middleware(_McpAwareCors)
+app.add_middleware(_NormalizeMcpMountPath)
 
 app.include_router(sources.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
