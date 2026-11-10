@@ -54,12 +54,6 @@ def _is_mcp_path(path: str) -> bool:
     return any(path == p or path.startswith(p + "/") for p in _MCP_PREFIXES)
 
 
-def _is_cors_preflight(scope: Scope) -> bool:
-    if scope.get("method") != "OPTIONS":
-        return False
-    return any(k == b"access-control-request-method" for k, _ in scope["headers"])
-
-
 def _bearer_token(scope: Scope) -> str | None:
     for key, value in scope["headers"]:
         if key == b"authorization":
@@ -96,11 +90,6 @@ class ListenerGuard:
             await JSONResponse({"detail": "Not Found"}, status_code=404)(
                 scope, receive, send
             )
-            return
-        # Browsers send CORS preflights without credentials, and CORSMiddleware
-        # answers them itself without reaching any MCP handler.
-        if _is_cors_preflight(scope):
-            await self._app(scope, receive, send)
             return
         presented = _bearer_token(scope)
         expected = await get_or_create_token()

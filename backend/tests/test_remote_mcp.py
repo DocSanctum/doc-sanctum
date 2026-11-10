@@ -52,12 +52,34 @@ async def test_remote_port_never_serves_the_rest_api(client):
 
 
 @pytest.mark.asyncio
-async def test_remote_port_lets_cors_preflight_through(client):
-    async with client("http://192.168.1.10:8100") as c:
-        resp = await c.options(
-            "/mcp", headers={"Access-Control-Request-Method": "POST"}
+async def test_remote_port_errors_are_readable_by_browser_clients(monkeypatch):
+    """A 401 without CORS headers reaches a browser client (e.g. the Obsidian
+    plugin) as an opaque network error, so it could never tell a bad token
+    apart from an unreachable server. Preflights must also pass untouched."""
+    from backend.app.main import app
+
+    async def fake_token() -> str:
+        return TOKEN
+
+    monkeypatch.setattr(remote_mcp_module, "get_or_create_token", fake_token)
+    origin = {"Origin": "app://obsidian.md"}
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport, base_url="http://192.168.1.10:8100"
+    ) as c:
+        rejected = await c.post("/mcp", headers=origin)
+        preflight = await c.options(
+            "/mcp",
+            headers={
+                **origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization",
+            },
         )
-    assert resp.status_code == 200
+    assert rejected.status_code == 401
+    assert rejected.headers["access-control-allow-origin"] == "app://obsidian.md"
+    assert preflight.status_code == 200
+    assert "authorization" in preflight.headers["access-control-allow-headers"]
 
 
 @pytest.mark.asyncio
