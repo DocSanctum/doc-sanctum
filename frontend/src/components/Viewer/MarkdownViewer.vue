@@ -4,7 +4,7 @@
       <div v-if="loading" class="text-gray-400 text-sm">{{ t('viewer.markdownViewer.loading') }}</div>
       <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
       <template v-else>
-        <Breadcrumb :path="filePath" :source-root="sourceRoot" />
+        <Breadcrumb :path="filePath" :source-root="sourceRoot" :source-id="sourceId" />
         <div
           ref="contentRef"
           class="prose dark:prose-invert max-w-none"

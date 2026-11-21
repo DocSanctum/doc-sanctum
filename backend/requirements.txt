@@ -11,3 +11,4 @@ chromadb==1.5.9
 geoip2fast==1.2.2
 cryptography==50.0.0
 pypdf==6.21.2
+markdown-it-py==4.0.0

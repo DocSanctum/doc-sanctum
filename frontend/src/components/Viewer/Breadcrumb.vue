@@ -25,6 +25,22 @@
         <path d="M13 4.5H5.5A1.5 1.5 0 0 0 4 6v7.5" />
       </svg>
     </button>
+    <button
+      v-if="sourceId"
+      type="button"
+      class="crumb-copy-btn"
+      :title="t('share.button')"
+      :aria-label="t('share.button')"
+      @click="shareOpen = true"
+    >
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1" />
+        <path d="M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1" />
+      </svg>
+    </button>
+    <Teleport to="body">
+      <ShareDialog v-if="shareOpen && sourceId" :source-id="sourceId" :path="path" @close="shareOpen = false" />
+    </Teleport>
   </nav>
 </template>
 
@@ -33,13 +49,15 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useClipboard } from '@vueuse/core'
 import { useTreeReveal } from '../../composables/useTreeReveal'
+import ShareDialog from './ShareDialog.vue'
 
-const props = defineProps<{ path: string; sourceRoot?: string }>()
+const props = defineProps<{ path: string; sourceRoot?: string; sourceId?: string }>()
 const emit = defineEmits<{ 'select-segment': [path: string] }>()
 const { t } = useI18n()
 const { reveal } = useTreeReveal()
 const { copy, copied, isSupported: clipboardSupported } = useClipboard({ legacy: true, copiedDuring: 1500 })
 const copyFailed = ref(false)
+const shareOpen = ref(false)
 
 // The source root is the registered source's own location: an absolute
 // filesystem path for local sources, a repository/base URL for remote ones.

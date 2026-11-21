@@ -101,6 +101,20 @@ CREATE TABLE IF NOT EXISTS source (
 )
 """
 
+_CREATE_SHARE_LINK_TABLE = """
+CREATE TABLE IF NOT EXISTS share_link (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL UNIQUE,
+    source_id TEXT NOT NULL,
+    path TEXT NOT NULL,
+    label TEXT,
+    created_at TEXT NOT NULL,
+    last_accessed_at TEXT,
+    access_count INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT
+)
+"""
+
 
 @pytest_asyncio.fixture
 async def session_factory(monkeypatch, tmp_path):
@@ -109,6 +123,7 @@ async def session_factory(monkeypatch, tmp_path):
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as conn:
         await conn.execute(text(_CREATE_SOURCE_TABLE))
+        await conn.execute(text(_CREATE_SHARE_LINK_TABLE))
     monkeypatch.setattr(sources_module, "async_session_factory", factory)
     yield factory
     await engine.dispose()
@@ -729,3 +744,31 @@ async def test_delete_source_stops_the_recurring_poller(monkeypatch, session_fac
         )
 
     assert "s-remote-del" not in poller_module._tasks
+
+
+@pytest.mark.asyncio
+async def test_delete_source_removes_its_share_links(monkeypatch, session_factory):
+    source = Source(id="s-shared", name="repo", type="github", path="owner/shared")
+    await _insert_source(session_factory, source)
+    async with session_factory() as session:
+        await session.execute(
+            text(
+                "INSERT INTO share_link (id, token, source_id, path, created_at) "
+                "VALUES ('l1', 't1', 's-shared', 'a.md', '2026-01-01'), "
+                "('l2', 't2', 'other', 'b.md', '2026-01-01')"
+            )
+        )
+        await session.commit()
+
+    async def fake_delete_source_index(source_id):
+        return None
+
+    monkeypatch.setattr(sources_module, "delete_source_index", fake_delete_source_index)
+    monkeypatch.setattr(sources_module, "stop_watching", lambda sid: None)
+
+    async with session_factory() as session:
+        await sources_module.delete_source("s-shared", session)
+        remaining = (
+            (await session.execute(text("SELECT id FROM share_link"))).scalars().all()
+        )
+    assert remaining == ["l2"]

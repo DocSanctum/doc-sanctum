@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, PatchSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, PatchSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse, ShareLink, ShareSettings } from '../types'
 
 const BASE = '/api/v1'
 
@@ -49,6 +49,22 @@ export const api = {
 
   rotateRemoteMcpToken: () =>
     request<McpStatus>('/mcp/remote-token', { method: 'POST' }),
+
+  listShares: () => request<ShareLink[]>('/shares'),
+
+  createShare: (sourceId: string, path: string, label?: string) =>
+    request<ShareLink>('/shares', {
+      method: 'POST',
+      body: JSON.stringify({ source_id: sourceId, path, label: label || null }),
+    }),
+
+  deleteShare: (id: string) =>
+    request<void>(`/shares/${id}`, { method: 'DELETE' }),
+
+  getShareSettings: () => request<ShareSettings>('/shares/settings'),
+
+  setShareBaseUrl: (baseUrl: string) =>
+    request<ShareSettings>('/shares/settings', { method: 'PUT', body: JSON.stringify({ base_url: baseUrl }) }),
 
   getDeploymentMode: () => request<DeploymentStatus>('/deployment'),
 

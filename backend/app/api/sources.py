@@ -370,6 +370,10 @@ async def delete_source(
 ) -> None:
     await _get_or_404(session, source_id)
     await session.execute(text("DELETE FROM source WHERE id = :id"), {"id": source_id})
+    # Share links into a removed source would only ever 404, so they go too.
+    await session.execute(
+        text("DELETE FROM share_link WHERE source_id = :id"), {"id": source_id}
+    )
     await session.commit()
     # Stop anything that could still write to this source's vector collection
     # before deleting it, so a task that's already past this point can't

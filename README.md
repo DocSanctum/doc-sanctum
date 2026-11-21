@@ -182,6 +182,16 @@ The ports above only listen on the machine running DocSanctum, and they need no 
 
 Traffic on this port is plain HTTP, so keep it on a network you trust rather than exposing it to the internet.
 
+### Sharing a document with teammates
+
+The remote port also serves view-only share links, so a teammate on the same network can read one document in their browser without installing anything.
+
+1. Open the remote port as described above (`REMOTE_MCP_BIND_ADDRESS=0.0.0.0`).
+2. Open a document and click the share icon next to its path. Give the link a label, such as who it is for, and copy it.
+3. Manage every link in Settings → Shared links. There you can see when each link was last opened and revoke it. Links never expire on their own.
+
+Each link opens only its own document, with no tree, search, or access to anything else. The link address defaults to this Mac's Bonjour name (`http://<name>.local:8020`), which survives IP changes. You can override it with the base URL field in Settings. Links stop working while this machine is off, and a link to a document that was removed shows a "no longer available" page.
+
 ## Contributing
 
 Contributions are welcome — bug reports, fixes, and features alike. A few things that make this easier:
