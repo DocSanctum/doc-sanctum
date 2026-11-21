@@ -117,6 +117,24 @@ async def create_tables() -> None:
         """)
         )
 
+        # View-only links that let anyone holding the token read one document
+        # through the LAN listener. expires_at stays NULL until the UI offers it.
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS share_link (
+                id TEXT PRIMARY KEY,
+                token TEXT NOT NULL UNIQUE,
+                source_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                label TEXT,
+                created_at TEXT NOT NULL,
+                last_accessed_at TEXT,
+                access_count INTEGER NOT NULL DEFAULT 0,
+                expires_at TEXT
+            )
+        """)
+        )
+
         result = await conn.execute(text("PRAGMA table_info(source)"))
         existing_columns = {row[1] for row in result.fetchall()}
         if "icon" not in existing_columns:

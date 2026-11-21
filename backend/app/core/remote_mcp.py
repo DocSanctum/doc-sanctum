@@ -5,7 +5,7 @@ The main listener stays loopback-only and unauthenticated, so the web UI and
 local MCP clients keep working as before. The remote listener is what gets
 published to the LAN, and because it rejects every non-MCP path, other
 machines can query documents but can never reach the REST API (source
-registration, file reads, settings).
+registration, file reads, settings). It also serves view-only share links.
 """
 
 from __future__ import annotations
@@ -54,6 +54,12 @@ def _is_mcp_path(path: str) -> bool:
     return any(path == p or path.startswith(p + "/") for p in _MCP_PREFIXES)
 
 
+def _is_share_path(path: str) -> bool:
+    # Exactly "/share/<token>": nothing nested, so no other route can hide here.
+    rest = path.removeprefix("/share/")
+    return rest != path and bool(rest) and "/" not in rest
+
+
 def _bearer_token(scope: Scope) -> str | None:
     for key, value in scope["headers"]:
         if key == b"authorization":
@@ -84,6 +90,11 @@ class ListenerGuard:
             await self._trusted(scope, receive, send)
             return
 
+        # A share link carries its own token in the path and is checked by
+        # the viewer route, so it skips the MCP bearer token.
+        if _is_share_path(scope["path"]):
+            await self._app(scope, receive, send)
+            return
         # The token stands in for the Host check here, since a DNS rebinding
         # page cannot know it, so LAN clients may use any hostname or IP.
         if not _is_mcp_path(scope["path"]):

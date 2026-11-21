@@ -256,6 +256,8 @@
       </div>
     </section>
 
+    <SharedLinksSection />
+
     <!-- Version & Changelog -->
     <section class="pt-6 border-t border-gray-200 dark:border-gray-700">
       <div class="flex items-baseline justify-between mb-4">
@@ -320,6 +322,7 @@ import { useSources } from '../../composables/useSources'
 import { useLocale } from '../../composables/useLocale'
 import { changelog } from '../../data/changelog'
 import { api } from '../../services/api'
+import SharedLinksSection from './SharedLinksSection.vue'
 import type { McpStatus, SourceStatus } from '../../types'
 import pkg from '../../../package.json'
 

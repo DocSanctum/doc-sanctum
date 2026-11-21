@@ -66,6 +66,27 @@ export interface McpStatus {
   remote_token: string
 }
 
+export interface ShareLink {
+  id: string
+  token: string
+  source_id: string
+  source_name: string | null
+  path: string
+  label: string | null
+  created_at: string
+  last_accessed_at: string | null
+  access_count: number
+  // null when a remote source's tree is not cached yet.
+  available: boolean | null
+}
+
+export interface ShareSettings {
+  base_url: string
+  suggested_base_url: string
+  remote_port: number
+  remote_reachable: boolean
+}
+
 export interface RegisterSourcePayload {
   name?: string
   type: SourceType

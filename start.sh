@@ -76,6 +76,15 @@ if [ "${DEPLOYMENT_MODE:-standalone}" != "scaleout" ]; then
   export REMOTE_MCP_PORT_MAX="${REMOTE_MCP_PORT:-8020}"
 fi
 
+# The container cannot see the host's name, so pass the macOS Bonjour name
+# in as the default address for share links unless .env already sets one.
+if [ -z "${SHARE_HOST_HINT:-}" ] && command -v scutil >/dev/null 2>&1; then
+  LOCAL_HOST_NAME=$(scutil --get LocalHostName 2>/dev/null || true)
+  if [ -n "$LOCAL_HOST_NAME" ]; then
+    export SHARE_HOST_HINT="${LOCAL_HOST_NAME}.local"
+  fi
+fi
+
 if $WINDOWS && [ -z "${WINDOWS_VAULT_MOUNT:-}" ]; then
   echo "--windows requires WINDOWS_VAULT_MOUNT to be set in .env — see .env.example." >&2
   exit 1

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .api import deployment, files, locale, search, sources, sse
+from .api import deployment, files, locale, search, shares, sources, sse
 from .api import mcp as mcp_api
 from .api.sources import resume_local_sources, seed_sample_source
 from .core.config import settings
@@ -138,6 +138,8 @@ app.include_router(mcp_api.router, prefix="/api/v1")
 app.include_router(deployment.router, prefix="/api/v1")
 app.include_router(locale.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
+app.include_router(shares.router, prefix="/api/v1")
+app.include_router(shares.viewer_router)
 
 app.mount("/mcp-sse", _make_guard(_mcp_sse_app))  # SSE transport (legacy)
 app.mount(
