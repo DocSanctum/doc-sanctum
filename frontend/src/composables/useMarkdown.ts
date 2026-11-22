@@ -5,9 +5,12 @@ import footnote from 'markdown-it-footnote'
 import abbr from 'markdown-it-abbr'
 import hljs from 'highlight.js'
 import { i18n } from '../i18n'
+import { alertsPlugin } from './markdownAlerts'
 
+// Raw HTML is allowed because READMEs rely on <details>, <br>, <kbd> and sized
+// <img> tags; sanitizeMarkdownHtml() strips anything unsafe afterwards.
 const md = new MarkdownIt({
-  html: false,
+  html: true,
   linkify: true,
   typographer: true,
 })
@@ -22,6 +25,7 @@ const md = new MarkdownIt({
   })
   .use(footnote)
   .use(abbr)
+  .use(alertsPlugin)
 
 // markdown-it's default fence renderer wraps whatever `options.highlight`
 // returns in its own `<pre><code>` unless that string starts with literal
@@ -136,27 +140,8 @@ md.renderer.rules.fence = (tokens, idx) => {
   )
 }
 
-export interface RenderOptions {
-  // Maps an image's written src to the URL the browser should load; null keeps it.
-  resolveImageSrc?: (src: string) => string | null
-}
-
-interface RenderEnv {
-  resolveImageSrc?: RenderOptions['resolveImageSrc']
-}
-
-const defaultImageRule = md.renderer.rules.image!
-md.renderer.rules.image = (tokens, idx, options, env: RenderEnv, self) => {
-  const token = tokens[idx]
-  const src = token.attrGet('src')
-  const resolved = src && env.resolveImageSrc ? env.resolveImageSrc(src) : null
-  if (resolved) token.attrSet('src', resolved)
-  token.attrSet('loading', 'lazy')
-  return defaultImageRule(tokens, idx, options, env, self)
-}
-
 export function useMarkdown() {
-  function render(src: string, renderOptions: RenderOptions = {}): string {
+  function render(src: string): string {
     // Scrolling to a specific source line from a search result (008-search)
     // requires knowing which source line a rendered block element starts at.
     // markdown-it already tracks each block token's source line range
@@ -164,7 +149,7 @@ export function useMarkdown() {
     // parse → attach data-line attributes → renderer.render so that
     // information rides along into the DOM. Inline tokens are excluded since
     // they render inside their parent block's tag and have no tag of their own.
-    const env: RenderEnv = { resolveImageSrc: renderOptions.resolveImageSrc }
+    const env = {}
     const tokens = md.parse(src, env)
     for (const token of tokens) {
       if (token.map && token.nesting >= 0 && token.type !== 'inline') {
