@@ -15,11 +15,20 @@ from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
+from mdit_py_plugins.footnote import footnote_plugin
+from mdit_py_plugins.front_matter import front_matter_plugin
+from mdit_py_plugins.tasklists import tasklists_plugin
 
 from .document_formats import image_media_type
+from .markdown_alerts import alerts_plugin
 
-_md = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable(
-    ["table", "strikethrough"]
+_md = (
+    MarkdownIt("commonmark", {"html": False, "linkify": False})
+    .enable(["table", "strikethrough"])
+    .use(front_matter_plugin)
+    .use(footnote_plugin)
+    .use(tasklists_plugin)
+    .use(alerts_plugin)
 )
 
 # The token sits in the URL path, so a Referer header would leak it to any
@@ -65,6 +74,18 @@ table { border-collapse:collapse; display:block; overflow-x:auto; }
 th,td { border:1px solid var(--border); padding:6px 12px; }
 hr { border:0; border-top:1px solid var(--border); margin:2em 0; }
 .notice { text-align:center; color:var(--muted); padding-top:20vh; }
+.footnotes-sep { margin-top:2.5em; }
+.footnotes { color:var(--muted); font-size:.9em; }
+.contains-task-list { list-style:none; padding-left:1.2em; }
+.task-list-item-checkbox { margin-right:.5em; }
+.markdown-alert { --alert:#2563eb; margin:1.2em 0; padding:.5em 1em; color:var(--fg);
+  border-left:4px solid var(--alert); border-radius:0 6px 6px 0;
+  background:color-mix(in srgb, var(--alert) 8%, transparent); }
+.markdown-alert p { margin:.4em 0; }
+.markdown-alert-title { font-weight:600; color:var(--alert); }
+summary.markdown-alert-title { cursor:pointer; }
+.markdown-alert-tip { --alert:#16a34a; } .markdown-alert-important { --alert:#9333ea; }
+.markdown-alert-warning { --alert:#ca8a04; } .markdown-alert-caution { --alert:#dc2626; }
 """
 
 
