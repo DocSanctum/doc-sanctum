@@ -25,6 +25,8 @@ export function resolveDocPath(currentFile: string, ref: string): string | null 
   const segments = [...base]
   for (const raw of pathPart.split('/')) {
     const seg = safeDecode(raw)
+    // An encoded slash must not smuggle in extra segments such as "..%2F..".
+    if (seg.includes('/') || seg.includes('\\')) return null
     if (seg === '' || seg === '.') continue
     if (seg === '..') {
       if (segments.length === 0) return null

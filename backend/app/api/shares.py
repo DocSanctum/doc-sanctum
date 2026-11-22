@@ -1,8 +1,9 @@
 """View-only share links for single documents.
 
 `router` is the management API, served only on the loopback main listener.
-`viewer_router` serves `/share/<token>`, which the LAN listener also exposes
-without a bearer token because the share token itself is the credential.
+`viewer_router` serves `/share/<token>` and the images that document embeds,
+which the LAN listener also exposes without a bearer token because the share
+token itself is the credential.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import os
 import secrets
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import quote
@@ -23,14 +25,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import async_session_factory, get_session, get_setting, set_setting
 from ..models.source import Source
-from ..services.document_access import flatten_tree, read_raw_with_cache
+from ..services.document_access import (
+    flatten_tree,
+    read_asset_with_cache,
+    read_raw_with_cache,
+)
 from ..services.document_cache import get_cached
 from ..services.document_formats import is_supported
 from ..services.share_render import (
     SECURITY_HEADERS,
+    referenced_images,
     render_markdown_page,
     render_notice_page,
 )
+from .files import ASSET_HEADERS
 from .mcp import _remote_port, _remote_reachable
 
 router = APIRouter(prefix="/shares", tags=["shares"])
@@ -208,8 +216,8 @@ def _notice(message: str, status_code: int) -> HTMLResponse:
     )
 
 
-@viewer_router.get("/share/{token}", response_model=None)
-async def view_share(token: str) -> Response:
+async def _open_share(token: str) -> tuple[dict[str, Any], Source] | HTMLResponse:
+    """Look up a live share link, or return the notice page explaining why not."""
     async with async_session_factory() as session:
         row = (
             (
@@ -226,6 +234,20 @@ async def view_share(token: str) -> Response:
     expires_at = row["expires_at"]
     if expires_at and expires_at <= _now():
         return _notice("This link has expired.", 410)
+    return dict(row), source
+
+
+def _share_asset_url(token: str) -> Callable[[str], str]:
+    # Relative to /share/<token>, so it also works behind a path-prefixing proxy.
+    return lambda path: f"{token}/asset?path={quote(path, safe='')}"
+
+
+@viewer_router.get("/share/{token}", response_model=None)
+async def view_share(token: str) -> Response:
+    opened = await _open_share(token)
+    if isinstance(opened, Response):
+        return opened
+    row, source = opened
 
     path = row["path"]
     try:
@@ -258,4 +280,33 @@ async def view_share(token: str) -> Response:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _notice("The shared document could not be decoded.", 500)
-    return HTMLResponse(render_markdown_page(path, markdown), headers=SECURITY_HEADERS)
+    page = render_markdown_page(path, markdown, asset_url=_share_asset_url(token))
+    return HTMLResponse(page, headers=SECURITY_HEADERS)
+
+
+@viewer_router.get("/share/{token}/asset", response_model=None)
+async def view_share_asset(token: str, path: str) -> Response:
+    """Serve an image only if the shared document currently embeds it, so a
+    token never exposes other files in the same source."""
+    opened = await _open_share(token)
+    if isinstance(opened, Response):
+        return opened
+    row, source = opened
+    doc_path = row["path"]
+    if not doc_path.lower().endswith(".md"):
+        raise HTTPException(status_code=404, detail="Not Found")
+    try:
+        raw_doc, _warning = await read_raw_with_cache(source, doc_path)
+        if path not in referenced_images(doc_path, raw_doc.decode("utf-8")):
+            raise HTTPException(status_code=404, detail="Not Found")
+        raw, media_type, _warning = await read_asset_with_cache(source, path)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=404, detail="Not Found") from exc
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        raise HTTPException(status_code=502, detail="Upstream fetch failed") from exc
+    headers = {
+        **ASSET_HEADERS,
+        "Referrer-Policy": "no-referrer",
+        "Cache-Control": "no-store",
+    }
+    return Response(content=raw, media_type=media_type, headers=headers)

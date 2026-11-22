@@ -23,6 +23,7 @@ describe('resolveDocPath', () => {
     expect(resolveDocPath('doc.md', 'data:image/png;base64,AAAA')).toBeNull()
     expect(resolveDocPath('doc.md', '//cdn.example.com/a.png')).toBeNull()
     expect(resolveDocPath('doc.md', '#heading')).toBeNull()
+    expect(resolveDocPath('a/b.md', '..%2F..%2Fsecret.png')).toBeNull()
   })
 })
 
