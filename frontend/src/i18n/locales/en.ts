@@ -101,6 +101,7 @@ export const en = {
       copyCode: 'Copy code',
       mermaidError: 'Mermaid diagram error',
       viewFullscreen: 'Fullscreen',
+      properties: 'Properties ({count})',
       exitFullscreen: 'Close fullscreen',
     },
   },

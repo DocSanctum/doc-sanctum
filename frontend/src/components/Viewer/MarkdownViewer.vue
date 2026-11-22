@@ -5,6 +5,20 @@
       <div v-else-if="fetchError" class="text-red-400 text-sm">{{ fetchError }}</div>
       <template v-else>
         <Breadcrumb :path="filePath" :source-root="sourceRoot" :source-id="sourceId" />
+        <div v-if="frontMatter" class="front-matter" data-testid="front-matter">
+          <div v-if="frontMatter.tags.length" class="front-matter-tags">
+            <span v-for="tag in frontMatter.tags" :key="tag" class="front-matter-tag">#{{ tag }}</span>
+          </div>
+          <details v-if="frontMatter.fields.length" class="front-matter-fields">
+            <summary>{{ t('viewer.markdown.properties', { count: frontMatter.fields.length }) }}</summary>
+            <dl>
+              <template v-for="field in frontMatter.fields" :key="field.key">
+                <dt>{{ field.key }}</dt>
+                <dd>{{ field.value }}</dd>
+              </template>
+            </dl>
+          </details>
+        </div>
         <div
           ref="contentRef"
           class="prose dark:prose-invert max-w-none"
@@ -55,6 +69,8 @@ import { useViewerUrl } from '../../composables/useViewerUrl'
 import { useSearchReveal } from '../../composables/useSearchReveal'
 import { useSources } from '../../composables/useSources'
 import { isExternalUrl, parseInternalDocLink, resolveDocPath } from '../../utils/docLinks'
+import { extractFrontMatter, toFrontMatterView } from '../../utils/frontMatter'
+import { sanitizeMarkdownHtml } from '../../utils/sanitizeMarkdown'
 import type { PaneId } from '../../types'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
@@ -100,9 +116,15 @@ function resolveImageSrc(src: string): string | null {
   return path ? api.getAssetUrl(props.sourceId, path) : null
 }
 
-const rendered = computed(() =>
-  DOMPurify.sanitize(render(raw.value, { resolveImageSrc }), { USE_PROFILES: { html: true } })
-)
+const parsed = computed(() => extractFrontMatter(raw.value))
+const frontMatter = computed(() => {
+  const data = parsed.value.data
+  if (!data) return null
+  const view = toFrontMatterView(data)
+  return view.tags.length || view.fields.length ? view : null
+})
+
+const rendered = computed(() => sanitizeMarkdownHtml(render(parsed.value.body), resolveImageSrc))
 
 // Mermaid diagrams render on the client, outside the markdown-it → DOMPurify
 // pipeline: useMarkdown.ts emits a plain `<div class="mermaid">source</div>`
@@ -809,6 +831,106 @@ function handleClick(e: MouseEvent) {
   100% {
     background-color: transparent;
   }
+}
+
+/* Front matter */
+.front-matter {
+  margin: 0.75rem 0 1.5rem;
+  font-size: 0.8rem;
+}
+.front-matter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+}
+.front-matter-tag {
+  padding: 0.1rem 0.55rem;
+  border-radius: 9999px;
+  color: #2563eb;
+  background: #eff6ff;
+}
+:root.dark .front-matter-tag { color: #93c5fd; background: #1e293b; }
+.front-matter-fields summary {
+  cursor: pointer;
+  color: #6b7280;
+  user-select: none;
+}
+.front-matter-fields dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0.5rem 0 0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+:root.dark .front-matter-fields dl { border-color: #374151; background: #111827; }
+.front-matter-fields dt { color: #6b7280; font-weight: 500; }
+.front-matter-fields dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Alerts: GitHub "> [!NOTE]" blocks and Obsidian callouts. They are
+   blockquotes (or <details> when foldable), so the quote styling is undone. */
+.prose .markdown-alert {
+  --alert-color: #2563eb;
+  margin: 1.25rem 0;
+  padding: 0.6rem 1rem;
+  border-left: 4px solid var(--alert-color);
+  border-radius: 0 6px 6px 0;
+  font-style: normal;
+  quotes: none;
+}
+/* Beats the themed .prose blockquote background and color rules below. */
+:root.dark .prose .markdown-alert,
+:root:not(.dark) .prose .markdown-alert {
+  background: color-mix(in srgb, var(--alert-color) 8%, transparent);
+  color: inherit;
+}
+.prose .markdown-alert p { margin: 0.4rem 0; }
+.prose .markdown-alert p:not(.markdown-alert-title)::before,
+.prose .markdown-alert p::after { content: none; }
+.prose .markdown-alert-tip { --alert-color: #16a34a; }
+.prose .markdown-alert-important { --alert-color: #9333ea; }
+.prose .markdown-alert-warning { --alert-color: #ca8a04; }
+.prose .markdown-alert-caution { --alert-color: #dc2626; }
+.prose .markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 600;
+  color: var(--alert-color);
+}
+.prose .markdown-alert-title::before {
+  content: '';
+  width: 1em;
+  height: 1em;
+  flex-shrink: 0;
+  background: currentColor;
+  -webkit-mask: var(--alert-icon) center / contain no-repeat;
+  mask: var(--alert-icon) center / contain no-repeat;
+}
+.prose summary.markdown-alert-title { cursor: pointer; list-style: none; }
+.prose summary.markdown-alert-title::-webkit-details-marker { display: none; }
+.prose summary.markdown-alert-title::after {
+  content: '▸';
+  margin-left: auto;
+  font-size: 0.8em;
+  transition: transform 0.15s ease;
+}
+.prose details[open] > summary.markdown-alert-title::after { transform: rotate(90deg); }
+.prose .markdown-alert-note {
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm.75 7h-1.5v5h1.5Zm0-3h-1.5v1.5h1.5Z'/%3E%3C/svg%3E");
+}
+.prose .markdown-alert-tip {
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 0a5.5 5.5 0 0 1 3.2 10l-.2.2V12H5v-1.8l-.2-.2A5.5 5.5 0 0 1 8 0ZM5.5 13.5h5V15a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1Z'/%3E%3C/svg%3E");
+}
+.prose .markdown-alert-important {
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 1h13A1.5 1.5 0 0 1 16 2.5v9a1.5 1.5 0 0 1-1.5 1.5H7l-4 3v-3H1.5A1.5 1.5 0 0 1 0 11.5v-9A1.5 1.5 0 0 1 1.5 1Zm7.25 2h-1.5v4.5h1.5Zm0 6h-1.5v1.5h1.5Z'/%3E%3C/svg%3E");
+}
+.prose .markdown-alert-warning,
+.prose .markdown-alert-caution {
+  --alert-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M8 .5 16 15H0Zm.75 5h-1.5v5h1.5Zm0 6.5h-1.5v1.5h1.5Z'/%3E%3C/svg%3E");
 }
 
 /* Blockquote */

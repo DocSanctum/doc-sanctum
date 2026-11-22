@@ -103,6 +103,7 @@ export const ko: MessageSchema = {
       copyCode: '코드 복사',
       mermaidError: 'Mermaid 다이어그램 오류',
       viewFullscreen: '전체화면',
+      properties: '속성 ({count})',
       exitFullscreen: '전체화면 닫기',
     },
   },
