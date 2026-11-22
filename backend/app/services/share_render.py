@@ -8,9 +8,15 @@ that allows no scripts at all.
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable, Iterator
 from html import escape
+from urllib.parse import unquote
 
 from markdown_it import MarkdownIt
+from markdown_it.token import Token
+
+from .document_formats import image_media_type
 
 _md = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable(
     ["table", "strikethrough"]
@@ -20,7 +26,7 @@ _md = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable(
 # site a teammate clicks through to from the shared document.
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
-        "default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; "
+        "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; "
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
     "Referrer-Policy": "no-referrer",
@@ -72,13 +78,73 @@ def _page(title: str, body: str) -> str:
     )
 
 
-def render_markdown_page(path: str, markdown: str) -> str:
+_EXTERNAL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.IGNORECASE)
+
+
+def resolve_doc_path(current_file: str, ref: str) -> str | None:
+    """Resolve a reference written in a document to a source-relative path.
+    Returns None for external, empty, or root-escaping references."""
+    part = re.split(r"[?#]", ref, maxsplit=1)[0]
+    if not part or _EXTERNAL_SCHEME.match(ref) or ref.startswith("//"):
+        return None
+    segments = [] if part.startswith("/") else current_file.split("/")[:-1]
+    for raw in part.split("/"):
+        seg = unquote(raw)
+        if "/" in seg or "\\" in seg:
+            return None
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if not segments:
+                return None
+            segments.pop()
+            continue
+        segments.append(seg)
+    return "/".join(segments) or None
+
+
+def _image_tokens(tokens: list[Token]) -> Iterator[Token]:
+    for token in tokens:
+        for child in token.children or []:
+            if child.type == "image":
+                yield child
+
+
+def _local_image_path(doc_path: str, image: Token) -> str | None:
+    src = str(image.attrGet("src") or "")
+    path = resolve_doc_path(doc_path, src)
+    return path if path and image_media_type(path) else None
+
+
+def referenced_images(doc_path: str, markdown: str) -> set[str]:
+    """Return the source-relative image paths that the document embeds."""
+    found = set()
+    for image in _image_tokens(_md.parse(markdown)):
+        path = _local_image_path(doc_path, image)
+        if path:
+            found.add(path)
+    return found
+
+
+def render_markdown_page(
+    path: str, markdown: str, asset_url: Callable[[str], str] | None = None
+) -> str:
+    """Render a shared document; asset_url maps each embedded local image
+    path to the URL the page should load it from."""
     name = path.rsplit("/", 1)[-1]
     header = (
         f"<header><span class='name'>{escape(name)}</span>"
         "<span>DocSanctum · read-only</span></header>"
     )
-    return _page(name, header + _md.render(markdown))
+    tokens = _md.parse(markdown)
+    if asset_url is not None:
+        for image in _image_tokens(tokens):
+            image_path = _local_image_path(path, image)
+            if image_path:
+                image.attrSet("src", asset_url(image_path))
+                image.attrSet("loading", "lazy")
+    body = _md.renderer.render(tokens, _md.options, {})
+    return _page(name, header + body)
 
 
 def render_notice_page(message: str) -> str:

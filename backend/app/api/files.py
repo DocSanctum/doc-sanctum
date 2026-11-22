@@ -21,7 +21,7 @@ router = APIRouter(tags=["files"])
 
 # An SVG opened directly in a tab would run its scripts on the app origin,
 # so assets are sandboxed and cannot load anything else.
-_ASSET_HEADERS = {
+ASSET_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
     "X-Content-Type-Options": "nosniff",
     "Cache-Control": "private, max-age=300",
@@ -126,4 +126,4 @@ async def get_asset(
         raise HTTPException(
             status_code=502, detail=f"Failed to fetch file from source: {exc}"
         ) from exc
-    return Response(content=raw, media_type=media_type, headers=_ASSET_HEADERS)
+    return Response(content=raw, media_type=media_type, headers=ASSET_HEADERS)

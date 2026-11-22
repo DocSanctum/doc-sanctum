@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from urllib.parse import quote
 
 import backend.app.api.shares as shares_module
 import backend.app.core.database as database_module
@@ -18,6 +19,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 REMOTE = "http://192.168.1.10:8100"
 LOCAL = "http://localhost:8000"
 FIXTURES = Path(__file__).parent / "fixtures"
+PNG_BYTES = b"\x89PNG\r\n\x1a\nshared-image"
 
 
 @pytest_asyncio.fixture
@@ -37,8 +39,13 @@ async def env(monkeypatch, tmp_path):
     docs = tmp_path / "docs"
     (docs / "team").mkdir(parents=True)
     (docs / "team" / "plan.md").write_text(
-        "# Plan\n\nHello **team**.\n\n<script>alert(1)</script>\n", encoding="utf-8"
+        "# Plan\n\nHello **team**.\n\n<script>alert(1)</script>\n\n"
+        "![diagram](img/diagram.png)\n\n![remote](https://example.com/x.png)\n",
+        encoding="utf-8",
     )
+    (docs / "team" / "img").mkdir()
+    (docs / "team" / "img" / "diagram.png").write_bytes(PNG_BYTES)
+    (docs / "private.png").write_bytes(PNG_BYTES)
     (docs / "secret.md").write_text("# Secret\n", encoding="utf-8")
     shutil.copy(FIXTURES / "sample.pdf", docs / "report.pdf")
     async with factory() as session:
@@ -181,3 +188,73 @@ async def test_base_url_setting_round_trips(env, monkeypatch):
     assert before["base_url"] == ""
     assert before["suggested_base_url"] == "http://my-mac.local:8020"
     assert after["base_url"] == "http://10.0.0.5:8020"
+
+
+def _asset_url(token: str, path: str) -> str:
+    return f"/share/{token}/asset?path={quote(path, safe='')}"
+
+
+@pytest.mark.asyncio
+async def test_shared_page_points_embedded_images_at_the_share_asset_route(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(REMOTE) as c:
+        res = await c.get(f"/share/{link['token']}")
+    expected = f'src="{link["token"]}/asset?path=team%2Fimg%2Fdiagram.png"'
+    assert expected in res.text
+    assert 'src="https://example.com/x.png"' in res.text
+    assert "img-src 'self'" in res.headers["content-security-policy"]
+
+
+@pytest.mark.asyncio
+async def test_teammate_loads_an_image_the_shared_document_embeds(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(REMOTE) as c:
+        res = await c.get(_asset_url(link["token"], "team/img/diagram.png"))
+    assert res.status_code == 200
+    assert res.headers["content-type"] == "image/png"
+    assert res.content == PNG_BYTES
+    assert res.headers["referrer-policy"] == "no-referrer"
+    assert "sandbox" in res.headers["content-security-policy"]
+
+    # Images do not count as extra views of the shared document.
+    async with client(LOCAL) as c:
+        listed = (await c.get("/api/v1/shares")).json()
+    assert listed[0]["access_count"] == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path", ["private.png", "team/plan.md", "team/img/../../private.png", ".env"]
+)
+async def test_share_token_cannot_fetch_files_the_document_does_not_embed(env, path):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(REMOTE) as c:
+        res = await c.get(_asset_url(link["token"], path))
+    assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_revoked_or_bogus_token_cannot_fetch_images(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(LOCAL) as c:
+        await c.delete(f"/api/v1/shares/{link['id']}")
+    async with client(REMOTE) as c:
+        revoked = await c.get(_asset_url(link["token"], "team/img/diagram.png"))
+        bogus = await c.get(_asset_url("nope", "team/img/diagram.png"))
+        nested = await c.get(f"/share/{link['token']}/asset/extra")
+    assert revoked.status_code == 404
+    assert bogus.status_code == 404
+    assert nested.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_pdf_share_serves_no_images(env):
+    client, _docs = env
+    link = await _create(client, "report.pdf", label=None)
+    async with client(REMOTE) as c:
+        res = await c.get(_asset_url(link["token"], "team/img/diagram.png"))
+    assert res.status_code == 404
