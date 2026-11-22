@@ -33,6 +33,9 @@ export const api = {
   getFileUrl: (sourceId: string, path: string) =>
     `${BASE}/sources/${sourceId}/file?path=${encodeURIComponent(path)}`,
 
+  getAssetUrl: (sourceId: string, path: string) =>
+    `${BASE}/sources/${sourceId}/asset?path=${encodeURIComponent(path)}`,
+
   getFileContent: (sourceId: string, path: string) =>
     fetch(api.getFileUrl(sourceId, path)).then(r => {
       if (!r.ok) throw new Error(r.statusText)

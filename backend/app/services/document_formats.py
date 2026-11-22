@@ -9,6 +9,20 @@ from pypdf.errors import PdfReadError
 
 SUPPORTED_EXTENSIONS = frozenset({".md", ".pdf"})
 
+# Images that Markdown documents may embed. They are served to the viewer
+# but never indexed, so they stay separate from SUPPORTED_EXTENSIONS.
+IMAGE_MEDIA_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".avif": "image/avif",
+    ".bmp": "image/bmp",
+    ".ico": "image/x-icon",
+    ".svg": "image/svg+xml",
+}
+
 
 class NoExtractableTextError(Exception):
     """Raised when a document's extracted text is empty across its entire
@@ -19,6 +33,11 @@ class NoExtractableTextError(Exception):
 
 def is_supported(name_or_path: str) -> bool:
     return os.path.splitext(name_or_path)[1].lower() in SUPPORTED_EXTENSIONS
+
+
+def image_media_type(name_or_path: str) -> str | None:
+    """Return the media type of an embeddable image, or None otherwise."""
+    return IMAGE_MEDIA_TYPES.get(os.path.splitext(name_or_path)[1].lower())
 
 
 @dataclass

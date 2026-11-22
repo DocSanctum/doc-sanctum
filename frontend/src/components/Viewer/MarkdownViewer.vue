@@ -54,6 +54,7 @@ import { useToc } from '../../composables/useToc'
 import { useViewerUrl } from '../../composables/useViewerUrl'
 import { useSearchReveal } from '../../composables/useSearchReveal'
 import { useSources } from '../../composables/useSources'
+import { isExternalUrl, parseInternalDocLink, resolveDocPath } from '../../utils/docLinks'
 import type { PaneId } from '../../types'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
@@ -87,8 +88,20 @@ const toc = useToc(contentRef)
 // URL 해시(퍼머링크로 들어온 값)를 덮어쓰지 않도록 스크롤스파이→URL 동기화를 잠시 멈춘다.
 let suppressHashSync = false
 
+// Heading requested by an in-pane link like "other.md#section". It is applied
+// once that document finishes loading, since switching documents clears the hash.
+let pendingHeadingId: string | null = null
+
+// Relative image paths would otherwise resolve against the app's own URL,
+// so they are pointed at the backend endpoint that serves source images.
+function resolveImageSrc(src: string): string | null {
+  if (isExternalUrl(src)) return null
+  const path = resolveDocPath(props.filePath, src)
+  return path ? api.getAssetUrl(props.sourceId, path) : null
+}
+
 const rendered = computed(() =>
-  DOMPurify.sanitize(render(raw.value), { USE_PROFILES: { html: true } })
+  DOMPurify.sanitize(render(raw.value, { resolveImageSrc }), { USE_PROFILES: { html: true } })
 )
 
 // Mermaid diagrams render on the client, outside the markdown-it → DOMPurify
@@ -173,9 +186,9 @@ onKeyStroke('Escape', () => {
 // Rewrites rendered <a> tags so native browser gestures (ctrl/cmd+click,
 // middle-click, right-click "open in new tab") work correctly: external
 // links get a real target="_blank"/rel attribute pair instead of relying on
-// JS to reopen them, and internal .md links get their href swapped for a
-// real, navigable permalink URL (the original relative path is kept in
-// data-internal-path for handleClick's in-pane fast-navigation).
+// JS to reopen them, and internal Markdown links get their href swapped for
+// a real, navigable permalink URL (the resolved path and heading are kept in
+// data attributes for handleClick's in-pane fast-navigation).
 function rewriteAnchors() {
   if (!contentRef.value) return
   const anchors = contentRef.value.querySelectorAll<HTMLAnchorElement>('a')
@@ -188,11 +201,11 @@ function rewriteAnchors() {
       continue
     }
     if (href.startsWith('#')) continue
-    if (href.endsWith('.md')) {
-      const dir = props.filePath.split('/').slice(0, -1).join('/')
-      const resolved = dir ? `${dir}/${href}` : href
-      a.dataset.internalPath = href
-      a.setAttribute('href', buildPermalink(props.sourceId, resolved, ''))
+    const link = parseInternalDocLink(props.filePath, href)
+    if (link) {
+      a.dataset.internalPath = link.path
+      a.dataset.internalHeading = link.headingId
+      a.setAttribute('href', buildPermalink(props.sourceId, link.path, link.headingId))
     }
   }
 }
@@ -209,6 +222,7 @@ async function load() {
     raw.value = await api.getFileContent(props.sourceId, props.filePath)
   } catch (e: any) {
     fetchError.value = e.message ?? t('viewer.markdownViewer.notFound')
+    pendingHeadingId = null
     loading.value = false
     suppressHashSync = false
     return
@@ -224,8 +238,12 @@ async function load() {
   await nextTick()
   // 여러 패널이 동시에 열려 있을 때 URL 해시는 활성 패널 하나만 소유한다
   // (research.md #4) — 비활성 패널은 해시를 읽지도 쓰지도 않는다.
-  if (props.active) restoreScrollFromUrl()
-  await toc.refresh(props.active ? getHeadingId() : null)
+  const linkedHeading = pendingHeadingId
+  pendingHeadingId = null
+  if (linkedHeading) scrollToHeadingInstant(linkedHeading)
+  else if (props.active) restoreScrollFromUrl()
+  await toc.refresh(linkedHeading ?? (props.active ? getHeadingId() : null))
+  if (linkedHeading && props.active) setHeadingId(linkedHeading)
   suppressHashSync = false
   // If the document was just opened by picking a search result (008-search),
   // apply any reveal signal that hasn't been handled yet — since load() is
@@ -252,8 +270,11 @@ watch(
 
 function restoreScrollFromUrl() {
   const headingId = getHeadingId()
-  if (!headingId || !contentRef.value) return
-  const target = contentRef.value.querySelector<HTMLElement>(`#${CSS.escape(headingId)}`)
+  if (headingId) scrollToHeadingInstant(headingId)
+}
+
+function scrollToHeadingInstant(headingId: string) {
+  const target = contentRef.value?.querySelector<HTMLElement>(`#${CSS.escape(headingId)}`)
   target?.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' })
 }
 
@@ -371,13 +392,17 @@ function handleClick(e: MouseEvent) {
   // given the anchor a real target/href for that to work correctly.
   if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return
 
-  const href = anchor.getAttribute('href') ?? ''
-  if (href.startsWith('http://') || href.startsWith('https://')) return
-  if (href.startsWith('#')) return
-
+  // Checked before the external-URL test, because rewriteAnchors() gives
+  // internal links an absolute permalink href that also starts with http.
   const internalPath = anchor.dataset.internalPath
   if (internalPath) {
     e.preventDefault()
+    const headingId = anchor.dataset.internalHeading || null
+    if (internalPath === props.filePath) {
+      if (headingId) scrollToHeading(headingId)
+      return
+    }
+    pendingHeadingId = headingId
     emit('navigate', internalPath)
   }
 }
@@ -764,12 +789,13 @@ function handleClick(e: MouseEvent) {
 
 /* Footnotes */
 .prose .footnotes {
-  border-top: 1px solid #374151;
+  border-top: 1px solid #e5e7eb;
   margin-top: 2rem;
   padding-top: 1rem;
   font-size: 0.85em;
-  color: #9ca3af;
+  color: #6b7280;
 }
+:root.dark .prose .footnotes { border-top-color: #374151; color: #9ca3af; }
 
 /* Search reveal (008-search) — same pattern as TreeNode.vue's tree-reveal-flash */
 .prose .search-match-flash {
