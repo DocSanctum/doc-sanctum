@@ -15,7 +15,12 @@ from .document_cache import (
     set_cached,
     set_cached_content,
 )
-from .document_formats import ExtractedDocument, extract_text, is_supported
+from .document_formats import (
+    ExtractedDocument,
+    extract_text,
+    image_media_type,
+    is_supported,
+)
 from .github import _content_api_url, _github_headers, _parse_github_url
 from .gitlab import _content_raw_url, _gitlab_headers, _parse_gitlab_url
 from .token_resolver import resolve_access_token
@@ -184,6 +189,14 @@ async def _read_raw(source: Source, path: str) -> tuple[bytes, dict[str, Any] | 
     # arbitrary files such as .env or SSH keys that sit under a source root.
     if not is_supported(path):
         raise ValueError(f"Unsupported document type: {path}")
+    return await _read_raw_unchecked(source, path)
+
+
+async def _read_raw_unchecked(
+    source: Source, path: str
+) -> tuple[bytes, dict[str, Any] | None]:
+    """Fetch raw bytes through the shared local/remote cache path.
+    Callers must validate the file type before calling this."""
     if source.type == "local":
         return await _read_local(source, path), None
 
@@ -215,6 +228,18 @@ async def read_raw_with_cache(
     """Read a document's raw bytes, unextracted — used where the original
     file content is what's wanted (e.g. serving a PDF download)."""
     return await _read_raw(source, path)
+
+
+async def read_asset_with_cache(
+    source: Source, path: str
+) -> tuple[bytes, str, dict[str, Any] | None]:
+    """Read an image embedded by a Markdown document.
+    Returns (raw, media_type, warning_or_None); non-image paths are rejected."""
+    media_type = image_media_type(path)
+    if media_type is None:
+        raise ValueError(f"Unsupported asset type: {path}")
+    raw, warning = await _read_raw_unchecked(source, path)
+    return raw, media_type, warning
 
 
 async def read_with_cache(

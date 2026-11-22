@@ -87,4 +87,18 @@ describe('useMarkdown', () => {
     expect(block?.querySelector('.mermaid')?.textContent).toBe('graph TD\n  A --> B')
     expect(block?.querySelector('code[hidden]')?.textContent).toBe('graph TD\n  A --> B')
   })
+
+  it('rewrites image sources through resolveImageSrc before sanitization', () => {
+    const { render } = useMarkdown()
+    const html = render('![arch](images/a.png)\n\n![remote](https://x.com/b.png)', {
+      resolveImageSrc: (src) => (src.startsWith('http') ? null : `/asset?path=${src}`),
+    })
+    const container = document.createElement('div')
+    container.innerHTML = DOMPurify.sanitize(html, { USE_PROFILES: { html: true } })
+
+    const imgs = container.querySelectorAll('img')
+    expect(imgs[0].getAttribute('src')).toBe('/asset?path=images/a.png')
+    expect(imgs[1].getAttribute('src')).toBe('https://x.com/b.png')
+    expect(imgs[0].getAttribute('loading')).toBe('lazy')
+  })
 })

@@ -132,12 +132,12 @@ function activate() {
   setActivePane(props.paneId)
 }
 
+// MarkdownViewer resolves the link target, so the path is already
+// normalized and relative to the source root.
 function onNavigate(path: string) {
   const current = pane.value
-  if (!current.sourceId || !current.filePath) return
-  const dir = current.filePath.split('/').slice(0, -1).join('/')
-  const resolved = dir ? `${dir}/${path}` : path
-  setPaneDocument(props.paneId, current.sourceId, resolved)
+  if (!current.sourceId) return
+  setPaneDocument(props.paneId, current.sourceId, path)
 }
 </script>
 

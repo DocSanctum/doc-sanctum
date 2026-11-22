@@ -10,6 +10,7 @@ from ..core.database import get_session
 from ..models.source import Source
 from ..services.document_access import (
     get_tree_with_cache,
+    read_asset_with_cache,
     read_raw_with_cache,
     read_with_cache,
 )
@@ -17,6 +18,14 @@ from ..services.document_cache import get_cached
 from ..services.document_formats import is_supported
 
 router = APIRouter(tags=["files"])
+
+# An SVG opened directly in a tab would run its scripts on the app origin,
+# so assets are sandboxed and cannot load anything else.
+_ASSET_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, max-age=300",
+}
 
 
 async def _get_source_or_404(session: AsyncSession, source_id: str) -> Source:
@@ -97,3 +106,24 @@ async def get_file(
             return Response(content=f.read(), media_type="application/pdf")
     with open(target, encoding="utf-8") as f:
         return PlainTextResponse(f.read())
+
+
+@router.get("/sources/{source_id}/asset")
+async def get_asset(
+    source_id: str,
+    path: str = Query(...),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Serve an image referenced by a Markdown document under the source."""
+    source = await _get_source_or_404(session, source_id)
+    try:
+        raw, media_type, _warning = await read_asset_with_cache(source, path)
+    except ValueError as exc:
+        # Unsupported types, traversal attempts, and missing files all look
+        # the same to the caller.
+        raise HTTPException(status_code=404, detail="File not found") from exc
+    except (httpx.HTTPStatusError, httpx.RequestError) as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Failed to fetch file from source: {exc}"
+        ) from exc
+    return Response(content=raw, media_type=media_type, headers=_ASSET_HEADERS)
