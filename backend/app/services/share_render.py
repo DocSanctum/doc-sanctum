@@ -268,7 +268,8 @@ def _heading_text(inline: Token) -> str:
 
 def _add_heading_ids(tokens: list[Token]) -> list[tuple[int, str, str]]:
     """Give every heading a unique id and return (level, id, text) for each."""
-    headings, seen = [], {}
+    headings: list[tuple[int, str, str]] = []
+    seen: dict[str, int] = {}
     for i, token in enumerate(tokens):
         if token.type != "heading_open":
             continue
