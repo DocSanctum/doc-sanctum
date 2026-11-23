@@ -31,6 +31,16 @@ _md = (
     .use(alerts_plugin)
 )
 
+# Wrapping tables lets wide ones scroll sideways on phones while the table
+# itself still spans the full text width on larger screens.
+_md.add_render_rule(
+    "table_open",
+    lambda self, tokens, idx, options, env: "<div class='table-wrap'><table>",
+)
+_md.add_render_rule(
+    "table_close", lambda self, tokens, idx, options, env: "</table></div>"
+)
+
 # The token sits in the URL path, so a Referer header would leak it to any
 # site a teammate clicks through to from the shared document.
 SECURITY_HEADERS = {
@@ -45,34 +55,57 @@ SECURITY_HEADERS = {
 
 _STYLE = """
 :root { --bg:#ffffff; --fg:#1f2937; --muted:#6b7280; --border:#e5e7eb;
-  --code-bg:#f3f4f6; --link:#2563eb; }
+  --subtle:#f9fafb; --code-bg:#f3f4f6; --link:#2563eb; }
 @media (prefers-color-scheme: dark) {
   :root { --bg:#111827; --fg:#e5e7eb; --muted:#9ca3af; --border:#374151;
-    --code-bg:#1f2937; --link:#60a5fa; }
+    --subtle:#1a2232; --code-bg:#1f2937; --link:#60a5fa; }
 }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg);
-  font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
-    "Malgun Gothic", sans-serif; }
-main { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
-header { color:var(--muted); font-size:13px; border-bottom:1px solid var(--border);
-  padding-bottom:12px; margin-bottom:24px; display:flex; gap:8px; flex-wrap:wrap;
-  justify-content:space-between; }
-header .name { color:var(--fg); font-weight:600; word-break:break-all; }
-a { color:var(--link); }
-h1,h2,h3,h4 { line-height:1.3; margin:1.6em 0 .6em; }
-h1 { font-size:1.9em; } h2 { font-size:1.45em; border-bottom:1px solid var(--border);
-  padding-bottom:.25em; }
-img { max-width:100%; }
-code { background:var(--code-bg); padding:.15em .35em; border-radius:4px; font-size:.9em;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-pre { background:var(--code-bg); padding:14px 16px; border-radius:8px; overflow-x:auto; }
-pre code { background:none; padding:0; }
-blockquote { margin:1em 0; padding:0 1em; color:var(--muted);
-  border-left:4px solid var(--border); }
-table { border-collapse:collapse; display:block; overflow-x:auto; }
-th,td { border:1px solid var(--border); padding:6px 12px; }
-hr { border:0; border-top:1px solid var(--border); margin:2em 0; }
+  font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+    "Malgun Gothic", "Noto Sans KR", sans-serif;
+  letter-spacing:-0.01em; word-break:keep-all; overflow-wrap:break-word;
+  -webkit-font-smoothing:antialiased; }
+.bar { position:sticky; top:0; z-index:1; background:var(--bg);
+  border-bottom:1px solid var(--border); }
+.bar-inner { max-width:820px; margin:0 auto; padding:10px 16px; display:flex;
+  align-items:center; gap:12px; font-size:13px; line-height:1.4; }
+.doc { min-width:0; flex:1; display:flex; flex-direction:column; }
+.doc .name { font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.doc .folder { color:var(--muted); overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.badge { flex:none; color:var(--muted); border:1px solid var(--border);
+  border-radius:999px; padding:2px 10px; font-size:12px; white-space:nowrap; }
+main { max-width:820px; margin:0 auto; padding:24px 16px 80px; }
+main > :first-child { margin-top:0; }
+a { color:var(--link); text-underline-offset:2px; }
+h1,h2,h3,h4,h5,h6 { line-height:1.35; letter-spacing:-0.02em; margin:2em 0 .6em;
+  font-weight:700; }
+h1 { font-size:1.875em; margin-top:.4em; }
+h2 { font-size:1.45em; padding-bottom:.3em; border-bottom:1px solid var(--border); }
+h3 { font-size:1.2em; } h4 { font-size:1.05em; }
+hr { border:0; border-top:1px solid var(--border); margin:2.5em 0; }
+hr + h1, hr + h2, hr + h3 { margin-top:0; }
+hr + h2 { border-bottom:0; padding-bottom:0; }
+p, ul, ol, blockquote, pre, .table-wrap { margin:0 0 1.1em; }
+li { margin:.25em 0; } li > ul, li > ol { margin:.25em 0 0; }
+img { max-width:100%; height:auto; border-radius:6px; }
+code { background:var(--code-bg); padding:.15em .4em; border-radius:4px; font-size:.875em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing:0; word-break:break-word; }
+pre { background:var(--code-bg); padding:14px 16px; border-radius:8px; overflow-x:auto;
+  line-height:1.55; }
+pre code { background:none; padding:0; font-size:.85em; word-break:normal; }
+blockquote { padding:0 1em; color:var(--muted); border-left:4px solid var(--border); }
+.table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:8px; }
+table { border-collapse:collapse; width:100%; font-size:.94em; line-height:1.6; }
+th,td { padding:8px 12px; text-align:left; vertical-align:top; min-width:5.5em;
+  border-bottom:1px solid var(--border); }
+th + th, td + td { border-left:1px solid var(--border); }
+th { background:var(--subtle); font-weight:600; white-space:nowrap; }
+tr:last-child td { border-bottom:0; }
+td code, th code { white-space:nowrap; }
 .notice { text-align:center; color:var(--muted); padding-top:20vh; }
 .footnotes-sep { margin-top:2.5em; }
 .footnotes { color:var(--muted); font-size:.9em; }
@@ -86,16 +119,17 @@ hr { border:0; border-top:1px solid var(--border); margin:2em 0; }
 summary.markdown-alert-title { cursor:pointer; }
 .markdown-alert-tip { --alert:#16a34a; } .markdown-alert-important { --alert:#9333ea; }
 .markdown-alert-warning { --alert:#ca8a04; } .markdown-alert-caution { --alert:#dc2626; }
+@media print { .bar { position:static; } .table-wrap { overflow:visible; } }
 """
 
 
-def _page(title: str, body: str) -> str:
+def _page(title: str, body: str, bar: str = "") -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<meta name='robots' content='noindex'>"
         f"<title>{escape(title)}</title><style>{_STYLE}</style></head>"
-        f"<body><main>{body}</main></body></html>"
+        f"<body>{bar}<main>{body}</main></body></html>"
     )
 
 
@@ -152,10 +186,12 @@ def render_markdown_page(
 ) -> str:
     """Render a shared document; asset_url maps each embedded local image
     path to the URL the page should load it from."""
-    name = path.rsplit("/", 1)[-1]
-    header = (
-        f"<header><span class='name'>{escape(name)}</span>"
-        "<span>DocSanctum · read-only</span></header>"
+    folder, _, name = path.rpartition("/")
+    folder_line = f"<span class='folder'>{escape(folder)}</span>" if folder else ""
+    bar = (
+        "<header class='bar'><div class='bar-inner'><div class='doc'>"
+        f"<span class='name' title='{escape(path)}'>{escape(name)}</span>{folder_line}"
+        "</div><span class='badge'>Read-only · DocSanctum</span></div></header>"
     )
     tokens = _md.parse(markdown)
     if asset_url is not None:
@@ -165,7 +201,7 @@ def render_markdown_page(
                 image.attrSet("src", asset_url(image_path))
                 image.attrSet("loading", "lazy")
     body = _md.renderer.render(tokens, _md.options, {})
-    return _page(name, header + body)
+    return _page(name, body, bar)
 
 
 def render_notice_page(message: str) -> str:
