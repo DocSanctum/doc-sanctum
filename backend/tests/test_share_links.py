@@ -97,6 +97,7 @@ async def test_teammate_opens_shared_markdown_without_mcp_token(env):
     # Raw HTML in the document is escaped, never executed.
     assert "<script>" not in res.text
     assert "script-src" not in res.headers["content-security-policy"]
+    assert "<span class='folder'>team</span>" in res.text
     assert res.headers["referrer-policy"] == "no-referrer"
 
     async with client(LOCAL) as c:
@@ -258,3 +259,16 @@ async def test_pdf_share_serves_no_images(env):
     async with client(REMOTE) as c:
         res = await c.get(_asset_url(link["token"], "team/img/diagram.png"))
     assert res.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_shared_tables_are_wrapped_so_they_scroll_on_phones(env):
+    client, docs = env
+    (docs / "table.md").write_text(
+        "| a | b |\n|---|---|\n| 1 | 2 |\n", encoding="utf-8"
+    )
+    link = await _create(client, "table.md")
+    async with client(REMOTE) as c:
+        res = await c.get(f"/share/{link['token']}")
+    assert "<div class='table-wrap'><table>" in res.text
+    assert "</table></div>" in res.text
