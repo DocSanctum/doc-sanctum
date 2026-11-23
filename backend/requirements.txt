@@ -10,7 +10,7 @@ mcp==1.30.0
 chromadb==1.5.9
 geoip2fast==1.2.2
 cryptography==50.0.0
-pypdf==6.21.2
+pypdf==6.21.4
 markdown-it-py==4.0.0
 mdit-py-plugins==0.7.0
 Pygments==2.21.0
