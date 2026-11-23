@@ -62,3 +62,46 @@ def test_shared_page_still_escapes_raw_html():
     page = render_markdown_page("a.md", "<details><summary>x</summary></details>")
     assert "<details>" not in page
     assert "&lt;details&gt;" in page
+
+
+LONG_DOC = (
+    "# Title\n\n## 현재 문제\n\ntext\n\n### Detail `code`\n\n"
+    "## Setup\n\n## Setup\n\n[jump](#현재-문제)\n"
+)
+
+
+def test_fenced_code_with_a_known_language_is_highlighted():
+    page = render_markdown_page("a.md", "```python\ndef f():\n    return 1\n```\n")
+    assert '<code class="language-python">' in page
+    assert '<span class="k">def</span>' in page
+    assert "pre code .k" in page
+
+
+def test_unknown_language_falls_back_to_escaped_code():
+    page = render_markdown_page("a.md", "```nope\n<b>x</b>\n```\n")
+    assert "&lt;b&gt;x&lt;/b&gt;" in page
+    assert "<b>x</b>" not in page
+
+
+def test_headings_get_unique_ids_matching_the_app_viewer():
+    page = render_markdown_page("a.md", LONG_DOC)
+    assert '<h2 id="현재-문제">' in page
+    assert '<h3 id="detail-code">' in page
+    assert '<h2 id="setup">' in page
+    assert '<h2 id="setup-1">' in page
+    assert "href='#현재-문제' aria-hidden='true'>#</a></h2>" in page
+
+
+def test_long_document_gets_a_table_of_contents_without_the_title():
+    page = render_markdown_page("a.md", LONG_DOC)
+    assert "<nav class='toc toc-side'" in page
+    assert "<details class='toc toc-inline'>" in page
+    assert "<li class='toc-l2'><a href='#현재-문제'>현재 문제</a></li>" in page
+    assert "<li class='toc-l3'><a href='#detail-code'>Detail code</a></li>" in page
+    assert "href='#title'>Title</a>" not in page
+    assert page.index("<details class='toc toc-inline'>") > page.index("</h1>")
+
+
+def test_short_document_has_no_table_of_contents():
+    page = render_markdown_page("a.md", "# Title\n\n## One\n\n## Two\n")
+    assert "class='toc" not in page
