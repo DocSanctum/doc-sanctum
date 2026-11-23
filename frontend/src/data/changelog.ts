@@ -7,6 +7,11 @@ export interface ChangelogEntry {
 // Keep each change to one short line that a user can scan at a glance.
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.4.0',
+    date: '2026-11-23',
+    changes: ['Shared pages: code highlighting and a table of contents'],
+  },
+  {
     version: '1.3.1',
     date: '2026-11-23',
     changes: ['Cleaner shared pages: Korean line breaks, phone-friendly tables, tidy header'],
