@@ -4,7 +4,20 @@ export interface ChangelogEntry {
   changes: string[]
 }
 
+// Keep each change to one short line that a user can scan at a glance.
 export const changelog: ChangelogEntry[] = [
+  {
+    version: '1.3.0',
+    date: '2026-11-23',
+    changes: [
+      'View-only share links for teammates on your network',
+      'Remote MCP access from other PCs with a token',
+      'Viewer: source images, front matter, alerts and safe HTML',
+      'Copy a document\'s absolute path',
+      'Better Korean semantic search (reindexes once)',
+      'Web UI and API now listen on this PC only by default',
+    ],
+  },
   {
     version: '1.2.0',
     date: '2026-07-26',
