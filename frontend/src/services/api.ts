@@ -1,4 +1,4 @@
-import type { Source, DirectoryTree, RegisterSourcePayload, PatchSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse, ShareLink, ShareSettings } from '../types'
+import type { Source, DirectoryTree, RegisterSourcePayload, PatchSourcePayload, McpStatus, DeploymentStatus, LocaleResult, SearchResponse, SemanticSearchResponse, ShareLink, ShareSettings, IndexError } from '../types'
 
 const BASE = '/api/v1'
 
@@ -29,6 +29,9 @@ export const api = {
 
   getTree: (sourceId: string) =>
     request<DirectoryTree>(`/sources/${sourceId}/tree`),
+
+  getIndexErrors: (sourceId: string) =>
+    request<IndexError[]>(`/sources/${sourceId}/index-errors`),
 
   getFileUrl: (sourceId: string, path: string) =>
     `${BASE}/sources/${sourceId}/file?path=${encodeURIComponent(path)}`,

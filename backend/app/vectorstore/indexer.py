@@ -16,7 +16,7 @@ from ..services.document_access import (
 )
 from ..services.document_cache import clear_source
 from ..services.document_formats import ExtractedDocument
-from . import client, hash_cache
+from . import client, hash_cache, index_errors
 from .chunker import chunk_markdown
 from .index_progress import ProgressReporter, mark_reason
 
@@ -99,18 +99,31 @@ async def _index_document(
                 )
         if not chunks:
             await hash_cache.delete(source.id, path)
+            await index_errors.clear(source.id, path)
             return None
         await hash_cache.mark_in_progress(source.id, path)
         await client.upsert_chunks(source.id, source.name, path, chunks)
         await keyword_client.upsert_document(source.id, path, _keyword_pages(extracted))
         await hash_cache.upsert(source.id, path, _hash_content(extracted.text), sha)
+        await index_errors.clear(source.id, path)
         return None
     except Exception as exc:
         logger.warning(
             "Failed to index document %s in source %s: %s", path, source.id, exc
         )
         await hash_cache.delete(source.id, path)
-        return {"path": path, "reason": "index_error", "message": str(exc)}
+        warning = _document_warning(path, exc)
+        await index_errors.record(source.id, path, warning["kind"], warning["message"])
+        return warning
+
+
+def _document_warning(path: str, exc: BaseException) -> dict[str, Any]:
+    return {
+        "path": path,
+        "reason": "index_error",
+        "kind": index_errors.classify(exc),
+        "message": str(exc),
+    }
 
 
 async def remove_document(source: Source, path: str) -> None:
@@ -118,6 +131,7 @@ async def remove_document(source: Source, path: str) -> None:
     await client.delete_document(source.id, path)
     await keyword_client.delete_document(source.id, path)
     await hash_cache.delete(source.id, path)
+    await index_errors.clear(source.id, path)
 
 
 async def reindex_document(source: Source, path: str) -> dict[str, Any] | None:
@@ -164,12 +178,7 @@ async def _prefetch(
             extracted, _warning = await read_with_cache(source, path)
             return path, sha, extracted, None
         except Exception as exc:
-            return (
-                path,
-                sha,
-                None,
-                {"path": path, "reason": "index_error", "message": str(exc)},
-            )
+            return path, sha, None, _document_warning(path, exc)
 
 
 async def sync_source_index(source: Source) -> list[dict[str, Any]]:
@@ -228,6 +237,7 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
         if tree_warning is None:
             for stale_path in (set(known_hashes) | set(known_shas)) - current_paths:
                 await remove_document(source, stale_path)
+            await index_errors.prune(source.id, current_paths)
         completed = tree_warning is None
     finally:
         await progress.finish(completed)
@@ -246,6 +256,7 @@ async def _index_fetched(
 ) -> None:
     if warning is not None:
         warnings.append(warning)
+        await index_errors.record(source.id, path, warning["kind"], warning["message"])
         return
     # extracted is only None on a fetch/extraction failure, which is reported
     # via `warning` and handled above, so it is always present here.
@@ -269,6 +280,7 @@ async def delete_source_index(source_id: str) -> None:
         lambda: client.delete_collection(source_id),
         lambda: keyword_client.delete_source(source_id),
         lambda: hash_cache.delete_source(source_id),
+        lambda: index_errors.clear_source(source_id),
     ):
         try:
             await step()

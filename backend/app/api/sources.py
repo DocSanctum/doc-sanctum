@@ -17,6 +17,7 @@ from ..core.database import async_session_factory, get_session, get_setting, set
 from ..models.source import Source, SourceIcon, SourceType
 from ..services.poller import poll_now, stop_polling
 from ..services.watcher import register_index_listener, start_watching, stop_watching
+from ..vectorstore import index_errors
 from ..vectorstore.indexer import (
     EngineUnavailableError,
     create_index,
@@ -207,7 +208,7 @@ async def _resume_local_source(source: Source) -> None:
 
     try:
         warnings = await sync_source_index(source)
-        status, error_msg = "active", None
+        status, error_msg = summarize_index_warnings(warnings)
         if warnings:
             logger.warning(
                 "Startup sync for source %s completed with %d warning(s)",
@@ -362,6 +363,15 @@ async def list_sources(session: AsyncSession = Depends(get_session)) -> list[dic
     # access_token_encrypted never reaches this response — only the derived
     # access_token_configured boolean does (FR-004, FR-009).
     return [Source.from_row(dict(r)).to_dict() for r in rows]
+
+
+@router.get("/sources/{source_id}/index-errors")
+async def list_index_errors(
+    source_id: str, session: AsyncSession = Depends(get_session)
+) -> list[dict]:
+    """Documents of this source that failed to index on the last attempt."""
+    await _get_or_404(session, source_id)
+    return await index_errors.list_for_source(source_id)
 
 
 @router.delete("/sources/{source_id}", status_code=204)

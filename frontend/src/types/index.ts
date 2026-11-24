@@ -25,6 +25,13 @@ export interface Source {
   index_total: number | null
 }
 
+export interface IndexError {
+  path: string
+  kind: 'no_text' | 'fetch_failed' | 'index_failed'
+  message: string
+  updated_at: string
+}
+
 export type IndexReason = 'initial' | 'model' | 'chunking' | 'keyword' | 'recovery'
 
 export interface FileEntry {

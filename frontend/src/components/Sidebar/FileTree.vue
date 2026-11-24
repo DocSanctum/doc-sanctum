@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import { useFileTree } from '../../composables/useFileTree'
 import { useSSE } from '../../composables/useSSE'
 import { useTreeReveal } from '../../composables/useTreeReveal'
+import { provideIndexErrors } from '../../composables/useIndexErrors'
 import TreeNode from './TreeNode.vue'
 
 const props = defineProps<{
@@ -35,5 +36,6 @@ const { t } = useI18n()
 const sourceIdRef = computed(() => props.sourceId)
 const { treeQuery } = useFileTree(sourceIdRef)
 useSSE(sourceIdRef)
+provideIndexErrors(sourceIdRef)
 const { revealPath, revealToken } = useTreeReveal()
 </script>
