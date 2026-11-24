@@ -19,15 +19,12 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import HTMLResponse, JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from ..services.share_i18n import pick_locale, t
 from ..services.share_render import SECURITY_HEADERS, render_notice_page
 from .database import async_session_factory, set_setting
 
 TOKEN_SETTING_KEY = "remote_mcp_token"
 _MCP_PREFIXES = ("/mcp", "/mcp-sse")
-_ROOT_NOTICE = (
-    "This address only opens documents shared from DocSanctum. "
-    "Open the full link you were sent, which includes /share/ and a code."
-)
 
 
 def _new_token() -> str:
@@ -69,12 +66,20 @@ def _is_share_path(path: str) -> bool:
     return bool(token) and (not sep or sub in ("asset", "font"))
 
 
-def _bearer_token(scope: Scope) -> str | None:
+def _header(scope: Scope, name: bytes) -> str | None:
     for key, value in scope["headers"]:
-        if key == b"authorization":
-            scheme, _, credentials = value.decode("latin-1").partition(" ")
-            if scheme.lower() == "bearer" and credentials:
-                return credentials.strip()
+        if key == name:
+            return value.decode("latin-1")
+    return None
+
+
+def _bearer_token(scope: Scope) -> str | None:
+    value = _header(scope, b"authorization")
+    if value is None:
+        return None
+    scheme, _, credentials = value.partition(" ")
+    if scheme.lower() == "bearer" and credentials:
+        return credentials.strip()
     return None
 
 
@@ -106,9 +111,9 @@ class ListenerGuard:
             return
         # Someone who types just the host and port sees a hint, not bare JSON.
         if scope["type"] == "http" and scope["path"] == "/":
-            await HTMLResponse(
-                render_notice_page(_ROOT_NOTICE), headers=SECURITY_HEADERS
-            )(scope, receive, send)
+            locale = pick_locale(_header(scope, b"accept-language"))
+            page = render_notice_page(t(locale, "root"), locale)
+            await HTMLResponse(page, headers=SECURITY_HEADERS)(scope, receive, send)
             return
         # The token stands in for the Host check here, since a DNS rebinding
         # page cannot know it, so LAN clients may use any hostname or IP.
