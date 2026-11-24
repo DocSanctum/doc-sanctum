@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -33,6 +33,7 @@ from ..services.document_access import (
 )
 from ..services.document_cache import get_cached
 from ..services.document_formats import is_supported
+from ..services.share_i18n import Locale, pick_locale, t
 from ..services.share_render import (
     SECURITY_HEADERS,
     referenced_images,
@@ -211,13 +212,21 @@ async def put_share_settings(body: ShareSettingsPatch):
     return await _settings()
 
 
-def _notice(message: str, status_code: int) -> HTMLResponse:
+def _locale(request: Request) -> Locale:
+    return pick_locale(request.headers.get("accept-language"))
+
+
+def _notice(locale: Locale, key: str, status_code: int) -> HTMLResponse:
     return HTMLResponse(
-        render_notice_page(message), status_code=status_code, headers=SECURITY_HEADERS
+        render_notice_page(t(locale, key), locale),
+        status_code=status_code,
+        headers=SECURITY_HEADERS,
     )
 
 
-async def _open_share(token: str) -> tuple[dict[str, Any], Source] | HTMLResponse:
+async def _open_share(
+    token: str, locale: Locale
+) -> tuple[dict[str, Any], Source] | HTMLResponse:
     """Look up a live share link, or return the notice page explaining why not."""
     async with async_session_factory() as session:
         row = (
@@ -231,10 +240,10 @@ async def _open_share(token: str) -> tuple[dict[str, Any], Source] | HTMLRespons
         )
         source = await _load_source(session, row["source_id"]) if row else None
     if row is None or source is None:
-        return _notice("This link is invalid or has been revoked.", 404)
+        return _notice(locale, "invalid", 404)
     expires_at = row["expires_at"]
     if expires_at and expires_at <= _now():
-        return _notice("This link has expired.", 410)
+        return _notice(locale, "expired", 410)
     return dict(row), source
 
 
@@ -244,8 +253,9 @@ def _share_asset_url(token: str) -> Callable[[str], str]:
 
 
 @viewer_router.get("/share/{token}", response_model=None)
-async def view_share(token: str) -> Response:
-    opened = await _open_share(token)
+async def view_share(token: str, request: Request) -> Response:
+    locale = _locale(request)
+    opened = await _open_share(token, locale)
     if isinstance(opened, Response):
         return opened
     row, source = opened
@@ -254,9 +264,9 @@ async def view_share(token: str) -> Response:
     try:
         raw, _warning = await read_raw_with_cache(source, path)
     except ValueError:
-        return _notice("The shared document is no longer available.", 404)
+        return _notice(locale, "gone", 404)
     except (httpx.HTTPStatusError, httpx.RequestError):
-        return _notice("The document could not be fetched right now.", 502)
+        return _notice(locale, "fetch_failed", 502)
 
     async with async_session_factory() as session:
         await session.execute(
@@ -280,18 +290,22 @@ async def view_share(token: str) -> Response:
     try:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
-        return _notice("The shared document could not be decoded.", 500)
+        return _notice(locale, "decode_failed", 500)
     page = render_markdown_page(
-        path, markdown, asset_url=_share_asset_url(token), font_url=f"{token}/font"
+        path,
+        markdown,
+        asset_url=_share_asset_url(token),
+        font_url=f"{token}/font",
+        locale=locale,
     )
     return HTMLResponse(page, headers=SECURITY_HEADERS)
 
 
 @viewer_router.get("/share/{token}/asset", response_model=None)
-async def view_share_asset(token: str, path: str) -> Response:
+async def view_share_asset(token: str, path: str, request: Request) -> Response:
     """Serve an image only if the shared document currently embeds it, so a
     token never exposes other files in the same source."""
-    opened = await _open_share(token)
+    opened = await _open_share(token, _locale(request))
     if isinstance(opened, Response):
         return opened
     row, source = opened
@@ -324,9 +338,9 @@ _FONT_FILE = (
 
 
 @viewer_router.get("/share/{token}/font", response_model=None)
-async def view_share_font(token: str) -> Response:
+async def view_share_font(token: str, request: Request) -> Response:
     """Serve the bundled body font so shared pages look the same on every PC."""
-    opened = await _open_share(token)
+    opened = await _open_share(token, _locale(request))
     if isinstance(opened, Response):
         return opened
     # The font never changes between releases, so browsers may keep it.

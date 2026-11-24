@@ -25,6 +25,7 @@ from pygments.util import ClassNotFound
 
 from .document_formats import image_media_type
 from .markdown_alerts import alerts_plugin
+from .share_i18n import DEFAULT_LOCALE, Locale, t
 
 _FORMATTER = HtmlFormatter(nowrap=True)
 
@@ -208,9 +209,15 @@ def _font_face(font_url: str | None) -> str:
     )
 
 
-def _page(title: str, body: str, bar: str = "", font_url: str | None = None) -> str:
+def _page(
+    title: str,
+    body: str,
+    bar: str = "",
+    font_url: str | None = None,
+    locale: Locale = DEFAULT_LOCALE,
+) -> str:
     return (
-        "<!doctype html><html><head><meta charset='utf-8'>"
+        f"<!doctype html><html lang='{locale}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<meta name='robots' content='noindex'>"
         f"<title>{escape(title)}</title>"
@@ -257,10 +264,7 @@ def _local_image_path(doc_path: str, image: Token) -> str | None:
     return path if path and image_media_type(path) else None
 
 
-_UNSHARED_TITLE = "This document is not shared. Open it in DocSanctum."
-
-
-def _disable_local_links(doc_path: str, tokens: list[Token]) -> None:
+def _disable_local_links(doc_path: str, tokens: list[Token], title: str) -> None:
     """Turn links to other files in the source into plain text, since the
     share token only opens this one document."""
     for token in tokens:
@@ -272,7 +276,7 @@ def _disable_local_links(doc_path: str, tokens: list[Token]) -> None:
             if resolve_doc_path(doc_path, href) is None:
                 continue
             child.tag = "span"
-            child.attrs = {"class": "unshared-link", "title": _UNSHARED_TITLE}
+            child.attrs = {"class": "unshared-link", "title": title}
             for close in children[i + 1 :]:
                 if close.type == "link_close" and close.level == child.level:
                     close.tag = "span"
@@ -321,7 +325,7 @@ def _add_heading_ids(tokens: list[Token]) -> list[tuple[int, str, str]]:
     return headings
 
 
-def _toc(headings: list[tuple[int, str, str]]) -> tuple[str, str]:
+def _toc(headings: list[tuple[int, str, str]], label: str) -> tuple[str, str]:
     """Return the side and collapsible contents lists, or empty strings."""
     entries = [h for h in headings if h[0] <= 3]
     if sum(1 for h in entries if h[0] == 1) == 1:
@@ -335,9 +339,11 @@ def _toc(headings: list[tuple[int, str, str]]) -> tuple[str, str]:
         for level, anchor_id, text in entries
     )
     return (
-        f"<nav class='toc toc-side' aria-label='Contents'><p class='toc-title'>Contents</p>"
+        f"<nav class='toc toc-side' aria-label='{escape(label)}'>"
+        f"<p class='toc-title'>{escape(label)}</p>"
         f"<ol>{items}</ol></nav>",
-        f"<details class='toc toc-inline'><summary>Contents</summary><ol>{items}</ol></details>",
+        f"<details class='toc toc-inline'><summary>{escape(label)}</summary>"
+        f"<ol>{items}</ol></details>",
     )
 
 
@@ -346,6 +352,7 @@ def render_markdown_page(
     markdown: str,
     asset_url: Callable[[str], str] | None = None,
     font_url: str | None = None,
+    locale: Locale = DEFAULT_LOCALE,
 ) -> str:
     """Render a shared document; asset_url maps each embedded local image
     path to the URL the page should load it from, and font_url points at the
@@ -355,7 +362,7 @@ def render_markdown_page(
     bar = (
         "<header class='bar'><div class='bar-inner'><div class='doc'>"
         f"<span class='name' title='{escape(path)}'>{escape(name)}</span>{folder_line}"
-        "</div><span class='badge'>Read-only · DocSanctum</span></div></header>"
+        f"</div><span class='badge'>{escape(t(locale, 'badge'))}</span></div></header>"
     )
     tokens = _md.parse(markdown)
     if asset_url is not None:
@@ -364,14 +371,16 @@ def render_markdown_page(
             if image_path:
                 image.attrSet("src", asset_url(image_path))
                 image.attrSet("loading", "lazy")
-    _disable_local_links(path, tokens)
-    side, inline = _toc(_add_heading_ids(tokens))
+    _disable_local_links(path, tokens, t(locale, "unshared_link"))
+    side, inline = _toc(_add_heading_ids(tokens), t(locale, "contents"))
     body = _md.renderer.render(tokens, _md.options, {})
     # The collapsible contents sit under the document title when it opens with one.
     title_end = body.find("</h1>\n") + len("</h1>\n") if body.startswith("<h1") else 0
     body = body[:title_end] + inline + body[title_end:]
-    return _page(name, side + body, bar, font_url)
+    return _page(name, side + body, bar, font_url, locale)
 
 
-def render_notice_page(message: str) -> str:
-    return _page("DocSanctum", f"<p class='notice'>{escape(message)}</p>")
+def render_notice_page(message: str, locale: Locale = DEFAULT_LOCALE) -> str:
+    return _page(
+        "DocSanctum", f"<p class='notice'>{escape(message)}</p>", locale=locale
+    )

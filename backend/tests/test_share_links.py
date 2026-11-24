@@ -315,3 +315,21 @@ async def test_remote_root_shows_a_hint_instead_of_json(env):
     assert "/share/" in root.text
     assert "script-src" not in root.headers["content-security-policy"]
     assert other.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_share_pages_follow_the_viewer_browser_language(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    korean = {"Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8"}
+    async with client(REMOTE) as c:
+        page = await c.get(f"/share/{link['token']}", headers=korean)
+        bogus = await c.get("/share/nope", headers=korean)
+        root = await c.get("/", headers=korean)
+        english_root = await c.get("/", headers={"Accept-Language": "en-US"})
+    assert "읽기 전용 · DocSanctum" in page.text
+    assert bogus.status_code == 404
+    assert "잘못된 링크이거나 공유가 해제된 링크입니다." in bogus.text
+    assert "<html lang='ko'>" in root.text
+    assert "/share/" in root.text
+    assert "only opens documents shared from DocSanctum" in english_root.text
