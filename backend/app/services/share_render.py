@@ -92,6 +92,7 @@ _md.add_render_rule("heading_close", _heading_close)
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https: data:; "
+        "font-src 'self'; "
         "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     ),
     "Referrer-Policy": "no-referrer",
@@ -108,8 +109,8 @@ _STYLE = """
 }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg);
-  font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
-    "Malgun Gothic", "Noto Sans KR", sans-serif;
+  font: 16px/1.75 "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
   letter-spacing:-0.01em; word-break:keep-all; overflow-wrap:break-word;
   -webkit-font-smoothing:antialiased; }
 .bar { position:sticky; top:0; z-index:1; background:var(--bg);
@@ -195,12 +196,24 @@ h4:hover .header-anchor, .header-anchor:focus { opacity:1; }
 """
 
 
-def _page(title: str, body: str, bar: str = "") -> str:
+def _font_face(font_url: str | None) -> str:
+    # One variable file covers every weight; swap keeps text visible meanwhile.
+    if font_url is None:
+        return ""
+    return (
+        "@font-face { font-family:'Pretendard Variable'; font-style:normal; "
+        "font-display:swap; font-weight:45 920; "
+        f"src:url('{font_url}') format('woff2-variations'), url('{font_url}') format('woff2'); }}"
+    )
+
+
+def _page(title: str, body: str, bar: str = "", font_url: str | None = None) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<meta name='robots' content='noindex'>"
-        f"<title>{escape(title)}</title><style>{_STYLE}{_CODE_CSS}</style></head>"
+        f"<title>{escape(title)}</title>"
+        f"<style>{_font_face(font_url)}{_STYLE}{_CODE_CSS}</style></head>"
         f"<body>{bar}<main>{body}</main></body></html>"
     )
 
@@ -306,10 +319,14 @@ def _toc(headings: list[tuple[int, str, str]]) -> tuple[str, str]:
 
 
 def render_markdown_page(
-    path: str, markdown: str, asset_url: Callable[[str], str] | None = None
+    path: str,
+    markdown: str,
+    asset_url: Callable[[str], str] | None = None,
+    font_url: str | None = None,
 ) -> str:
     """Render a shared document; asset_url maps each embedded local image
-    path to the URL the page should load it from."""
+    path to the URL the page should load it from, and font_url points at the
+    bundled body font."""
     folder, _, name = path.rpartition("/")
     folder_line = f"<span class='folder'>{escape(folder)}</span>" if folder else ""
     bar = (
@@ -329,7 +346,7 @@ def render_markdown_page(
     # The collapsible contents sit under the document title when it opens with one.
     title_end = body.find("</h1>\n") + len("</h1>\n") if body.startswith("<h1") else 0
     body = body[:title_end] + inline + body[title_end:]
-    return _page(name, side + body, bar)
+    return _page(name, side + body, bar, font_url)
 
 
 def render_notice_page(message: str) -> str:

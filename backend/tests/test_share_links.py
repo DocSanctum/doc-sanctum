@@ -272,3 +272,33 @@ async def test_shared_tables_are_wrapped_so_they_scroll_on_phones(env):
         res = await c.get(f"/share/{link['token']}")
     assert "<div class='table-wrap'><table>" in res.text
     assert "</table></div>" in res.text
+
+
+@pytest.mark.asyncio
+async def test_shared_page_loads_the_bundled_font_through_its_token(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(REMOTE) as c:
+        page = await c.get(f"/share/{link['token']}")
+        font = await c.get(f"/share/{link['token']}/font")
+    assert f"url('{link['token']}/font')" in page.text
+    assert "font-src 'self'" in page.headers["content-security-policy"]
+    assert font.status_code == 200
+    assert font.headers["content-type"] == "font/woff2"
+    assert font.content[:4] == b"wOF2"
+    assert "immutable" in font.headers["cache-control"]
+
+
+@pytest.mark.asyncio
+async def test_font_route_needs_a_live_token(env):
+    client, _docs = env
+    link = await _create(client, "team/plan.md")
+    async with client(LOCAL) as c:
+        await c.delete(f"/api/v1/shares/{link['id']}")
+    async with client(REMOTE) as c:
+        revoked = await c.get(f"/share/{link['token']}/font")
+        bogus = await c.get("/share/nope/font")
+        nested = await c.get(f"/share/{link['token']}/font/extra")
+    assert revoked.status_code == 404
+    assert bogus.status_code == 404
+    assert nested.status_code == 404
