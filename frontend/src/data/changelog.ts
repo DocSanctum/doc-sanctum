@@ -7,6 +7,16 @@ export interface ChangelogEntry {
 // Keep each change to one short line that a user can scan at a glance.
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.5.0',
+    date: '2026-11-24',
+    changes: [
+      'Shared pages use the Pretendard font on every PC',
+      'Shared pages follow the reader\'s language (English or Korean)',
+      'Links to unshared documents show as plain text',
+      'The share address alone now shows how to open a link',
+    ],
+  },
+  {
     version: '1.4.0',
     date: '2026-11-23',
     changes: ['Shared pages: code highlighting and a table of contents'],
