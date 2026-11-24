@@ -45,6 +45,12 @@ export const en = {
     treeNode: {
       paneOpen: 'Open in pane {paneId}',
       paneOpenActive: 'Open in pane {paneId} (active)',
+      indexError: {
+        no_text: 'Left out of search: no readable text (scanned, password-protected or damaged file).',
+        fetch_failed: 'Left out of search: could not be fetched. It will be retried on the next sync.',
+        index_failed: 'Left out of search: indexing failed. It will be retried on the next sync.',
+        folder: '{count} document(s) in this folder could not be indexed.',
+      },
     },
     addSourceModal: {
       title: 'Add source path',

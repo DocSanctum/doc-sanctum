@@ -5,6 +5,7 @@ import backend.app.keywordindex.client as keywordindex_module
 import backend.app.vectorstore.chunker as chunker_module
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
+import backend.app.vectorstore.index_errors as index_errors_module
 import backend.app.vectorstore.index_progress as index_progress_module
 import backend.app.vectorstore.indexer as indexer_module
 import backend.app.vectorstore.rebuild_check as rebuild_check_module
@@ -20,6 +21,10 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 pytestmark = pytest.mark.asyncio
 
 _CREATE_TABLES = """
+CREATE TABLE IF NOT EXISTS doc_index_error (
+    source_id TEXT NOT NULL, path TEXT NOT NULL, kind TEXT NOT NULL,
+    message TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (source_id, path)
+);
 CREATE TABLE IF NOT EXISTS source (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
     path TEXT NOT NULL UNIQUE, polling_interval_seconds INTEGER,
@@ -53,6 +58,7 @@ async def db(monkeypatch, tmp_path):
         rebuild_lock_module,
         rebuild_check_module,
         index_progress_module,
+        index_errors_module,
     ):
         monkeypatch.setattr(mod, "async_session_factory", factory)
     # rebuild_check calls get_setting/set_setting, which open their own
@@ -727,3 +733,95 @@ async def test_failed_progress_writes_do_not_stop_indexing(
     await indexer_module.sync_source_index(source)
 
     assert fake_vector_writes["upsert"] == ["a.md"]
+
+
+async def _errors(source_id: str) -> dict[str, str]:
+    return {
+        row["path"]: row["kind"]
+        for row in await index_errors_module.list_for_source(source_id)
+    }
+
+
+async def test_failed_documents_are_recorded_then_cleared_once_fixed(
+    db, fake_vector_writes, monkeypatch
+):
+    from backend.app.services.document_formats import NoExtractableTextError
+
+    source = Source(name="s", type="local", path="/tmp/s")
+    broken = {"scan.pdf"}
+
+    async def fake_list_documents(_source):
+        return _docs({"ok.md": "", "scan.pdf": ""}), None
+
+    async def fake_read_with_cache(_source, path):
+        if path in broken:
+            raise NoExtractableTextError("No extractable text in any page")
+        return ExtractedDocument(text="# A\n\nhi", pages=None, page_starts=None), None
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+
+    warnings = await indexer_module.sync_source_index(source)
+    assert warnings[0]["kind"] == "no_text"
+    assert await _errors(source.id) == {"scan.pdf": "no_text"}
+
+    broken.clear()
+    await indexer_module.sync_source_index(source)
+    assert await _errors(source.id) == {}
+
+
+async def test_embedding_failures_are_recorded_as_index_failures(
+    db, fake_vector_writes, monkeypatch
+):
+    source = Source(name="s", type="local", path="/tmp/s")
+
+    async def fake_list_documents(_source):
+        return _docs({"a.md": ""}), None
+
+    async def fake_read_with_cache(_source, path):
+        return ExtractedDocument(text="# A\n\nhi", pages=None, page_starts=None), None
+
+    async def failing_upsert(*args, **kwargs):
+        raise RuntimeError("engine crashed")
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+    monkeypatch.setattr(indexer_module.client, "upsert_chunks", failing_upsert)
+
+    await indexer_module.sync_source_index(source)
+    assert await _errors(source.id) == {"a.md": "index_failed"}
+
+
+async def test_errors_for_removed_documents_are_pruned(
+    db, fake_vector_writes, monkeypatch
+):
+    source = Source(name="s", type="local", path="/tmp/s")
+    await index_errors_module.record(source.id, "gone.pdf", "no_text", "x")
+    await index_errors_module.record(source.id, "still.pdf", "no_text", "x")
+
+    async def fake_list_documents(_source):
+        return _docs({"still.pdf": ""}), None
+
+    async def fake_read_with_cache(_source, path):
+        raise ValueError(f"File not found: {path}")
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+
+    await indexer_module.sync_source_index(source)
+    assert await _errors(source.id) == {"still.pdf": "fetch_failed"}
+
+
+async def test_deleting_a_source_clears_its_errors(db, monkeypatch):
+    await index_errors_module.record("s1", "a.pdf", "no_text", "x")
+    await index_errors_module.record("s2", "b.pdf", "no_text", "x")
+
+    async def noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(indexer_module.client, "delete_collection", noop)
+    monkeypatch.setattr(indexer_module.keyword_client, "delete_source", noop)
+
+    await indexer_module.delete_source_index("s1")
+    assert await _errors("s1") == {}
+    assert await _errors("s2") == {"b.pdf": "no_text"}

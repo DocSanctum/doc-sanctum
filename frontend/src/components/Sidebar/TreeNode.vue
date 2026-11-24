@@ -7,6 +7,11 @@
       >
         <span>{{ open ? '▾' : '▸' }}</span>
         <span class="font-medium">{{ node.name }}</span>
+        <span
+          v-if="!open && folderErrorCount"
+          class="index-error-badge ml-auto pr-1 text-amber-500"
+          :title="t('sidebar.treeNode.indexError.folder', { count: folderErrorCount })"
+        >⚠</span>
       </button>
       <div v-if="open">
         <TreeNode
@@ -38,7 +43,12 @@
               : t('sidebar.treeNode.paneOpen', { paneId: m.paneId })"
           />
         </span>
-        <span class="truncate">{{ node.name }}</span>
+        <span class="truncate" :class="{ 'text-gray-400 dark:text-gray-500': fileError }">{{ node.name }}</span>
+        <span
+          v-if="fileError"
+          class="index-error-badge ml-auto shrink-0 pr-1 text-amber-500"
+          :title="fileErrorTitle"
+        >⚠</span>
       </button>
     </li>
   </ul>
@@ -49,6 +59,7 @@ import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { TreeNode as TreeNodeType } from '../../types'
 import { usePanes, paneColorClass } from '../../composables/usePanes'
+import { countErrorsUnder, useIndexErrors } from '../../composables/useIndexErrors'
 
 const props = defineProps<{
   node: TreeNodeType
@@ -69,6 +80,18 @@ const activeMatchTint = computed(() => (activeMatch.value ? paneColorClass(activ
 // mouseover 시 배경색을 현재 활성 패널의 색으로 보여줘서, 트리를 클릭하면
 // 어느 패널에 반영될지 hover만으로도 미리 알 수 있게 한다.
 const activePaneHoverClass = computed(() => paneColorClass(colorOf(activePaneId.value), 'hover'))
+
+const indexErrors = useIndexErrors()
+const fileError = computed(() => (props.node.is_dir ? undefined : indexErrors.value.get(props.node.path)))
+const fileErrorTitle = computed(() =>
+  fileError.value
+    ? `${t(`sidebar.treeNode.indexError.${fileError.value.kind}`)}\n${fileError.value.message}`
+    : undefined,
+)
+// Shown only on a collapsed folder, so a hidden failure is still noticed.
+const folderErrorCount = computed(() =>
+  props.node.is_dir ? countErrorsUnder(indexErrors.value, props.node.path) : 0,
+)
 
 const open = ref(true)
 const fileBtn = ref<HTMLButtonElement | null>(null)

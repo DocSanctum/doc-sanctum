@@ -88,6 +88,19 @@ async def create_tables() -> None:
         # still 'in_progress' at startup means the previous process died
         # mid-write, and its source is routed through an automatic full
         # rebuild instead of trusting the row.
+        # Documents that failed to index and why, shown as a badge in the tree.
+        await conn.execute(
+            text("""
+            CREATE TABLE IF NOT EXISTS doc_index_error (
+                source_id TEXT NOT NULL,
+                path TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                message TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (source_id, path)
+            )
+        """)
+        )
         await conn.execute(
             text("""
             CREATE TABLE IF NOT EXISTS doc_index_cache (

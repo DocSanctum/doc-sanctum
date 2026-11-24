@@ -7,6 +7,7 @@ import os
 import backend.app.api.sources as sources_module
 import backend.app.core.crypto as crypto
 import backend.app.services.poller as poller_module
+import backend.app.vectorstore.index_errors as index_errors_module
 import httpx
 import pytest
 import pytest_asyncio
@@ -101,6 +102,13 @@ CREATE TABLE IF NOT EXISTS source (
 )
 """
 
+_CREATE_INDEX_ERROR_TABLE = """
+CREATE TABLE IF NOT EXISTS doc_index_error (
+    source_id TEXT NOT NULL, path TEXT NOT NULL, kind TEXT NOT NULL,
+    message TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY (source_id, path)
+)
+"""
+
 _CREATE_SHARE_LINK_TABLE = """
 CREATE TABLE IF NOT EXISTS share_link (
     id TEXT PRIMARY KEY,
@@ -124,7 +132,9 @@ async def session_factory(monkeypatch, tmp_path):
     async with engine.begin() as conn:
         await conn.execute(text(_CREATE_SOURCE_TABLE))
         await conn.execute(text(_CREATE_SHARE_LINK_TABLE))
+        await conn.execute(text(_CREATE_INDEX_ERROR_TABLE))
     monkeypatch.setattr(sources_module, "async_session_factory", factory)
+    monkeypatch.setattr(index_errors_module, "async_session_factory", factory)
     yield factory
     await engine.dispose()
 
@@ -221,6 +231,26 @@ async def test_resume_local_source_marks_error_on_index_failure(
     await sources_module._resume_local_source(source)
 
     assert await _get_status(session_factory, "s2") == "error"
+
+
+@pytest.mark.asyncio
+async def test_resume_local_source_marks_partial_when_some_documents_fail(
+    monkeypatch, session_factory
+):
+    monkeypatch.setattr(sources_module, "start_watching", lambda sid, path: None)
+    monkeypatch.setattr(sources_module, "register_index_listener", lambda sid, cb: None)
+
+    async def sync_with_one_failure(source):
+        return [{"path": "scan.pdf", "reason": "index_error", "kind": "no_text"}]
+
+    monkeypatch.setattr(sources_module, "sync_source_index", sync_with_one_failure)
+
+    source = Source(id="s3", name="vault", type="local", path="~/vault3")
+    await _insert_source(session_factory, source)
+
+    await sources_module._resume_local_source(source)
+
+    assert await _get_status(session_factory, "s3") == "partial"
 
 
 @pytest.mark.asyncio
@@ -772,3 +802,19 @@ async def test_delete_source_removes_its_share_links(monkeypatch, session_factor
             (await session.execute(text("SELECT id FROM share_link"))).scalars().all()
         )
     assert remaining == ["l2"]
+
+
+@pytest.mark.asyncio
+async def test_index_errors_route_lists_failed_documents(session_factory):
+    source = Source(id="s-err", name="repo", type="github", path="owner/err")
+    await _insert_source(session_factory, source)
+    await index_errors_module.record("s-err", "scan.pdf", "no_text", "No text")
+    await index_errors_module.record("other", "x.md", "fetch_failed", "404")
+
+    async with session_factory() as session:
+        listed = await sources_module.list_index_errors("s-err", session)
+        with pytest.raises(HTTPException) as missing:
+            await sources_module.list_index_errors("nope", session)
+
+    assert [(e["path"], e["kind"]) for e in listed] == [("scan.pdf", "no_text")]
+    assert missing.value.status_code == 404

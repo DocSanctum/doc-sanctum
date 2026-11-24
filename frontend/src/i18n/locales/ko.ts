@@ -47,6 +47,12 @@ export const ko: MessageSchema = {
     treeNode: {
       paneOpen: '패널 {paneId}에서 열림',
       paneOpenActive: '패널 {paneId}에서 열림 (활성)',
+      indexError: {
+        no_text: '텍스트를 읽을 수 없어 검색에서 빠졌어요 (스캔본, 암호가 걸린 PDF, 손상된 파일 등).',
+        fetch_failed: '원본에서 가져오지 못해 검색에서 빠졌어요. 다음 동기화 때 다시 시도합니다.',
+        index_failed: '색인하다 오류가 나서 검색에서 빠졌어요. 다음 동기화 때 다시 시도합니다.',
+        folder: '이 폴더에 색인하지 못한 문서가 {count}개 있어요.',
+      },
     },
     addSourceModal: {
       title: '소스 경로 추가',
