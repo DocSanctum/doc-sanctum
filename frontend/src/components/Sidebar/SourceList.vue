@@ -24,8 +24,8 @@
         <span class="text-sm leading-none">{{ source.icon || source.name.charAt(0).toUpperCase() }}</span>
         <span
           class="absolute bottom-0.5 right-0.5 inline-block w-1.5 h-1.5 rounded-full"
-          :class="statusDot(source.status)"
-          :title="source.error_message ?? source.status"
+          :class="statusDot(dotStatus(source))"
+          :title="progressText(source) ?? source.error_message ?? source.status"
         />
       </li>
     </ul>
@@ -40,14 +40,36 @@
         <span class="flex items-center gap-2 min-w-0 flex-1">
           <span
             class="inline-block w-2 h-2 rounded-full shrink-0"
-            :class="statusDot(source.status)"
+            :class="statusDot(dotStatus(source))"
             :title="source.error_message ?? source.status"
           />
-          <span class="flex flex-col min-w-0">
+          <span class="flex flex-col min-w-0 flex-1">
             <span class="text-sm truncate">
               <span v-if="source.icon" class="mr-1">{{ source.icon }}</span>{{ source.name }}
             </span>
-            <span class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ source.path }}</span>
+            <template v-if="progressText(source)">
+              <span
+                class="index-progress-text flex gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+                :title="progressText(source) ?? undefined"
+              >
+                <span class="truncate">{{ t(`sidebar.sourceList.indexing.${indexProgress(source)?.reasonKey}`) }}</span>
+                <span v-if="progressCount(source)" class="index-progress-count ml-auto shrink-0 tabular-nums">{{ progressCount(source) }}</span>
+              </span>
+              <span
+                v-if="indexProgress(source)?.percent != null"
+                class="mt-1 block h-0.5 w-full rounded bg-gray-200 dark:bg-gray-700 overflow-hidden"
+                role="progressbar"
+                :aria-valuenow="indexProgress(source)?.percent ?? 0"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <span
+                  class="index-progress-bar block h-full bg-yellow-400 transition-[width] duration-500"
+                  :style="{ width: `${indexProgress(source)?.percent ?? 0}%` }"
+                />
+              </span>
+            </template>
+            <span v-else class="text-xs text-gray-400 dark:text-gray-500 truncate">{{ source.path }}</span>
           </span>
         </span>
         <button
@@ -71,8 +93,9 @@
 
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
-import type { SourceStatus } from '../../types'
+import type { Source, SourceStatus } from '../../types'
 import { useSources } from '../../composables/useSources'
+import { indexProgress, isIndexing } from '../../utils/indexProgress'
 
 withDefaults(defineProps<{ selectedSourceId: string | null; collapsed?: boolean }>(), {
   collapsed: false,
@@ -84,7 +107,28 @@ defineEmits<{
   'delete-source': [id: string]
 }>()
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+
+function progressCount(source: Source): string | null {
+  const progress = indexProgress(source)
+  if (progress?.total == null) return null
+  const format = (value: number) => value.toLocaleString(locale.value)
+  return `${format(progress.done ?? 0)}/${format(progress.total)}`
+}
+
+// The full line, used for tooltips where the sidebar is too narrow.
+function progressText(source: Source): string | null {
+  const progress = indexProgress(source)
+  if (!progress) return null
+  const label = t(`sidebar.sourceList.indexing.${progress.reasonKey}`)
+  const count = progressCount(source)
+  return count ? `${label} · ${count}` : label
+}
+
+// A background re-index on a remote source keeps its status, so pulse anyway.
+function dotStatus(source: Source): SourceStatus {
+  return isIndexing(source) ? 'syncing' : source.status
+}
 const { sourcesQuery } = useSources()
 
 function statusDot(status: SourceStatus): string {

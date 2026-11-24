@@ -30,6 +30,14 @@ export const ko: MessageSchema = {
       loading: '로딩 중...',
       loadError: '소스 로드 실패',
       editSource: '소스 정보 수정',
+      indexing: {
+        initial: '첫 색인 중',
+        model: '모델 변경으로 재색인',
+        chunking: '분할 방식 변경으로 재색인',
+        keyword: '키워드 검색 변경으로 재색인',
+        recovery: '중단된 색인 다시 하는 중',
+        changes: '변경 사항 반영 중',
+      },
     },
     fileTree: {
       loading: '파일 목록 로딩 중...',

@@ -5,6 +5,7 @@ import backend.app.keywordindex.client as keywordindex_module
 import backend.app.vectorstore.chunker as chunker_module
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
+import backend.app.vectorstore.index_progress as index_progress_module
 import backend.app.vectorstore.indexer as indexer_module
 import backend.app.vectorstore.rebuild_check as rebuild_check_module
 import backend.app.vectorstore.rebuild_events as rebuild_events_module
@@ -23,7 +24,8 @@ CREATE TABLE IF NOT EXISTS source (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
     path TEXT NOT NULL UNIQUE, polling_interval_seconds INTEGER,
     created_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active',
-    error_message TEXT, icon TEXT
+    error_message TEXT, icon TEXT, index_reason TEXT, index_done INTEGER,
+    index_total INTEGER
 );
 CREATE TABLE IF NOT EXISTS setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS doc_index_cache (
@@ -46,7 +48,12 @@ async def db(monkeypatch, tmp_path):
         for stmt in _CREATE_TABLES.strip().split(";"):
             if stmt.strip():
                 await conn.execute(text(stmt))
-    for mod in (hash_cache_module, rebuild_lock_module, rebuild_check_module):
+    for mod in (
+        hash_cache_module,
+        rebuild_lock_module,
+        rebuild_check_module,
+        index_progress_module,
+    ):
         monkeypatch.setattr(mod, "async_session_factory", factory)
     # rebuild_check calls get_setting/set_setting, which open their own
     # sessions via the database module's factory directly.
@@ -582,3 +589,141 @@ async def test_keyword_schema_version_first_observation_with_existing_data_still
     assert first_line.startswith(
         "REBUILT source=all sources reason=keyword-schema-mismatch"
     )
+
+
+async def _progress(factory, source_id: str) -> dict:
+    async with factory() as session:
+        row = (
+            (
+                await session.execute(
+                    text(
+                        "SELECT index_reason, index_done, index_total FROM source "
+                        "WHERE id = :id"
+                    ),
+                    {"id": source_id},
+                )
+            )
+            .mappings()
+            .one()
+        )
+    return dict(row)
+
+
+async def test_model_change_marks_every_source_with_the_reason(
+    db, monkeypatch, tmp_path
+):
+    from backend.app.core.database import set_setting
+
+    first = Source(name="a", type="local", path="/tmp/a")
+    second = Source(name="b", type="local", path="/tmp/b")
+    await _insert_source(db, first)
+    await _insert_source(db, second)
+    await set_setting("embedding_model_signature", "OldFn:128")
+    await hash_cache_module.upsert(first.id, "a.md", "h1", None)
+
+    monkeypatch.setattr(client_module, "_embedding_dimension", 384)
+
+    class _Fn:
+        def name(self) -> str:
+            return "new-model"
+
+    monkeypatch.setattr(client_module, "_embedding_function", _Fn())
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", tmp_path / "events")
+
+    await rebuild_check_module._check_embedding_signature()
+
+    assert (await _progress(db, first.id))["index_reason"] == "model"
+    assert (await _progress(db, second.id))["index_reason"] == "model"
+
+
+async def test_recovery_reason_is_set_only_on_the_crashed_source(
+    db, monkeypatch, tmp_path
+):
+    crashed = Source(name="crashed", type="local", path="/tmp/crashed")
+    healthy = Source(name="healthy", type="local", path="/tmp/healthy")
+    await _insert_source(db, crashed)
+    await _insert_source(db, healthy)
+    await hash_cache_module.mark_in_progress(crashed.id, "b.md")
+    monkeypatch.setattr(rebuild_events_module, "_EVENTS_DIR", tmp_path / "events")
+
+    await rebuild_check_module._check_incomplete_writes()
+
+    assert (await _progress(db, crashed.id))["index_reason"] == "recovery"
+    assert (await _progress(db, healthy.id))["index_reason"] is None
+
+
+async def test_sync_reports_progress_then_clears_it_and_the_reason(
+    db, fake_vector_writes, monkeypatch
+):
+    source = Source(name="s", type="local", path="/tmp/s")
+    await _insert_source(db, source)
+    await index_progress_module.mark_reason("chunking", source.id)
+    content_by_path = {"a.md": "# A\n\none", "b.md": "# B\n\ntwo"}
+    seen_during_sync: list[dict] = []
+
+    async def fake_list_documents(_source):
+        return _docs(content_by_path), None
+
+    async def fake_read_with_cache(_source, path):
+        seen_during_sync.append(await _progress(db, source.id))
+        return ExtractedDocument(
+            text=content_by_path[path], pages=None, page_starts=None
+        ), None
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+
+    await indexer_module.sync_source_index(source)
+
+    assert seen_during_sync[0] == {
+        "index_reason": "chunking",
+        "index_done": 0,
+        "index_total": 2,
+    }
+    assert await _progress(db, source.id) == {
+        "index_reason": None,
+        "index_done": None,
+        "index_total": None,
+    }
+
+
+async def test_degraded_listing_keeps_the_reason_for_the_next_sync(
+    db, fake_vector_writes, monkeypatch
+):
+    source = Source(name="s", type="github", path="o/r")
+    await _insert_source(db, source)
+    await index_progress_module.mark_reason("model", source.id)
+
+    async def fake_list_documents(_source):
+        return [], {"reason": "tree", "message": "rate limited"}
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+
+    await indexer_module.sync_source_index(source)
+
+    progress = await _progress(db, source.id)
+    assert progress["index_reason"] == "model"
+    assert progress["index_total"] is None
+
+
+async def test_failed_progress_writes_do_not_stop_indexing(
+    db, fake_vector_writes, monkeypatch
+):
+    source = Source(name="s", type="local", path="/tmp/s")
+
+    async def fake_list_documents(_source):
+        return _docs({"a.md": ""}), None
+
+    async def fake_read_with_cache(_source, path):
+        return ExtractedDocument(text="# A\n\nhi", pages=None, page_starts=None), None
+
+    def broken_factory():
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(indexer_module, "_list_documents", fake_list_documents)
+    monkeypatch.setattr(indexer_module, "read_with_cache", fake_read_with_cache)
+    monkeypatch.setattr(index_progress_module, "async_session_factory", broken_factory)
+
+    await indexer_module.sync_source_index(source)
+
+    assert fake_vector_writes["upsert"] == ["a.md"]
