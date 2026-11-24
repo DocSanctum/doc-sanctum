@@ -16,13 +16,18 @@ from collections.abc import Sequence
 
 from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from starlette.responses import JSONResponse
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from ..services.share_render import SECURITY_HEADERS, render_notice_page
 from .database import async_session_factory, set_setting
 
 TOKEN_SETTING_KEY = "remote_mcp_token"
 _MCP_PREFIXES = ("/mcp", "/mcp-sse")
+_ROOT_NOTICE = (
+    "This address only opens documents shared from DocSanctum. "
+    "Open the full link you were sent, which includes /share/ and a code."
+)
 
 
 def _new_token() -> str:
@@ -98,6 +103,12 @@ class ListenerGuard:
         # the viewer route, so it skips the MCP bearer token.
         if _is_share_path(scope["path"]):
             await self._app(scope, receive, send)
+            return
+        # Someone who types just the host and port sees a hint, not bare JSON.
+        if scope["type"] == "http" and scope["path"] == "/":
+            await HTMLResponse(
+                render_notice_page(_ROOT_NOTICE), headers=SECURITY_HEADERS
+            )(scope, receive, send)
             return
         # The token stands in for the Host check here, since a DNS rebinding
         # page cannot know it, so LAN clients may use any hostname or IP.
