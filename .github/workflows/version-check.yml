@@ -1,9 +1,8 @@
 name: Version Check
 
-# Runs on every PR and when labels change, so adding skip-version re-runs it.
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened]
 
 concurrency:
   group: version-check-${{ github.ref }}
@@ -11,7 +10,7 @@ concurrency:
 
 jobs:
   version:
-    name: Version Bump
+    name: Version Consistency
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,8 +19,4 @@ jobs:
       - name: Check version and changelog
         env:
           BASE_REF: ${{ github.base_ref }}
-          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-version') }}
-        run: |
-          args=("origin/$BASE_REF")
-          if [ "$SKIP" = "true" ]; then args+=(--skip-bump); fi
-          python3 scripts/check_version.py "${args[@]}"
+        run: python3 scripts/check_version.py "origin/$BASE_REF"
