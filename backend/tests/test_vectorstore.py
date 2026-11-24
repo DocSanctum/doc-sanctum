@@ -6,6 +6,7 @@ from pathlib import Path
 
 import backend.app.vectorstore.client as client_module
 import backend.app.vectorstore.hash_cache as hash_cache_module
+import backend.app.vectorstore.index_progress as index_progress_module
 import backend.app.vectorstore.indexer as indexer_module
 import backend.app.vectorstore.tokenizer as tokenizer_module
 import pytest
@@ -401,6 +402,8 @@ async def hash_cache_db(monkeypatch, tmp_path):
         """)
         )
     monkeypatch.setattr(hash_cache_module, "async_session_factory", factory)
+    # This schema has no source table, so progress writes fail and are skipped.
+    monkeypatch.setattr(index_progress_module, "async_session_factory", factory)
     yield factory
     await engine.dispose()
 

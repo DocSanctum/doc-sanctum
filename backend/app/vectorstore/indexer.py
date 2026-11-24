@@ -18,6 +18,7 @@ from ..services.document_cache import clear_source
 from ..services.document_formats import ExtractedDocument
 from . import client, hash_cache
 from .chunker import chunk_markdown
+from .index_progress import ProgressReporter, mark_reason
 
 logger = logging.getLogger(__name__)
 
@@ -199,42 +200,63 @@ async def sync_source_index(source: Source) -> list[dict[str, Any]]:
         if doc.get("sha") is None or known_shas.get(doc["path"]) != doc.get("sha")
     ]
 
-    sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
-    fetched = await asyncio.gather(
-        *(_prefetch(source, path, sha, sem) for path, sha in to_fetch)
-    )
-
     # A degraded tree listing (tree_warning) is surfaced to the caller so the
     # source can be flagged instead of silently looking fully indexed.
     warnings: list[dict[str, Any]] = []
     if tree_warning is not None:
         warnings.append(tree_warning)
 
-    for path, sha, extracted, warning in fetched:
-        if warning is not None:
-            warnings.append(warning)
-            continue
-        # extracted is only None on a fetch/extraction failure, which is
-        # reported via `warning` and handled above, so it is always present
-        # here.
-        assert extracted is not None
-        # A sha-less source can only detect an unchanged document by comparing
-        # the freshly fetched content's hash against the last-indexed one.
-        if sha is None and known_hashes.get(path) == _hash_content(extracted.text):
-            continue
-        warning = await _index_document(source, path, sha, extracted=extracted)
-        if warning:
-            warnings.append(warning)
+    progress = ProgressReporter(source.id, len(to_fetch))
+    await progress.start()
+    completed = False
+    try:
+        # Each document is indexed as soon as its download finishes, so the
+        # progress count moves and embedding overlaps the remaining fetches.
+        sem = asyncio.Semaphore(_FETCH_CONCURRENCY)
+        pending = [_prefetch(source, path, sha, sem) for path, sha in to_fetch]
+        for next_fetched in asyncio.as_completed(pending):
+            path, sha, extracted, warning = await next_fetched
+            await _index_fetched(
+                source, path, sha, extracted, warning, known_hashes, warnings
+            )
+            await progress.advance()
 
-    # Prune only against a tree we actually listed. When the listing degraded,
-    # current_paths is empty (or stale) and can't distinguish a deleted document
-    # from one we simply couldn't fetch — pruning then would wipe the whole
-    # index on a transient rate limit, so skip it.
-    if tree_warning is None:
-        for stale_path in (set(known_hashes) | set(known_shas)) - current_paths:
-            await remove_document(source, stale_path)
+        # Prune only against a tree we actually listed. When the listing
+        # degraded, current_paths is empty (or stale) and can't distinguish a
+        # deleted document from one we simply couldn't fetch — pruning then
+        # would wipe the whole index on a transient rate limit, so skip it.
+        if tree_warning is None:
+            for stale_path in (set(known_hashes) | set(known_shas)) - current_paths:
+                await remove_document(source, stale_path)
+        completed = tree_warning is None
+    finally:
+        await progress.finish(completed)
 
     return warnings
+
+
+async def _index_fetched(
+    source: Source,
+    path: str,
+    sha: str | None,
+    extracted: ExtractedDocument | None,
+    warning: dict[str, Any] | None,
+    known_hashes: dict[str, str],
+    warnings: list[dict[str, Any]],
+) -> None:
+    if warning is not None:
+        warnings.append(warning)
+        return
+    # extracted is only None on a fetch/extraction failure, which is reported
+    # via `warning` and handled above, so it is always present here.
+    assert extracted is not None
+    # A sha-less source can only detect an unchanged document by comparing the
+    # freshly fetched content's hash against the last-indexed one.
+    if sha is None and known_hashes.get(path) == _hash_content(extracted.text):
+        return
+    index_warning = await _index_document(source, path, sha, extracted=extracted)
+    if index_warning:
+        warnings.append(index_warning)
 
 
 async def delete_source_index(source_id: str) -> None:
@@ -269,6 +291,7 @@ async def create_index(source: Source) -> list[dict[str, Any]]:
     """
     if not client.init_engine():
         raise EngineUnavailableError("Local embedding engine is unavailable")
+    await mark_reason("initial", source.id)
     return await sync_source_index(source)
 
 

@@ -57,6 +57,11 @@ class Source:
     # backend/app/core/crypto.py and services/token_resolver.py. Excluded
     # from to_dict(); only its presence is exposed via access_token_configured.
     access_token_encrypted: str | None = None
+    # Why the source is being re-indexed and how many documents are done,
+    # while a sync runs (see vectorstore/index_progress.py).
+    index_reason: str | None = None
+    index_done: int | None = None
+    index_total: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -70,6 +75,9 @@ class Source:
             "error_message": self.error_message,
             "icon": self.icon,
             "access_token_configured": self.access_token_encrypted is not None,
+            "index_reason": self.index_reason,
+            "index_done": self.index_done,
+            "index_total": self.index_total,
         }
 
     @classmethod
@@ -85,4 +93,7 @@ class Source:
             error_message=row["error_message"],
             icon=row.get("icon"),
             access_token_encrypted=row.get("access_token_encrypted"),
+            index_reason=row.get("index_reason"),
+            index_done=row.get("index_done"),
+            index_total=row.get("index_total"),
         )

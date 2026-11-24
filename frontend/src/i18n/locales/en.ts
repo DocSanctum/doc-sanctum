@@ -28,6 +28,14 @@ export const en = {
       loading: 'Loading...',
       loadError: 'Failed to load sources',
       editSource: 'Edit source info',
+      indexing: {
+        initial: 'First index',
+        model: 'Model changed',
+        chunking: 'Splitting changed',
+        keyword: 'Search changed',
+        recovery: 'Resuming index',
+        changes: 'Applying changes',
+      },
     },
     fileTree: {
       loading: 'Loading file list...',

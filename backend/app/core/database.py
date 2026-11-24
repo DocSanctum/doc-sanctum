@@ -146,6 +146,17 @@ async def create_tables() -> None:
             await conn.execute(
                 text("ALTER TABLE source ADD COLUMN access_token_encrypted TEXT")
             )
+        # Why a source is being re-indexed and how far along it is, shown in
+        # the sidebar while a sync runs.
+        for column, kind in (
+            ("index_reason", "TEXT"),
+            ("index_done", "INTEGER"),
+            ("index_total", "INTEGER"),
+        ):
+            if column not in existing_columns:
+                await conn.execute(
+                    text(f"ALTER TABLE source ADD COLUMN {column} {kind}")
+                )
 
 
 async def get_setting(key: str, default: str | None = None) -> str | None:

@@ -8,6 +8,7 @@ from sqlalchemy import text
 from ..core.database import async_session_factory, get_setting, set_setting
 from ..keywordindex.client import KEYWORD_INDEX_SCHEMA_VERSION
 from . import chunker, client, hash_cache, rebuild_events, rebuild_lock
+from .index_progress import mark_reason
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,7 @@ async def _check_embedding_signature() -> None:
             await client.delete_collection(source_id)
         await set_setting(_EMBEDDING_SIGNATURE_KEY, current)
         duration = time.monotonic() - started
+        await mark_reason("model")
         rebuild_events.record(
             source_id="*",
             source_name="all sources",
@@ -141,6 +143,7 @@ async def _check_chunking_version() -> None:
             # there was nothing in the hash cache to invalidate either, so
             # this isn't a real rebuild — just start tracking the version.
             return
+        await mark_reason("chunking")
         rebuild_events.record(
             source_id="*",
             source_name="all sources",
@@ -205,6 +208,7 @@ async def _check_keyword_schema_version() -> None:
             # A genuinely fresh install: nothing to invalidate, just start
             # tracking the version.
             return
+        await mark_reason("keyword")
         rebuild_events.record(
             source_id="*",
             source_name="all sources",
@@ -251,6 +255,7 @@ async def _check_incomplete_writes() -> None:
             invalidated = await hash_cache.count_known(source_id)
             await hash_cache.delete_source(source_id)
             duration = time.monotonic() - started
+            await mark_reason("recovery", source_id)
             rebuild_events.record(
                 source_id=source_id,
                 source_name=name,

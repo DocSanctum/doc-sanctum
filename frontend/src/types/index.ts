@@ -18,7 +18,14 @@ export interface Source {
   // Whether a per-source access token is stored — the token itself is
   // never returned by the API (specs/007-source-access-token).
   access_token_configured: boolean
+  // Why the source is being re-indexed and how far along it is; the counts
+  // are only set while a sync runs.
+  index_reason: IndexReason | null
+  index_done: number | null
+  index_total: number | null
 }
+
+export type IndexReason = 'initial' | 'model' | 'chunking' | 'keyword' | 'recovery'
 
 export interface FileEntry {
   path: string
