@@ -154,6 +154,7 @@ th { background:var(--subtle); font-weight:600; white-space:nowrap; }
 tr:last-child td { border-bottom:0; }
 td code, th code { white-space:nowrap; }
 .notice { text-align:center; color:var(--muted); padding-top:20vh; }
+.unshared-link { color:var(--muted); text-decoration:underline dotted; cursor:help; }
 .footnotes-sep { margin-top:2.5em; }
 .footnotes { color:var(--muted); font-size:.9em; }
 .contains-task-list { list-style:none; padding-left:1.2em; }
@@ -256,6 +257,28 @@ def _local_image_path(doc_path: str, image: Token) -> str | None:
     return path if path and image_media_type(path) else None
 
 
+_UNSHARED_TITLE = "This document is not shared. Open it in DocSanctum."
+
+
+def _disable_local_links(doc_path: str, tokens: list[Token]) -> None:
+    """Turn links to other files in the source into plain text, since the
+    share token only opens this one document."""
+    for token in tokens:
+        children = token.children or []
+        for i, child in enumerate(children):
+            if child.type != "link_open":
+                continue
+            href = str(child.attrGet("href") or "")
+            if resolve_doc_path(doc_path, href) is None:
+                continue
+            child.tag = "span"
+            child.attrs = {"class": "unshared-link", "title": _UNSHARED_TITLE}
+            for close in children[i + 1 :]:
+                if close.type == "link_close" and close.level == child.level:
+                    close.tag = "span"
+                    break
+
+
 def referenced_images(doc_path: str, markdown: str) -> set[str]:
     """Return the source-relative image paths that the document embeds."""
     found = set()
@@ -341,6 +364,7 @@ def render_markdown_page(
             if image_path:
                 image.attrSet("src", asset_url(image_path))
                 image.attrSet("loading", "lazy")
+    _disable_local_links(path, tokens)
     side, inline = _toc(_add_heading_ids(tokens))
     body = _md.renderer.render(tokens, _md.options, {})
     # The collapsible contents sit under the document title when it opens with one.

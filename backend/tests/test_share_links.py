@@ -302,3 +302,16 @@ async def test_font_route_needs_a_live_token(env):
     assert revoked.status_code == 404
     assert bogus.status_code == 404
     assert nested.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_remote_root_shows_a_hint_instead_of_json(env):
+    client, _docs = env
+    async with client(REMOTE) as c:
+        root = await c.get("/")
+        other = await c.get("/favicon.ico")
+    assert root.status_code == 200
+    assert root.headers["content-type"].startswith("text/html")
+    assert "/share/" in root.text
+    assert "script-src" not in root.headers["content-security-policy"]
+    assert other.status_code == 404

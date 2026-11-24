@@ -105,3 +105,22 @@ def test_long_document_gets_a_table_of_contents_without_the_title():
 def test_short_document_has_no_table_of_contents():
     page = render_markdown_page("a.md", "# Title\n\n## One\n\n## Two\n")
     assert "class='toc" not in page
+
+
+def test_links_to_other_source_files_become_plain_text():
+    page = render_markdown_page(
+        "guide/intro.md",
+        "[design](./design.md), [**root**](/notes/a.md), "
+        "[site](https://example.com), [section](#setup)\n",
+    )
+    assert 'href="./design.md"' not in page
+    assert 'href="/notes/a.md"' not in page
+    assert (
+        '<span class="unshared-link" title="This document is not shared. '
+        'Open it in DocSanctum.">design</span>'
+    ) in page
+    assert (
+        '<span class="unshared-link"' in page and "<strong>root</strong></span>" in page
+    )
+    assert '<a href="https://example.com">site</a>' in page
+    assert '<a href="#setup">section</a>' in page
