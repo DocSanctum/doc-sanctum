@@ -55,13 +55,13 @@ def _is_mcp_path(path: str) -> bool:
 
 
 def _is_share_path(path: str) -> bool:
-    # Only "/share/<token>" and its image route "/share/<token>/asset" pass,
-    # so no other route can hide under the share prefix.
+    # Only "/share/<token>" and its "/asset" and "/font" routes pass, so no
+    # other route can hide under the share prefix.
     rest = path.removeprefix("/share/")
     if rest == path:
         return False
     token, sep, sub = rest.partition("/")
-    return bool(token) and (not sep or sub == "asset")
+    return bool(token) and (not sep or sub in ("asset", "font"))
 
 
 def _bearer_token(scope: Scope) -> str | None:

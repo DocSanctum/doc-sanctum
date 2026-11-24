@@ -13,12 +13,13 @@ import secrets
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -280,7 +281,9 @@ async def view_share(token: str) -> Response:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _notice("The shared document could not be decoded.", 500)
-    page = render_markdown_page(path, markdown, asset_url=_share_asset_url(token))
+    page = render_markdown_page(
+        path, markdown, asset_url=_share_asset_url(token), font_url=f"{token}/font"
+    )
     return HTMLResponse(page, headers=SECURITY_HEADERS)
 
 
@@ -310,3 +313,25 @@ async def view_share_asset(token: str, path: str) -> Response:
         "Cache-Control": "no-store",
     }
     return Response(content=raw, media_type=media_type, headers=headers)
+
+
+_FONT_FILE = (
+    Path(__file__).resolve().parent.parent
+    / "static"
+    / "fonts"
+    / "PretendardVariable.woff2"
+)
+
+
+@viewer_router.get("/share/{token}/font", response_model=None)
+async def view_share_font(token: str) -> Response:
+    """Serve the bundled body font so shared pages look the same on every PC."""
+    opened = await _open_share(token)
+    if isinstance(opened, Response):
+        return opened
+    # The font never changes between releases, so browsers may keep it.
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=31536000, immutable",
+    }
+    return FileResponse(_FONT_FILE, media_type="font/woff2", headers=headers)
