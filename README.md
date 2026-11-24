@@ -222,14 +222,14 @@ Contributions are welcome — bug reports, fixes, and features alike. A few thin
 
 3. Open a pull request against `main` with a clear description of what changed and why. If it fixes a bug, a short repro or failing test helps a lot.
 
-4. If the PR changes shipped code (`backend/app`, `frontend/src`, dependencies, Docker or start scripts), bump the version and add a one-line changelog entry. The Version Check workflow enforces this. Use a patch bump for fixes and a minor bump for features:
+4. Leave the version alone in feature and fix PRs. Releases bump it in a separate version commit, using a patch bump for fixes and a minor bump for features:
 
    ```bash
-   cd frontend && npm version 1.3.1 --no-git-tag-version
-   # then add the entry at the top of frontend/src/data/changelog.ts
+   cd frontend && npm version 1.4.1 --no-git-tag-version
+   # then add a one-line entry at the top of frontend/src/data/changelog.ts
    ```
 
-   Add the `skip-version` label to a PR that needs no release, such as a test-only refactor.
+   The Version Check workflow only makes sure `package.json`, the lockfile and the newest changelog entry agree.
 
 If you're not sure whether something is worth a PR, opening an issue first is always fine.
 
