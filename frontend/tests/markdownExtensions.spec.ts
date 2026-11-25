@@ -101,3 +101,19 @@ describe('front matter', () => {
     expect(extractFrontMatter('---\n- a\n- b\n---\n').data).toBeNull()
   })
 })
+
+describe('code blocks', () => {
+  it('labels a named language with its display name', () => {
+    const dom = renderToDom('```js\nconst a = 1\n```')
+    expect(dom.querySelector('.code-block .code-lang')?.textContent).toBe('JavaScript')
+  })
+
+  it('does not label auto-detected code', () => {
+    expect(renderToDom('```\nplain\n```').querySelector('.code-lang')).toBeNull()
+  })
+
+  it('gives mermaid blocks a loading label for the placeholder', () => {
+    const dom = renderToDom('```mermaid\ngraph TD; A-->B\n```')
+    expect(dom.querySelector('.mermaid')?.getAttribute('data-loading-label')).toBe('Rendering diagram…')
+  })
+})

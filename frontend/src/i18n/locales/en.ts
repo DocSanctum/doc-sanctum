@@ -111,12 +111,18 @@ export const en = {
       backTitle: 'Go to previous document',
       forwardTitle: 'Go to next document',
     },
+    zoom: {
+      zoomIn: 'Zoom in',
+      zoomOut: 'Zoom out',
+      fit: 'Fit',
+    },
     markdown: {
       copyCode: 'Copy code',
       mermaidError: 'Mermaid diagram error',
       viewFullscreen: 'Fullscreen',
       properties: 'Properties ({count})',
       exitFullscreen: 'Close fullscreen',
+      renderingDiagram: 'Rendering diagram…',
     },
   },
   settings: {
