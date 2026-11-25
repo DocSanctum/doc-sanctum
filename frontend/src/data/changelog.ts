@@ -7,6 +7,16 @@ export interface ChangelogEntry {
 // Keep each change to one short line that a user can scan at a glance.
 export const changelog: ChangelogEntry[] = [
   {
+    version: '1.6.0',
+    date: '2026-11-26',
+    changes: [
+      'Sidebar shows why a source is re-indexing and its progress',
+      'Files that could not be indexed are flagged in the tree',
+      'Zoom and pan in diagram and image previews',
+      'Shared pages draw mermaid diagrams',
+    ],
+  },
+  {
     version: '1.5.0',
     date: '2026-11-24',
     changes: [
