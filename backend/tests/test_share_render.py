@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 import pytest
 from backend.app.services.share_render import (
+    has_mermaid,
+    page_headers,
     referenced_images,
     render_markdown_page,
     resolve_doc_path,
@@ -124,3 +130,39 @@ def test_links_to_other_source_files_become_plain_text():
     )
     assert '<a href="https://example.com">site</a>' in page
     assert '<a href="#setup">section</a>' in page
+
+
+MERMAID_DOC = '# T\n\n```mermaid\nflowchart LR\n  A["<b>x</b>"] --> B\n```\n'
+
+
+def test_mermaid_blocks_are_left_for_the_diagram_script():
+    page = render_markdown_page("a.md", MERMAID_DOC, script_url="tok/mermaid.js")
+    assert "<pre class='mermaid'>flowchart LR" in page
+    # The source is escaped so only mermaid, in strict mode, interprets it.
+    assert "&lt;b&gt;x&lt;/b&gt;" in page
+    assert "<script src='tok/mermaid.js'></script></body>" in page
+
+
+def test_pages_without_a_script_url_have_no_script_tag():
+    assert "<script" not in render_markdown_page("a.md", MERMAID_DOC)
+
+
+def test_has_mermaid_only_matches_mermaid_fences():
+    assert has_mermaid(MERMAID_DOC)
+    assert not has_mermaid("```python\nprint(1)\n```\n\nmermaid in prose\n")
+
+
+def test_scripts_are_allowed_only_from_this_server_and_only_when_needed():
+    assert "script-src" not in page_headers(False)["Content-Security-Policy"]
+    csp = page_headers(True)["Content-Security-Policy"]
+    assert csp.endswith("script-src 'self'")
+    assert "default-src 'none'" in csp
+
+
+def test_mermaid_version_matches_the_frontend():
+    root = Path(__file__).resolve().parents[2]
+    dockerfile = (root / "backend" / "Dockerfile").read_text()
+    pinned = re.search(r"ARG MERMAID_VERSION=(\S+)", dockerfile)
+    lock = json.loads((root / "frontend" / "package-lock.json").read_text())
+    assert pinned is not None
+    assert pinned.group(1) == lock["packages"]["node_modules/mermaid"]["version"]

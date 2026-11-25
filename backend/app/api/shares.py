@@ -36,6 +36,8 @@ from ..services.document_formats import is_supported
 from ..services.share_i18n import Locale, pick_locale, t
 from ..services.share_render import (
     SECURITY_HEADERS,
+    has_mermaid,
+    page_headers,
     referenced_images,
     render_markdown_page,
     render_notice_page,
@@ -291,14 +293,17 @@ async def view_share(token: str, request: Request) -> Response:
         markdown = raw.decode("utf-8")
     except UnicodeDecodeError:
         return _notice(locale, "decode_failed", 500)
+    # Diagrams need the bundled mermaid script; without it they stay as code.
+    draws_diagrams = has_mermaid(markdown) and _MERMAID_FILE.is_file()
     page = render_markdown_page(
         path,
         markdown,
         asset_url=_share_asset_url(token),
         font_url=f"{token}/font",
         locale=locale,
+        script_url=f"{token}/mermaid.js" if draws_diagrams else None,
     )
-    return HTMLResponse(page, headers=SECURITY_HEADERS)
+    return HTMLResponse(page, headers=page_headers(draws_diagrams))
 
 
 @viewer_router.get("/share/{token}/asset", response_model=None)
@@ -329,6 +334,18 @@ async def view_share_asset(token: str, path: str, request: Request) -> Response:
     return Response(content=raw, media_type=media_type, headers=headers)
 
 
+_MERMAID_FILE = (
+    Path(__file__).resolve().parent.parent / "static" / "vendor" / "mermaid.min.js"
+)
+# Runs after the bundle: draws every diagram, following the reader's theme.
+_MERMAID_INIT = b"""
+;(function () {
+  var dark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: dark ? "dark" : "default" });
+  mermaid.run({ querySelector: "pre.mermaid" });
+})();
+"""
+
 _FONT_FILE = (
     Path(__file__).resolve().parent.parent
     / "static"
@@ -349,3 +366,19 @@ async def view_share_font(token: str, request: Request) -> Response:
         "Cache-Control": "private, max-age=31536000, immutable",
     }
     return FileResponse(_FONT_FILE, media_type="font/woff2", headers=headers)
+
+
+@viewer_router.get("/share/{token}/mermaid.js", response_model=None)
+async def view_share_mermaid(token: str, request: Request) -> Response:
+    """Serve the diagram script, which only exists in the Docker image."""
+    opened = await _open_share(token, _locale(request))
+    if isinstance(opened, Response):
+        return opened
+    if not _MERMAID_FILE.is_file():
+        raise HTTPException(status_code=404, detail="Not Found")
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "private, max-age=86400",
+    }
+    body = _MERMAID_FILE.read_bytes() + _MERMAID_INIT
+    return Response(content=body, media_type="text/javascript", headers=headers)

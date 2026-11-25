@@ -1,3 +1,22 @@
+# Fetches mermaid's browser bundle so shared pages can draw diagrams without
+# any third-party script host. Keep the version in step with the frontend's.
+FROM node:20-alpine AS mermaid
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ENV HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY} \
+    NO_PROXY=${NO_PROXY}
+COPY certs/ /tmp/corporate-certs/
+RUN cat /tmp/corporate-certs/*.crt > /usr/local/share/corporate-ca-bundle.pem 2>/dev/null; \
+    touch /usr/local/share/corporate-ca-bundle.pem
+ENV NODE_EXTRA_CA_CERTS=/usr/local/share/corporate-ca-bundle.pem
+ARG MERMAID_VERSION=11.16.1
+WORKDIR /tmp/mermaid
+RUN npm pack "mermaid@${MERMAID_VERSION}" --silent \
+    && tar -xzf mermaid-*.tgz package/dist/mermaid.min.js \
+    && mv package/dist/mermaid.min.js /mermaid.min.js
+
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -41,6 +60,7 @@ COPY app/ app/
 RUN python -c "from app.vectorstore.embedding import MultilingualEmbeddingFunction; MultilingualEmbeddingFunction()(['warmup'])"
 
 COPY . .
+COPY --from=mermaid /mermaid.min.js app/static/vendor/mermaid.min.js
 
 # Serves the API on 8000 and the token-protected remote MCP listener on 8100.
 CMD ["python", "-m", "app.serve"]
