@@ -38,28 +38,20 @@
       @select="scrollToHeading"
     />
   </div>
-  <div
-    v-if="fullscreenMermaidSvg"
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-8"
-    @click.self="closeMermaidFullscreen"
-  >
-    <div class="mermaid-fullscreen-content">
-      <button
-        type="button"
-        class="mermaid-fullscreen-close"
-        :title="t('viewer.markdown.exitFullscreen')"
-        @click="closeMermaidFullscreen"
-      >✕</button>
-      <div class="mermaid-fullscreen-svg" v-html="sanitizedFullscreenMermaidSvg" />
-    </div>
-  </div>
+  <ZoomLightbox
+    v-if="lightbox"
+    :svg="lightbox.svg"
+    :image-src="lightbox.imageSrc"
+    :alt="lightbox.alt"
+    @close="lightbox = null"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import DOMPurify from 'dompurify'
-import { useClipboard, onKeyStroke } from '@vueuse/core'
+import { useClipboard } from '@vueuse/core'
 import { api } from '../../services/api'
 import { useMarkdown } from '../../composables/useMarkdown'
 import { useViewerSettings } from '../../composables/useViewerSettings'
@@ -74,6 +66,7 @@ import { sanitizeMarkdownHtml } from '../../utils/sanitizeMarkdown'
 import type { PaneId } from '../../types'
 import TableOfContents from './TableOfContents.vue'
 import Breadcrumb from './Breadcrumb.vue'
+import ZoomLightbox from './ZoomLightbox.vue'
 
 const props = withDefaults(
   defineProps<{ paneId: PaneId; sourceId: string; filePath: string; active?: boolean }>(),
@@ -149,7 +142,12 @@ async function renderMermaidBlocks() {
     // — needed both to retry after an edit and to re-render when the app
     // theme changes.
     const source = el.closest('.mermaid-block')?.querySelector('code')?.textContent ?? ''
+    // A re-render (e.g. after a theme change) keeps the old diagram's height
+    // while the new one draws, so the page does not jump.
+    const previousHeight = el.querySelector('svg') ? el.offsetHeight : 0
+    if (previousHeight) el.style.minHeight = `${previousHeight}px`
     el.removeAttribute('data-processed')
+    el.classList.remove('mermaid-error')
     el.textContent = source
     try {
       await mermaid.run({ nodes: [el] })
@@ -171,6 +169,8 @@ async function renderMermaidBlocks() {
       el.textContent = source
       el.classList.add('mermaid-error')
       el.setAttribute('data-mermaid-error-label', t('viewer.markdown.mermaidError'))
+    } finally {
+      el.style.minHeight = ''
     }
   }
 }
@@ -178,32 +178,29 @@ async function renderMermaidBlocks() {
 // Fullscreen preview reuses the already-rendered SVG (outerHTML, not the
 // original mermaid source) so it doesn't need a second mermaid.run() call —
 // same reasoning as the copy button reusing the hidden <code> sibling.
-const fullscreenMermaidSvg = ref<string | null>(null)
-// mermaid renders diagram/label text as HTML inside <foreignObject>, which
-// DOMPurify's svg profile strips by default (a common XSS vector for
-// arbitrary SVG) — ADD_TAGS opts it back in for this already-mermaid-
-// generated markup, or every node/edge label would render as an empty box.
-const sanitizedFullscreenMermaidSvg = computed(() =>
-  fullscreenMermaidSvg.value
-    ? DOMPurify.sanitize(fullscreenMermaidSvg.value, {
-        USE_PROFILES: { svg: true, svgFilters: true },
-        ADD_TAGS: ['foreignObject'],
-      })
-    : ''
-)
+const lightbox = ref<{ svg?: string; imageSrc?: string; alt?: string } | null>(null)
 
 function openMermaidFullscreen(block: HTMLElement) {
   const svg = block.querySelector('svg')
-  if (svg) fullscreenMermaidSvg.value = svg.outerHTML
+  if (!svg) return
+  // mermaid renders diagram/label text as HTML inside <foreignObject>, which
+  // DOMPurify's svg profile strips by default (a common XSS vector for
+  // arbitrary SVG) — ADD_TAGS opts it back in for this already-mermaid-
+  // generated markup, or every node/edge label would render as an empty box.
+  lightbox.value = {
+    svg: DOMPurify.sanitize(svg.outerHTML, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ['foreignObject'],
+    }),
+  }
 }
 
-function closeMermaidFullscreen() {
-  fullscreenMermaidSvg.value = null
+// Images wrapped in a link keep the link's behavior instead of enlarging.
+function openImageLightbox(img: HTMLImageElement): boolean {
+  if (img.closest('a') || !img.currentSrc) return false
+  lightbox.value = { imageSrc: img.currentSrc, alt: img.alt }
+  return true
 }
-
-onKeyStroke('Escape', () => {
-  if (fullscreenMermaidSvg.value) closeMermaidFullscreen()
-})
 
 // Rewrites rendered <a> tags so native browser gestures (ctrl/cmd+click,
 // middle-click, right-click "open in new tab") work correctly: external
@@ -395,6 +392,11 @@ function handleClick(e: MouseEvent) {
     return
   }
 
+  if (target instanceof HTMLImageElement && openImageLightbox(target)) {
+    e.preventDefault()
+    return
+  }
+
   const permalinkAnchor = target.closest('a.header-anchor') as HTMLElement | null
   if (permalinkAnchor) {
     e.preventDefault()
@@ -573,7 +575,6 @@ function handleClick(e: MouseEvent) {
 :root:not(.dark) .prose .mermaid-block { border: 1px solid #d1d5db; background: #f9fafb; }
 .prose .mermaid-block-scroll {
   display: flex;
-  justify-content: center;
   overflow-x: auto;
   /* Thin themed horizontal scrollbar, matching .code-block-body instead of
      the browser default (most visible on Windows, where non-overlay
@@ -603,9 +604,38 @@ function handleClick(e: MouseEvent) {
 :root.dark .prose .mermaid-block-scroll::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
+/* Auto margins center a narrow diagram, but unlike justify-content: center
+   they never push a wide one's left edge out of scroll reach. */
+.prose .mermaid-block .mermaid {
+  margin: 0 auto;
+}
 .prose .mermaid-block .mermaid svg {
   max-width: 100%;
   height: auto;
+}
+/* Until mermaid swaps in the SVG, the raw source is hidden behind a quiet
+   placeholder instead of flashing on screen. */
+.prose .mermaid-block .mermaid:not([data-processed]):not(.mermaid-error) {
+  position: relative;
+  height: 8rem;
+  color: transparent;
+  white-space: pre;
+  overflow: hidden;
+}
+.prose .mermaid-block .mermaid:not([data-processed]):not(.mermaid-error)::after {
+  content: attr(data-loading-label);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-size: 0.8rem;
+  animation: mermaid-pending 1.4s ease-in-out infinite;
+}
+@keyframes mermaid-pending {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
 }
 .prose .mermaid-error {
   font-family: 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
@@ -654,39 +684,28 @@ function handleClick(e: MouseEvent) {
   border-color: #3b82f6;
 }
 
-.mermaid-fullscreen-content {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-  padding: 2rem;
-  border-radius: 8px;
-  overflow: auto;
-}
-:root.dark .mermaid-fullscreen-content { background: #161b22; }
-:root:not(.dark) .mermaid-fullscreen-content { background: #f9fafb; }
-.mermaid-fullscreen-close {
+/* Language label in the corner; it gives way to the copy button on hover. */
+.prose .code-lang {
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  font-size: 0.9rem;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 6px;
-  border: 1px solid rgba(148, 163, 184, 0.4);
-  background: rgba(255, 255, 255, 0.08);
-  color: #9ca3af;
-  cursor: pointer;
+  top: 0.55rem;
+  right: 0.75rem;
+  z-index: 2;
+  font-size: 0.7rem;
+  color: #6b7280;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
-.mermaid-fullscreen-close:hover {
-  color: #ef4444;
-  border-color: #ef4444;
-}
-.mermaid-fullscreen-svg svg {
-  display: block;
-  max-width: none;
+.prose .code-block:hover .code-lang,
+.prose .code-block:focus-within .code-lang {
+  opacity: 0;
 }
 
+/* Images open in the zoom lightbox, unless they are inside a link. */
+.prose img { cursor: zoom-in; }
+.prose a img { cursor: pointer; }
+
 .prose .code-copy-btn {
+  z-index: 3;
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;

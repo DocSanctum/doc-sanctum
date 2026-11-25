@@ -105,7 +105,10 @@ md.renderer.rules.fence = (tokens, idx) => {
     // the corner instead of panning away with the diagram on horizontal
     // scroll, the way .code-block-body already keeps line numbers/content
     // scrolling separately from the plain code-block's own copy button.
-    return `<div class="code-block mermaid-block"${dataLineAttr}><div class="mermaid-block-actions">${copyBtn}${fullscreenBtn}</div><code hidden>${escaped}</code><div class="mermaid-block-scroll"><div class="mermaid">${escaped}</div></div></div>`
+    // The loading label is shown by CSS in place of the raw source until
+    // mermaid replaces it with an SVG.
+    const renderingLabel = md.utils.escapeHtml(i18n.global.t('viewer.markdown.renderingDiagram'))
+    return `<div class="code-block mermaid-block"${dataLineAttr}><div class="mermaid-block-actions">${copyBtn}${fullscreenBtn}</div><code hidden>${escaped}</code><div class="mermaid-block-scroll"><div class="mermaid" data-loading-label="${renderingLabel}">${escaped}</div></div></div>`
   }
 
   // Use rawSource (trailing "\n" already stripped), not token.content — hljs
@@ -132,8 +135,14 @@ md.renderer.rules.fence = (tokens, idx) => {
         `</div>`
     )
     .join('')
+  // Only a language the author named is labeled; auto-detection guesses wrong
+  // too often to show as fact.
+  const language = langName ? hljs.getLanguage(langName)?.name ?? langName : ''
+  const langLabel = language
+    ? `<span class="code-lang" aria-hidden="true">${md.utils.escapeHtml(language)}</span>`
+    : ''
   return (
-    `<div class="code-block"${dataLineAttr}>${copyBtn}` +
+    `<div class="code-block"${dataLineAttr}>${langLabel}${copyBtn}` +
     `<code hidden>${md.utils.escapeHtml(rawSource)}</code>` +
     `<div class="code-block-body hljs">${rows}</div>` +
     `</div>`

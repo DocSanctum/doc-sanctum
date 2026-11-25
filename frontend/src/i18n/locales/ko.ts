@@ -113,12 +113,18 @@ export const ko: MessageSchema = {
       backTitle: '이전 문서로',
       forwardTitle: '다음 문서로',
     },
+    zoom: {
+      zoomIn: '확대',
+      zoomOut: '축소',
+      fit: '화면 맞춤',
+    },
     markdown: {
       copyCode: '코드 복사',
       mermaidError: 'Mermaid 다이어그램 오류',
       viewFullscreen: '전체화면',
       properties: '속성 ({count})',
       exitFullscreen: '전체화면 닫기',
+      renderingDiagram: '다이어그램 렌더링 중…',
     },
   },
   settings: {
