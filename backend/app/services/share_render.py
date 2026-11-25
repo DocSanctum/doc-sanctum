@@ -31,6 +31,10 @@ _FORMATTER = HtmlFormatter(nowrap=True)
 
 
 def _highlight(code: str, lang: str, _attrs: str) -> str:
+    # Mermaid source is left for the page's mermaid script to draw; output
+    # that starts with <pre> is used by markdown-it as is.
+    if lang == "mermaid":
+        return f"<pre class='mermaid'>{escape(code)}</pre>\n"
     # An empty string tells markdown-it to fall back to plain escaped code.
     if not lang:
         return ""
@@ -167,6 +171,7 @@ td code, th code { white-space:nowrap; }
 .markdown-alert-title { font-weight:600; color:var(--alert); }
 summary.markdown-alert-title { cursor:pointer; }
 .markdown-alert-tip { --alert:#16a34a; } .markdown-alert-important { --alert:#9333ea; }
+pre.mermaid { background:none; padding:0; text-align:center; }
 .markdown-alert-warning { --alert:#ca8a04; } .markdown-alert-caution { --alert:#dc2626; }
 html { scroll-behavior:smooth; }
 h1,h2,h3,h4,h5,h6 { scroll-margin-top:72px; }
@@ -209,20 +214,39 @@ def _font_face(font_url: str | None) -> str:
     )
 
 
+def has_mermaid(markdown: str) -> bool:
+    """Whether the document has a mermaid block, which needs the page script."""
+    return any(
+        token.type == "fence" and token.info.strip().split(" ")[0] == "mermaid"
+        for token in _md.parse(markdown)
+    )
+
+
+def page_headers(with_scripts: bool) -> dict[str, str]:
+    """Security headers for a share page; scripts are allowed only from this
+    server, and only on pages that draw diagrams."""
+    if not with_scripts:
+        return SECURITY_HEADERS
+    csp = SECURITY_HEADERS["Content-Security-Policy"] + "; script-src 'self'"
+    return {**SECURITY_HEADERS, "Content-Security-Policy": csp}
+
+
 def _page(
     title: str,
     body: str,
     bar: str = "",
     font_url: str | None = None,
     locale: Locale = DEFAULT_LOCALE,
+    script_url: str | None = None,
 ) -> str:
+    script = f"<script src='{escape(script_url)}'></script>" if script_url else ""
     return (
         f"<!doctype html><html lang='{locale}'><head><meta charset='utf-8'>"
         "<meta name='viewport' content='width=device-width, initial-scale=1'>"
         "<meta name='robots' content='noindex'>"
         f"<title>{escape(title)}</title>"
         f"<style>{_font_face(font_url)}{_STYLE}{_CODE_CSS}</style></head>"
-        f"<body>{bar}<main>{body}</main></body></html>"
+        f"<body>{bar}<main>{body}</main>{script}</body></html>"
     )
 
 
@@ -353,6 +377,7 @@ def render_markdown_page(
     asset_url: Callable[[str], str] | None = None,
     font_url: str | None = None,
     locale: Locale = DEFAULT_LOCALE,
+    script_url: str | None = None,
 ) -> str:
     """Render a shared document; asset_url maps each embedded local image
     path to the URL the page should load it from, and font_url points at the
@@ -377,7 +402,7 @@ def render_markdown_page(
     # The collapsible contents sit under the document title when it opens with one.
     title_end = body.find("</h1>\n") + len("</h1>\n") if body.startswith("<h1") else 0
     body = body[:title_end] + inline + body[title_end:]
-    return _page(name, side + body, bar, font_url, locale)
+    return _page(name, side + body, bar, font_url, locale, script_url)
 
 
 def render_notice_page(message: str, locale: Locale = DEFAULT_LOCALE) -> str:

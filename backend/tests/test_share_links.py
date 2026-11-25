@@ -333,3 +333,52 @@ async def test_share_pages_follow_the_viewer_browser_language(env):
     assert "<html lang='ko'>" in root.text
     assert "/share/" in root.text
     assert "only opens documents shared from DocSanctum" in english_root.text
+
+
+@pytest.mark.asyncio
+async def test_diagram_pages_load_the_bundled_mermaid_script(
+    env, monkeypatch, tmp_path
+):
+    client, docs = env
+    bundle = tmp_path / "mermaid.min.js"
+    bundle.write_text("window.mermaid = {};", encoding="utf-8")
+    monkeypatch.setattr(shares_module, "_MERMAID_FILE", bundle)
+    (docs / "diagram.md").write_text(
+        "```mermaid\ngraph TD; A-->B\n```\n", encoding="utf-8"
+    )
+    link = await _create(client, "diagram.md")
+    plain = await _create(client, "team/plan.md")
+
+    async with client(REMOTE) as c:
+        page = await c.get(f"/share/{link['token']}")
+        script = await c.get(f"/share/{link['token']}/mermaid.js")
+        plain_page = await c.get(f"/share/{plain['token']}")
+        bogus = await c.get("/share/nope/mermaid.js")
+
+    assert f"<script src='{link['token']}/mermaid.js'></script>" in page.text
+    assert "script-src 'self'" in page.headers["content-security-policy"]
+    assert script.status_code == 200
+    assert script.headers["content-type"].startswith("text/javascript")
+    assert script.text.startswith("window.mermaid = {};")
+    assert 'securityLevel: "strict"' in script.text
+    assert "<script" not in plain_page.text
+    assert "script-src" not in plain_page.headers["content-security-policy"]
+    assert bogus.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_diagrams_stay_as_code_when_the_bundle_is_missing(
+    env, monkeypatch, tmp_path
+):
+    client, docs = env
+    monkeypatch.setattr(shares_module, "_MERMAID_FILE", tmp_path / "missing.js")
+    (docs / "diagram.md").write_text(
+        "```mermaid\ngraph TD; A-->B\n```\n", encoding="utf-8"
+    )
+    link = await _create(client, "diagram.md")
+    async with client(REMOTE) as c:
+        page = await c.get(f"/share/{link['token']}")
+        script = await c.get(f"/share/{link['token']}/mermaid.js")
+    assert "<script" not in page.text
+    assert "script-src" not in page.headers["content-security-policy"]
+    assert script.status_code == 404
