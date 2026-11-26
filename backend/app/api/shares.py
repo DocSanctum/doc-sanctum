@@ -334,9 +334,8 @@ async def view_share_asset(token: str, path: str, request: Request) -> Response:
     return Response(content=raw, media_type=media_type, headers=headers)
 
 
-_MERMAID_FILE = (
-    Path(__file__).resolve().parent.parent / "static" / "vendor" / "mermaid.min.js"
-)
+# The image keeps the bundle outside /app, which dev mode bind-mounts over.
+_MERMAID_FILE = Path("/opt/mermaid/mermaid.min.js")
 # Runs after the bundle: draws every diagram, following the reader's theme.
 _MERMAID_INIT = b"""
 ;(function () {

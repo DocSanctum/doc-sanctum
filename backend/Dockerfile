@@ -60,7 +60,8 @@ COPY app/ app/
 RUN python -c "from app.vectorstore.embedding import MultilingualEmbeddingFunction; MultilingualEmbeddingFunction()(['warmup'])"
 
 COPY . .
-COPY --from=mermaid /mermaid.min.js app/static/vendor/mermaid.min.js
+# Kept outside /app so the dev stack's source bind mount does not hide it.
+COPY --from=mermaid /mermaid.min.js /opt/mermaid/mermaid.min.js
 
 # Serves the API on 8000 and the token-protected remote MCP listener on 8100.
 CMD ["python", "-m", "app.serve"]
